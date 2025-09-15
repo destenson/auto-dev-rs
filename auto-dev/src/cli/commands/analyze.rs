@@ -4,22 +4,23 @@ use anyhow::Result;
 use auto_dev_core::llm::classifier::HeuristicClassifier;
 use auto_dev_core::self_target::SelfTargetConfig;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 /// Analyze a project directory or file
 pub async fn execute(path: String, target_self: bool) -> Result<()> {
-    let path = if target_self {
+    let path_buf = if target_self {
         // Use self-targeting configuration
         println!(" Using self-targeting mode");
         let config = SelfTargetConfig::load_or_create()?;
         println!(" Analyzing auto-dev-rs project: {}", config.project.name);
         println!(" Version: {}", config.project.version);
-        &config.project.path
+        config.project.path
     } else {
-        Path::new(&path)
+        PathBuf::from(path)
     };
     
+    let path = path_buf.as_path();
     let classifier = HeuristicClassifier::new();
     
     if path.is_file() {

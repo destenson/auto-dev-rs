@@ -142,7 +142,7 @@ impl SelfTargetConfig {
         
         let project_info = ProjectInfo {
             path: project_path.clone(),
-            name: root_package.name.clone(),
+            name: root_package.name.to_string(),
             workspace_root: Some(workspace_root.clone()),
             version: root_package.version.to_string(),
             src_dirs,
