@@ -3,6 +3,8 @@
 //! This crate contains the core business logic for the auto-dev tool,
 //! including project management, code generation, and plugin systems.
 
+pub mod monitor;
+
 use serde::{Deserialize, Serialize};
 
 /// Core struct that will hold the main application state
