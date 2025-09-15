@@ -50,6 +50,10 @@ pub enum Commands {
     /// Analyze files and projects
     #[command(about = "Analyze and classify files or entire projects")]
     Analyze(AnalyzeArgs),
+    
+    /// Control the autonomous development loop
+    #[command(about = "Manage the continuous monitoring and autonomous development loop")]
+    Loop(super::commands::loop_control::LoopCommand),
 }
 
 #[derive(Parser, Debug)]

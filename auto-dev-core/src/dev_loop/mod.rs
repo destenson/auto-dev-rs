@@ -6,6 +6,7 @@ pub mod decision_engine;
 pub mod scheduler;
 pub mod llm_optimizer;
 pub mod health_monitor;
+pub mod control_server;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -47,6 +48,20 @@ pub struct Event {
     pub source: PathBuf,
     pub requires_llm: Option<bool>,
     pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl PartialEq for Event {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Event {}
+
+impl std::hash::Hash for Event {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 /// Type of event

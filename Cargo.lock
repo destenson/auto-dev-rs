@@ -144,7 +144,9 @@ dependencies = [
  "anyhow",
  "auto-dev-core",
  "clap",
+ "serde_json",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]

@@ -20,7 +20,7 @@ pub struct Orchestrator {
     scheduler: Arc<scheduler::TaskScheduler>,
     config: LoopConfig,
     metrics: Arc<RwLock<LoopMetrics>>,
-    shutdown_signal: mpsc::Receiver<()>,
+    shutdown_signal: Arc<Mutex<mpsc::Receiver<()>>>,
 }
 
 impl Orchestrator {
@@ -38,12 +38,12 @@ impl Orchestrator {
             scheduler: Arc::new(scheduler::TaskScheduler::new()),
             config,
             metrics: Arc::new(RwLock::new(LoopMetrics::default())),
-            shutdown_signal,
+            shutdown_signal: Arc::new(Mutex::new(shutdown_signal)),
         }
     }
 
     /// Main run loop
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         info!("Starting development loop orchestrator");
         
         // Start health monitoring
@@ -52,6 +52,17 @@ impl Orchestrator {
         
         // Main event loop
         loop {
+            // Check for shutdown signal
+            {
+                let mut shutdown_guard = self.shutdown_signal.lock().await;
+                if shutdown_guard.try_recv().is_ok() {
+                    info!("Received shutdown signal");
+                    drop(shutdown_guard);
+                    self.graceful_shutdown().await?;
+                    break;
+                }
+            }
+            
             tokio::select! {
                 // Process events from queue
                 _ = self.process_next_event() => {},
@@ -66,12 +77,8 @@ impl Orchestrator {
                     self.check_health().await?;
                 },
                 
-                // Shutdown signal
-                _ = self.shutdown_signal.recv() => {
-                    info!("Received shutdown signal");
-                    self.graceful_shutdown().await?;
-                    break;
-                }
+                // Small timeout to prevent busy loop
+                _ = tokio::time::sleep(Duration::from_millis(100)) => {},
             }
         }
         

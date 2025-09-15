@@ -63,6 +63,12 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::analyze::execute(args.path))?;
         }
+        Commands::Loop(args) => {
+            info!("Loop command: {:?}", args);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::loop_control::execute(args))?;
+        }
     }
 
     Ok(())

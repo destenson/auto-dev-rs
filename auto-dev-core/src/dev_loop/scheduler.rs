@@ -116,18 +116,19 @@ impl TaskScheduler {
         // Check scheduled tasks
         {
             let mut tasks = self.tasks.write().await;
-            let tasks_vec: Vec<_> = tasks.clone().into_sorted_vec();
-            tasks.clear();
-            
+            let mut new_queue = PriorityQueue::new();
             let mut found = false;
-            for (task, priority) in tasks_vec {
+            
+            while let Some((task, priority)) = tasks.pop() {
                 if task.id != task_id {
-                    tasks.push(task, priority);
+                    new_queue.push(task, priority);
                 } else {
                     found = true;
                     debug!("Cancelled scheduled task: {}", task_id);
                 }
             }
+            
+            *tasks = new_queue;
             
             if found {
                 return Ok(true);
@@ -226,7 +227,7 @@ impl TaskScheduler {
 }
 
 /// A scheduled task
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize)]
 pub struct ScheduledTask {
     pub id: String,
     pub name: String,
@@ -235,6 +236,18 @@ pub struct ScheduledTask {
     #[serde(skip)]
     pub task_fn: Arc<dyn TaskFunction>,
     pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl std::fmt::Debug for ScheduledTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScheduledTask")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("scheduled_time", &self.scheduled_time)
+            .field("task_type", &self.task_type)
+            .field("metadata", &self.metadata)
+            .finish()
+    }
 }
 
 impl ScheduledTask {

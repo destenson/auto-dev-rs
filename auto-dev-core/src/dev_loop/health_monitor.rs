@@ -81,7 +81,7 @@ impl HealthMonitor {
             llm_quota,
             error_rate,
             is_healthy,
-            warnings,
+            warnings: warnings.clone(),
         };
         
         if !warnings.is_empty() {
