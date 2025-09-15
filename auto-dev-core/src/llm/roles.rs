@@ -273,7 +273,7 @@ impl CustomRoleRegistry {
 
 impl RolePrompts {
     /// Get the system prompt for a specific role
-    pub fn get_system_prompt(role: DevelopmentRole) -> String {
+    pub fn get_system_prompt(role: &DevelopmentRole) -> String {
         if let DevelopmentRole::Custom(name) = role {
             // Try to get from registry or return generic
             return format!(
@@ -618,7 +618,7 @@ impl RolePrompts {
     }
     
     /// Get analysis focus areas for a role
-    pub fn get_focus_areas(role: DevelopmentRole) -> Vec<String> {
+    pub fn get_focus_areas(role: &DevelopmentRole) -> Vec<String> {
         match role {
             DevelopmentRole::SoftwareArchitect => vec![
                 "System design patterns".to_string(),
@@ -657,7 +657,7 @@ impl RolePrompts {
     }
     
     /// Get questions a role would ask about the project
-    pub fn get_role_questions(role: DevelopmentRole) -> Vec<String> {
+    pub fn get_role_questions(role: &DevelopmentRole) -> Vec<String> {
         match role {
             DevelopmentRole::SoftwareArchitect => vec![
                 "What are the main architectural patterns used?".to_string(),
@@ -696,7 +696,7 @@ impl RolePrompts {
     }
     
     /// Get the review checklist for a role
-    pub fn get_review_checklist(role: DevelopmentRole) -> Vec<ChecklistItem> {
+    pub fn get_review_checklist(role: &DevelopmentRole) -> Vec<ChecklistItem> {
         match role {
             DevelopmentRole::SoftwareArchitect => vec![
                 ChecklistItem::new("Clear separation of concerns", Priority::High),
@@ -800,11 +800,14 @@ pub struct RoleContext {
 
 impl RoleContext {
     pub fn new(role: DevelopmentRole) -> Self {
+        let focus_areas = RolePrompts::get_focus_areas(&role);
+        let questions = RolePrompts::get_role_questions(&role);
+        let checklist = RolePrompts::get_review_checklist(&role);
         Self {
             role,
-            focus_areas: RolePrompts::get_focus_areas(role),
-            questions: RolePrompts::get_role_questions(role),
-            checklist: RolePrompts::get_review_checklist(role),
+            focus_areas,
+            questions,
+            checklist,
         }
     }
     
@@ -816,7 +819,7 @@ impl RoleContext {
              Focus Areas:\n{}\n\n\
              Key Questions to Address:\n{}\n\n\
              Please provide a comprehensive analysis from this role's perspective.",
-            RolePrompts::get_system_prompt(self.role),
+            RolePrompts::get_system_prompt(&self.role),
             project_context,
             self.focus_areas.join("\n- "),
             self.questions.join("\n- ")
@@ -837,7 +840,7 @@ impl MultiRoleAnalyzer {
     /// Get all role contexts for analysis
     pub fn get_all_contexts(&self) -> Vec<RoleContext> {
         self.roles.iter()
-            .map(|&role| RoleContext::new(role))
+            .map(|role| RoleContext::new(role.clone()))
             .collect()
     }
     
