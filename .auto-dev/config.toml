@@ -1,0 +1,167 @@
+# Auto-Dev Configuration File
+# Copy this to .auto-dev/config.toml and customize as needed
+
+[loop]
+# Enable/disable the autonomous development loop
+enabled = true
+
+# Maximum number of concurrent tasks
+max_concurrent_tasks = 4
+
+# Event debounce time in milliseconds
+event_debounce_ms = 500
+
+# Health check interval in seconds
+health_check_interval = 60
+
+[loop.llm_optimization]
+# Cache time-to-live in hours
+cache_ttl_hours = 24
+
+# Similarity threshold for finding similar solutions (0.0 to 1.0)
+similarity_threshold = 0.85
+
+# Batch size for combining LLM requests
+batch_size = 5
+
+# Maximum context tokens per request
+max_context_tokens = 2000
+
+[loop.recovery]
+# Maximum number of retries for failed operations
+max_retries = 3
+
+# Backoff multiplier for exponential retry delay
+backoff_multiplier = 2.0
+
+# Checkpoint interval in seconds
+checkpoint_interval = 300
+
+[monitoring]
+# File patterns to watch for changes
+watch_patterns = ["*.md", "*.yaml", "*.yml", "tests/**", "spec/**", "**/README*", "**/TODO*", "**/CHANGELOG*"]
+
+# Debounce time for filesystem events in milliseconds
+debounce_ms = 500
+
+# Directories to ignore
+ignore_patterns = ["target/", "node_modules/", ".git/", "*.tmp", "**/*.local.*"]
+
+# Whether to ignore files ignored by git
+ignore_git_ignored = true
+
+[synthesis]
+# Enable incremental implementation
+incremental = true
+
+# Enable test-first development
+test_first = true
+
+# Maximum size of code increments (in lines)
+max_increment_size = 50
+
+[llm]
+# LLM routing strategy: "tiered", "cost_optimized", "quality_first"
+routing_strategy = "tiered"
+
+# Cache LLM responses
+cache_responses = true
+
+# Prefer local models when available
+local_models_preferred = true
+
+# Model tiers configuration
+[llm.tiers]
+# Tier 1: Tiny local models for simple tasks
+tier1 = ["qwen2.5-coder-0.5b-instruct-q4_k_m", "phi-2", "tinyllama"]
+
+# Tier 2: Small models for moderate complexity
+tier2 = ["codellama-7b", "mistral-7b"]
+
+# Tier 3: Medium models for complex tasks
+tier3 = ["mixtral", "codellama-34b"]
+
+# Tier 4: Large models for the most complex tasks
+tier4 = ["claude-3-opus", "gpt-4"]
+
+[learning]
+# Enable pattern learning from successful implementations
+enabled = true
+
+# Enable pattern extraction from code
+pattern_extraction = true
+
+# Minimum pattern quality score (0.0 to 1.0)
+min_pattern_quality = 0.7
+
+[validation]
+# Run tests after each implementation
+run_tests = true
+
+# Run linting and formatting
+run_linting = true
+
+# Security scanning
+security_scanning = true
+
+# Minimum test coverage requirement (percentage)
+min_coverage = 80
+
+[server]
+# Control server port for IPC communication
+port = 9090
+
+# Server bind address
+host = "127.0.0.1"
+
+# Parser configuration
+[parser]
+# Include TODO comments as specifications
+include_todos = false
+
+# TODO marker patterns to search for
+todo_patterns = ["TODO", "FIXME", "HACK", "XXX", "BUG", "NOTE"]
+
+# File types to scan for TODOs
+todo_file_types = ["*.rs", "*.md", "*.toml", "*.yml", "*.yaml"]
+
+# Priority mapping from markers to priority levels
+[parser.priority_mapping]
+FIXME = "High"
+BUG = "High"
+TODO = "Medium"
+XXX = "Medium"
+HACK = "Low"
+NOTE = "Low"
+
+# Dogfood configuration for self-development
+[dogfood]
+# Enable dogfood mode
+enabled = false
+
+# Safety mode for self-modification
+safety_mode = "strict"
+
+# Paths where modifications are allowed during self-development
+allow_paths = ["src/", "auto-dev-core/src/", "auto-dev/src/", "tests/", "docs/", "examples/"]
+
+# Critical paths that must never be modified
+deny_paths = ["Cargo.lock", ".git/", "target/", "models/", ".github/workflows/"]
+
+# Enable dry-run mode by default for safety
+dry_run_default = true
+
+# Require confirmation before applying changes
+require_confirmation = true
+
+# Enable automatic rollback on failure
+rollback_enabled = true
+
+# Backup directory for rollback
+backup_dir = ".auto-dev/backups"
+
+# Pre-validation commands
+pre_validation = ["cargo check", "cargo fmt --check"]
+
+# Post-validation commands  
+post_validation = ["cargo test", "cargo clippy"]

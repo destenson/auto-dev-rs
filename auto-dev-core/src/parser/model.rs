@@ -153,6 +153,17 @@ pub enum Priority {
     Critical,
 }
 
+impl std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Low => write!(f, "Low"),
+            Self::Medium => write!(f, "Medium"),
+            Self::High => write!(f, "High"),
+            Self::Critical => write!(f, "Critical"),
+        }
+    }
+}
+
 impl From<&str> for Priority {
     fn from(s: &str) -> Self {
         match s.to_uppercase().as_str() {

@@ -386,7 +386,7 @@ async fn init_dogfood() -> Result<()> {
     }
 
     // Create default configuration
-    let default_config = include_str!("../../../../auto-dev.dogfood.toml");
+    let default_config = include_str!("../../../../.auto-dev/config.toml");
     fs::write(&config_path, default_config)?;
 
     println!(" Created dogfood configuration at: {}", config_path.display());

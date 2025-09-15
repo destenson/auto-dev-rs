@@ -1,4 +1,4 @@
-use auto_dev_core::modules::{Message, MessageBus, MessageType};
+use auto_dev_core::modules::messages::{Message, MessageBus, MessageType};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use serde_json::Value;
 
