@@ -195,6 +195,23 @@ pub enum Complexity {
     VeryComplex,
 }
 
+impl Default for Implementation {
+    fn default() -> Self {
+        Self {
+            files: Vec::new(),
+            estimated_complexity: Complexity::Simple,
+            approach: String::new(),
+            language: "rust".to_string(),
+        }
+    }
+}
+
+impl Default for Complexity {
+    fn default() -> Self {
+        Complexity::Simple
+    }
+}
+
 impl Increment {
     /// Create a new increment
     pub fn new(spec: SpecFragment, dependencies: Vec<Uuid>) -> Self {

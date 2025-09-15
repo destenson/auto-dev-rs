@@ -64,6 +64,12 @@ impl Specification {
     }
 }
 
+impl Default for Specification {
+    fn default() -> Self {
+        Self::new(PathBuf::from("default.md"))
+    }
+}
+
 /// A single requirement extracted from documentation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Requirement {
