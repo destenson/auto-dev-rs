@@ -15,6 +15,7 @@ pub mod validation;
 pub mod dev_loop;
 pub mod self_target;
 pub mod learning;
+pub mod self_upgrade;
 
 use serde::{Deserialize, Serialize};
 

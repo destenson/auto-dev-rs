@@ -145,7 +145,7 @@ impl fmt::Display for RequirementType {
 }
 
 /// Requirement priority
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Priority {
     Low,
     Medium,
