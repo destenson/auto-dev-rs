@@ -1,6 +1,18 @@
-[package]
-name = "auto-dev-rs"
+[workspace]
+members = ["auto-dev", "auto-dev-core"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+authors = ["Auto Dev Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/auto-dev-rs"
 
-[dependencies]
+[workspace.dependencies]
+clap = { version = "4.5.47", features = ["derive"] }
+serde = { version = "1.0.223", features = ["derive"] }
+tokio = { version = "1.47.1", features = ["full"] }
+thiserror = "2.0.16"
+anyhow = "1.0.99"
+tracing = "0.1.41"
