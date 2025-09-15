@@ -48,24 +48,6 @@ Different tasks require different levels of intelligence. Simple tasks like form
 
 ## Implementation Blueprint
 
-### File Structure
-```
-src/
-├── routing/
-│   ├── mod.rs              # Routing module exports
-│   ├── router.rs           # Main routing logic
-│   ├── classifier.rs       # Task complexity classifier
-│   ├── models/
-│   │   ├── mod.rs
-│   │   ├── tier0.rs        # No LLM needed
-│   │   ├── tier1.rs        # Tiny models (1-3B params)
-│   │   ├── tier2.rs        # Small models (7-13B params)
-│   │   ├── tier3.rs        # Medium models (30-70B params)
-│   │   └── tier4.rs        # Large models (>70B params)
-│   ├── cost_tracker.rs     # Cost monitoring
-│   └── performance.rs      # Performance tracking
-```
-
 ### Key Components
 1. **ModelRouter**: Routes tasks to appropriate models
 2. **ComplexityClassifier**: Determines task complexity

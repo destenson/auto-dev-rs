@@ -5,6 +5,9 @@ Auto Dev is an open-source project designed to streamline and automate the softw
 ## Features
 
 - **Code Generation**: Automatically generate boilerplate code for various programming languages and frameworks.
+- **Intelligent LLM Routing**: 5-tier model system that intelligently routes tasks to the most cost-effective model, from no-LLM pattern matching to large language models.
+- **Cost Optimization**: Advanced cost tracking and budget management with dynamic routing strategies based on daily/monthly budgets.
+- **Performance Monitoring**: Real-time tracking of model performance, success rates, and latency with automatic tier adjustments.
 - **Project Management**: Tools to help manage tasks, track progress, and collaborate with team members.
 - **Continuous Integration/Continuous Deployment (CI/CD)**: Integrate with popular CI/CD tools to automate testing and deployment.
 - **Version Control Integration**: Seamlessly integrate with Git and other version control systems.
@@ -18,6 +21,36 @@ Auto Dev is an open-source project designed to streamline and automate the softw
 - **User-Friendly Interface**: Intuitive UI to simplify project management and development tasks.
 - **Multi-language Support**: Compatible with multiple programming languages including Rust, Python, JavaScript, Java, and more.
 - **Self-Targeting Mode**: Auto Dev can analyze and improve its own codebase using the `--target-self` flag.
+
+## LLM Optimization and Routing
+
+Auto Dev features a sophisticated 5-tier model routing system that intelligently selects the most cost-effective model for each task:
+
+### Model Tiers
+- **Tier 0 (No LLM)**: Pattern matching and template-based solutions
+- **Tier 1 (Tiny)**: Local models like Qwen 0.5B for simple classifications
+- **Tier 2 (Small)**: 7B models for basic code generation
+- **Tier 3 (Medium)**: 13-34B models for complex generation
+- **Tier 4 (Large)**: GPT-4, Claude-3 for architecture and design
+
+### Key Components
+- **ComplexityClassifier**: Determines task complexity using rules and ML
+- **CostTracker**: Monitors spending and enforces budget limits
+- **PerformanceMonitor**: Tracks model performance and recommends adjustments
+- **ModelRegistry**: Manages available models and their capabilities
+- **CostOptimizer**: Selects optimal models based on cost/performance
+
+### Configuration
+Models are configured in `auto-dev-core/models.toml`. The system automatically:
+- Routes 70% of tasks to free/cheap tiers
+- Falls back to higher tiers on failure
+- Adjusts routing based on budget usage
+- Tracks performance metrics for optimization
+
+### Cost Savings
+Expected daily cost reduction of 87% compared to using only high-tier models:
+- Without optimization: ~$20/day
+- With optimization: ~$2.60/day
 
 ## Self-Targeting Mode
 

@@ -7,6 +7,18 @@
 //! - Cost optimization
 //! - Performance requirements
 
+pub mod classifier;
+pub mod cost_tracker;
+pub mod performance;
+pub mod models;
+pub mod registry;
+pub mod optimizer;
+
+pub use classifier::{ComplexityClassifier, MLClassifier, TaskFeatures};
+pub use cost_tracker::{CostTracker, CostStrategy, BudgetAlert};
+pub use performance::{PerformanceMonitor, ModelMetrics, TierAdjustment};
+pub use registry::{ModelRegistry, ModelConfig, ProviderConfig};
+pub use optimizer::{CostOptimizer, RoutingStrategy};
 use super::{
     provider::{*, self},
     tiny::OllamaTinyModel,
