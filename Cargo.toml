@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Auto Dev Team"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/auto-dev-rs"
+repository = "https://github.com/destenson/auto-dev-rs.git"
 
 [workspace.dependencies]
 clap = { version = "4.5.47", features = ["derive"] }
