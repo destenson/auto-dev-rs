@@ -6,6 +6,8 @@
 pub mod tiny;
 pub mod classifier;
 pub mod candle;
+pub mod provider;
+pub mod router;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

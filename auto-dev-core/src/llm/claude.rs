@@ -1,0 +1,570 @@
+//! Anthropic Claude provider implementation
+
+use super::provider::*;
+use anyhow::{Result, Context};
+use async_trait::async_trait;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// Claude provider for Anthropic's models
+pub struct ClaudeProvider {
+    client: Client,
+    config: ClaudeConfig,
+    model_tier: ModelTier,
+}
+
+impl ClaudeProvider {
+    pub fn new(config: ClaudeConfig) -> Result<Self> {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(config.timeout_secs))
+            .build()?;
+        
+        let model_tier = match config.model.as_str() {
+            "claude-3-haiku-20240307" => ModelTier::Small,
+            "claude-3-sonnet-20240229" => ModelTier::Medium,
+            "claude-3-opus-20240229" => ModelTier::Large,
+            "claude-3-5-sonnet-20241022" => ModelTier::Large,
+            _ => ModelTier::Medium,
+        };
+        
+        Ok(Self {
+            client,
+            config,
+            model_tier,
+        })
+    }
+    
+    async fn create_message(&self, messages: Vec<Message>) -> Result<String> {
+        let api_key = std::env::var(&self.config.api_key_env)
+            .context("Anthropic API key not found")?;
+        
+        let request = MessageRequest {
+            model: self.config.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            system: self.config.system_prompt.clone(),
+        };
+        
+        let response = self.client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Claude")?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!("Claude API error: {}", error_text));
+        }
+        
+        let result: MessageResponse = response.json().await
+            .context("Failed to parse Claude response")?;
+        
+        result.content.first()
+            .and_then(|c| {
+                if let Content::Text { text } = c {
+                    Some(text.clone())
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("No response from Claude"))
+    }
+}
+
+#[async_trait]
+impl LLMProvider for ClaudeProvider {
+    fn name(&self) -> &str {
+        "claude"
+    }
+    
+    fn tier(&self) -> ModelTier {
+        self.model_tier
+    }
+    
+    async fn is_available(&self) -> bool {
+        std::env::var(&self.config.api_key_env).is_ok()
+    }
+    
+    fn cost_per_1k_tokens(&self) -> f32 {
+        match self.config.model.as_str() {
+            "claude-3-haiku-20240307" => 0.00025,
+            "claude-3-sonnet-20240229" => 0.003,
+            "claude-3-opus-20240229" => 0.015,
+            "claude-3-5-sonnet-20241022" => 0.003,
+            _ => 0.003,
+        }
+    }
+    
+    async fn generate_code(
+        &self,
+        spec: &Specification,
+        context: &ProjectContext,
+        options: &GenerationOptions,
+    ) -> Result<GeneratedCode> {
+        let prompt = format!(
+            "You are tasked with implementing code based on the following specification.
+\n\
+             Project Context:
+\
+             - Language: {}
+\
+             - Framework: {:?}
+\
+             - Existing patterns to follow: {:?}
+\
+             - Dependencies available: {:?}
+\n\
+             Specification:
+\
+             {}
+\n\
+             Requirements:
+\
+             {}
+\n\
+             Examples:
+\
+             {}
+\n\
+             Please generate clean, well-documented code that:
+\
+             1. Follows the specification exactly
+\
+             2. Uses existing project patterns
+\
+             3. Includes comprehensive error handling
+\
+             4. Has clear documentation
+\
+             5. Follows {} best practices
+\n\
+             Format your response with code blocks marked with the language \
+             and include a comment with the filepath at the top of each file.",
+            context.language,
+            context.framework,
+            context.patterns,
+            context.dependencies,
+            spec.content,
+            spec.requirements.join("\n"),
+            spec.examples.join("\n"),
+            context.language
+        );
+        
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        
+        // Parse code blocks from response
+        let files = extract_code_files(&response);
+        
+        Ok(GeneratedCode {
+            files,
+            explanation: "Generated by Claude".to_string(),
+            confidence: 0.9,
+            tokens_used: response.len() / 4, // Rough estimate
+            model_used: self.config.model.clone(),
+            cached: false,
+        })
+    }
+    
+    async fn explain_implementation(
+        &self,
+        code: &str,
+        spec: &Specification,
+    ) -> Result<Explanation> {
+        let prompt = format!(
+            "Please explain how this code implements the given specification.
+\n\
+             Code:
+\
+             ```
+\
+             {}
+\
+             ```
+\n\
+             Specification:
+\
+             {}
+\n\
+             Provide:
+\
+             1. A brief summary
+\
+             2. Key implementation details
+\
+             3. Design decisions made
+\
+             4. Any trade-offs or limitations",
+            code, spec.content
+        );
+        
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        
+        // Parse the response into structured explanation
+        let sections: Vec<&str> = response.split("\n\n").collect();
+        
+        Ok(Explanation {
+            summary: sections.first().unwrap_or(&"").to_string(),
+            details: sections.get(1).map(|s| vec![s.to_string()]).unwrap_or_default(),
+            design_decisions: sections.get(2).map(|s| vec![s.to_string()]).unwrap_or_default(),
+            trade_offs: sections.get(3).map(|s| vec![s.to_string()]).unwrap_or_default(),
+        })
+    }
+    
+    async fn review_code(
+        &self,
+        code: &str,
+        requirements: &[Requirement],
+    ) -> Result<ReviewResult> {
+        let req_list = requirements.iter()
+            .map(|r| format!("[{}] {}: {} (Priority: {:?})", 
+                           if r.satisfied { "✓" } else { "✗" },
+                           r.id, r.description, r.priority))
+            .collect::<Vec<_>>()
+            .join("\n");
+        
+        let prompt = format!(
+            "Please review this code against the following requirements.
+\n\
+             Code to review:
+\
+             ```
+\
+             {}
+\
+             ```
+\n\
+             Requirements:
+\
+             {}
+\n\
+             For each requirement, indicate if it's satisfied and note any issues.
+\
+             Also provide general code quality feedback and suggestions for improvement.",
+            code, req_list
+        );
+        
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        
+        // Parse response to extract issues and suggestions
+        let mut issues = Vec::new();
+        let mut suggestions = Vec::new();
+        let mut meets_requirements = true;
+        
+        for line in response.lines() {
+            let lower = line.to_lowercase();
+            if lower.contains("issue:") || lower.contains("problem:") || lower.contains("error:") {
+                let severity = if lower.contains("error") {
+                    IssueSeverity::Error
+                } else if lower.contains("warning") {
+                    IssueSeverity::Warning
+                } else {
+                    IssueSeverity::Info
+                };
+                
+                issues.push(Issue {
+                    severity,
+                    message: line.to_string(),
+                    line: None,
+                    suggestion: None,
+                });
+                
+                if severity == IssueSeverity::Error {
+                    meets_requirements = false;
+                }
+            } else if lower.contains("suggestion:") || lower.contains("recommend:") {
+                suggestions.push(line.to_string());
+            } else if lower.contains("not satisfied") || lower.contains("missing") || lower.contains("failed") {
+                meets_requirements = false;
+            }
+        }
+        
+        Ok(ReviewResult {
+            issues,
+            suggestions,
+            meets_requirements,
+            confidence: 0.9,
+        })
+    }
+    
+    async fn answer_question(&self, question: &str) -> Result<Option<String>> {
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: question.to_string(),
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        Ok(Some(response))
+    }
+    
+    async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
+        // Claude is overkill for classification, but can do it
+        let prompt = format!(
+            "Classify this content. Respond with only a JSON object in this format:
+\
+             {{\"is_code\": boolean, \"is_doc\": boolean, \"is_test\": boolean, \
+              \"is_config\": boolean, \"language\": \"language name or null\"}}
+\n\
+             Content to classify:
+\
+             {}",
+            &content[..content.len().min(500)]
+        );
+        
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        
+        // Extract JSON from response
+        let json_start = response.find('{').unwrap_or(0);
+        let json_end = response.rfind('}').map(|i| i + 1).unwrap_or(response.len());
+        let json_str = &response[json_start..json_end];
+        
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+            return Ok(ClassificationResult {
+                is_code: parsed["is_code"].as_bool().unwrap_or(false),
+                is_documentation: parsed["is_doc"].as_bool().unwrap_or(false),
+                is_test: parsed["is_test"].as_bool().unwrap_or(false),
+                is_config: parsed["is_config"].as_bool().unwrap_or(false),
+                language: parsed["language"].as_str()
+                    .filter(|s| *s != "null")
+                    .map(String::from),
+                confidence: 0.95,
+            });
+        }
+        
+        // Fallback
+        Ok(ClassificationResult {
+            is_code: false,
+            is_documentation: false,
+            is_test: false,
+            is_config: false,
+            language: None,
+            confidence: 0.1,
+        })
+    }
+    
+    async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
+        let prompt = format!(
+            "Assess the complexity of this task. Respond with one of:
+\
+             - 'trivial' (can be done with heuristics)
+\
+             - 'simple' (tiny model like 0.5B can handle)
+\
+             - 'moderate' (needs 7B model)
+\
+             - 'complex' (needs 13-34B model)
+\
+             - 'very complex' (needs 70B+ model)
+\n\
+             Task: {}
+\n\
+             Respond with just the complexity level and a brief reason.",
+            task
+        );
+        
+        let messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
+        
+        let response = self.create_message(messages).await?;
+        let lower = response.to_lowercase();
+        
+        let tier = if lower.contains("trivial") {
+            ModelTier::NoLLM
+        } else if lower.contains("simple") {
+            ModelTier::Tiny
+        } else if lower.contains("moderate") {
+            ModelTier::Small
+        } else if lower.contains("very complex") {
+            ModelTier::Large
+        } else {
+            ModelTier::Medium
+        };
+        
+        Ok(TaskComplexity {
+            tier,
+            reasoning: response,
+            estimated_tokens: task.len() / 4 * 2,
+            confidence: 0.9,
+        })
+    }
+}
+
+/// Claude configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeConfig {
+    pub api_key_env: String,
+    pub model: String,
+    pub max_tokens: usize,
+    pub temperature: f32,
+    pub system_prompt: Option<String>,
+    pub timeout_secs: u64,
+}
+
+impl Default for ClaudeConfig {
+    fn default() -> Self {
+        Self {
+            api_key_env: "ANTHROPIC_API_KEY".to_string(),
+            model: "claude-3-5-sonnet-20241022".to_string(),
+            max_tokens: 4096,
+            temperature: 0.2,
+            system_prompt: Some("You are an expert software engineer.".to_string()),
+            timeout_secs: 60,
+        }
+    }
+}
+
+/// Message structure for Claude API
+#[derive(Debug, Serialize, Deserialize)]
+struct Message {
+    role: String,
+    content: String,
+}
+
+/// Claude API request
+#[derive(Debug, Serialize)]
+struct MessageRequest {
+    model: String,
+    messages: Vec<Message>,
+    max_tokens: usize,
+    temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+}
+
+/// Claude API response
+#[derive(Debug, Deserialize)]
+struct MessageResponse {
+    content: Vec<Content>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum Content {
+    #[serde(rename = "text")]
+    Text { text: String },
+}
+
+/// Extract code files from response
+fn extract_code_files(response: &str) -> Vec<GeneratedFile> {
+    let mut files = Vec::new();
+    let mut in_code_block = false;
+    let mut current_code = String::new();
+    let mut current_lang = String::new();
+    let mut current_path = None;
+    
+    for line in response.lines() {
+        if line.starts_with("```") {
+            if in_code_block {
+                // End of code block
+                if !current_code.is_empty() {
+                    files.push(GeneratedFile {
+                        path: current_path.unwrap_or_else(|| {
+                            format!("generated.{}", 
+                                   lang_to_extension(&current_lang))
+                        }),
+                        content: current_code.clone(),
+                        language: current_lang.clone(),
+                        is_test: current_code.contains("#[test]") || 
+                                current_code.contains("#[cfg(test)]") ||
+                                current_code.contains("describe(") ||
+                                current_code.contains("test("),
+                    });
+                }
+                current_code.clear();
+                current_lang.clear();
+                current_path = None;
+                in_code_block = false;
+            } else {
+                // Start of code block
+                in_code_block = true;
+                let lang = line.trim_start_matches("```").trim();
+                current_lang = lang.to_string();
+            }
+        } else if in_code_block {
+            // Check for file path comment at the start
+            if current_code.is_empty() {
+                if line.starts_with("//") || line.starts_with("#") || line.starts_with("--") {
+                    if line.contains("filepath:") || line.contains("file:") || line.contains("File:") {
+                        let path = line.split(':').nth(1)
+                            .map(|s| s.trim().to_string());
+                        current_path = path;
+                        continue;
+                    }
+                }
+            }
+            current_code.push_str(line);
+            current_code.push('\n');
+        }
+    }
+    
+    // Handle unclosed code block
+    if in_code_block && !current_code.is_empty() {
+        files.push(GeneratedFile {
+            path: current_path.unwrap_or_else(|| {
+                format!("generated.{}", lang_to_extension(&current_lang))
+            }),
+            content: current_code,
+            language: current_lang,
+            is_test: false,
+        });
+    }
+    
+    files
+}
+
+/// Convert language name to file extension
+fn lang_to_extension(lang: &str) -> &str {
+    match lang.to_lowercase().as_str() {
+        "rust" | "rs" => "rs",
+        "python" | "py" => "py",
+        "javascript" | "js" => "js",
+        "typescript" | "ts" => "ts",
+        "go" | "golang" => "go",
+        "java" => "java",
+        "c" => "c",
+        "cpp" | "c++" => "cpp",
+        "yaml" | "yml" => "yaml",
+        "json" => "json",
+        "toml" => "toml",
+        _ => "txt",
+    }
+}
