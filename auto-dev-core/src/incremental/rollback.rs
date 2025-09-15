@@ -4,7 +4,6 @@ use super::{Result, IncrementalError};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
-use tokio::fs;
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -200,7 +199,7 @@ impl RollbackManager {
 }
 
 /// Checkpoint identifier
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointId {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
