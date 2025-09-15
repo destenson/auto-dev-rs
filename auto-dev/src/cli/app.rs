@@ -42,6 +42,10 @@ pub enum Commands {
     /// Generate documentation
     #[command(about = "Generate and maintain project documentation")]
     Docs(DocsArgs),
+
+    /// Parse specifications
+    #[command(about = "Parse specifications and extract requirements")]
+    Parse(ParseArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -101,4 +105,11 @@ pub struct DocsArgs {
     /// Output format (e.g., markdown, html, pdf)
     #[arg(short, long, help = "Output format for documentation")]
     pub format: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct ParseArgs {
+    /// Path to specification file or directory
+    #[arg(help = "Path to specification file or directory to parse")]
+    pub path: String,
 }

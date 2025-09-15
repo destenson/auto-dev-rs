@@ -4,6 +4,7 @@
 //! including project management, code generation, and plugin systems.
 
 pub mod monitor;
+pub mod parser;
 
 use serde::{Deserialize, Serialize};
 
