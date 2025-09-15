@@ -46,6 +46,10 @@ pub enum Commands {
     /// Parse specifications
     #[command(about = "Parse specifications and extract requirements")]
     Parse(ParseArgs),
+
+    /// Analyze files and projects
+    #[command(about = "Analyze and classify files or entire projects")]
+    Analyze(AnalyzeArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -111,5 +115,12 @@ pub struct DocsArgs {
 pub struct ParseArgs {
     /// Path to specification file or directory
     #[arg(help = "Path to specification file or directory to parse")]
+    pub path: String,
+}
+
+#[derive(Parser, Debug)]
+pub struct AnalyzeArgs {
+    /// Path to file or directory to analyze
+    #[arg(help = "Path to file or directory to analyze", default_value = ".")]
     pub path: String,
 }

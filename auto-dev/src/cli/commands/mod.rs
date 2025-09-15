@@ -7,3 +7,4 @@ pub mod test;
 pub mod deploy;
 pub mod docs;
 pub mod parse;
+pub mod analyze;
