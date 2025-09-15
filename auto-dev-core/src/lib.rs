@@ -10,6 +10,8 @@ pub mod mcp;
 pub mod synthesis;
 pub mod context;
 pub mod incremental;
+pub mod test_gen;
+pub mod validation;
 
 use serde::{Deserialize, Serialize};
 
