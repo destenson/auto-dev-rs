@@ -49,10 +49,10 @@ impl ImplementationPlanner {
         }
         
         // Plan tasks for APIs
-        for api in &spec.apis {
+        for (idx, api) in spec.apis.iter().enumerate() {
             let task = ImplementationTask::new(
-                format!("api_{}", api.name),
-                format!("Implement API endpoint: {}", api.name),
+                format!("api_{}", idx),
+                format!("Implement API endpoint: {} {}", api.method, api.endpoint),
                 PathBuf::from("src/api.rs"),
             );
             tasks.push(task);

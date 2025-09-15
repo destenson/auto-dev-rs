@@ -86,7 +86,11 @@ impl PipelineStage for CodeMerger {
         }
         
         // Merge each generated file
-        for file_path in &context.generated_files {
+        let generated_files = context.generated_files.clone();
+        let mut warnings = Vec::new();
+        let mut modified_files = Vec::new();
+        
+        for file_path in &generated_files {
             let exists = file_path.exists();
             let merge_type = self.determine_merge_type(file_path, exists);
             
@@ -97,7 +101,7 @@ impl PipelineStage for CodeMerger {
             match self.merge_file(file_path, generated_content, merge_type).await {
                 Ok(result) => {
                     if exists {
-                        context.modified_files.push(file_path.clone());
+                        modified_files.push(file_path.clone());
                     }
                     
                     tracing::debug!(
@@ -108,7 +112,7 @@ impl PipelineStage for CodeMerger {
                     );
                 }
                 Err(e) => {
-                    context.add_warning(format!(
+                    warnings.push(format!(
                         "Failed to merge {}: {}",
                         file_path.display(),
                         e
@@ -116,6 +120,12 @@ impl PipelineStage for CodeMerger {
                 }
             }
         }
+        
+        // Add warnings and modified files after iteration
+        for warning in warnings {
+            context.add_warning(warning);
+        }
+        context.modified_files.extend(modified_files);
         
         Ok(context)
     }

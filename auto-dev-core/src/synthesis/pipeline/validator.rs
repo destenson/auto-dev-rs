@@ -56,8 +56,8 @@ impl PipelineStage for ImplementationValidator {
         let validation_result = self.validate_all(&context).await;
         
         // Update coverage based on validation
-        if let Some(coverage) = validation_result.coverage_update {
-            context.coverage = coverage;
+        if let Some(ref coverage) = validation_result.coverage_update {
+            context.coverage = coverage.clone();
         }
         
         // Add warnings for validation issues

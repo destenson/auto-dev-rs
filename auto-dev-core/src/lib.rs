@@ -7,6 +7,7 @@ pub mod monitor;
 pub mod parser;
 pub mod llm;
 pub mod mcp;
+pub mod synthesis;
 
 use serde::{Deserialize, Serialize};
 
