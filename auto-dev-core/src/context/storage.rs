@@ -18,7 +18,7 @@ pub struct ProjectContext {
     pub dependencies: DependencyGraph,
     pub decisions: Vec<ArchitectureDecision>,
     #[serde(skip)]
-    pub embeddings: Option<EmbeddingStore>,
+    pub embeddings: Option<()>,
     pub history: ContextHistory,
 }
 
@@ -107,6 +107,7 @@ impl Default for ProjectContext {
     }
 }
 
+#[derive(Debug)]
 pub struct ContextStorage {
     base_path: PathBuf,
     context_dir: PathBuf,

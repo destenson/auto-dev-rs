@@ -23,7 +23,7 @@ pub struct NamingConventions {
     pub variables: NamingStyle,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum NamingStyle {
     SnakeCase,      // snake_case
     CamelCase,      // camelCase
@@ -49,7 +49,7 @@ pub struct FormattingRules {
     pub brace_style: BraceStyle,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum IndentStyle {
     Spaces,
     Tabs,

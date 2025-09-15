@@ -24,6 +24,7 @@ pub enum PatternType {
     Convention,     // Naming, structure, etc.
 }
 
+#[derive(Debug)]
 pub struct PatternDetector {
     project_root: PathBuf,
     pattern_library: PatternLibrary,

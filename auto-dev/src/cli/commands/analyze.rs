@@ -175,15 +175,6 @@ impl ProjectStats {
 }
 
 /// Get emoji for language
-fn get_language_emoji(lang: &str) -> &'static str {
-    // match lang.to_lowercase().as_str() {
-    //     "rust" => "🦀",
-    //     "python" => "🐍",
-    //     "javascript" | "typescript" => "📜",
-    //     "java" => "☕",
-    //     "go" => "🐹",
-    //     "c" | "cpp" => "⚙️",
-    //     _ => "",
-    // }
-    lang
+fn get_language_emoji(_lang: &str) -> &'static str {
+    ""
 }

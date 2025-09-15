@@ -26,12 +26,14 @@ pub struct EmbeddingMetadata {
     pub last_modified: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, Clone)]
 pub struct EmbeddingStore {
     entries: Arc<RwLock<HashMap<PathBuf, EmbeddingEntry>>>,
     index: Arc<RwLock<VectorIndex>>,
     storage_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
 pub struct VectorIndex {
     vectors: Vec<(String, Vector)>,
     dimension: usize,

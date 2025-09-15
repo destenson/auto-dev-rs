@@ -4,15 +4,14 @@ pub mod conventions;
 pub mod dependencies;
 
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 pub use structure::ProjectStructure;
 pub use patterns::{CodePattern, PatternType, PatternDetector};
 pub use conventions::{CodingConventions, NamingConventions, NamingStyle};
 pub use dependencies::DependencyGraph;
 
-use crate::context::manager::CodeExample;
 
+#[derive(Debug)]
 pub struct ProjectAnalyzer {
     project_root: PathBuf,
     pattern_detector: PatternDetector,
