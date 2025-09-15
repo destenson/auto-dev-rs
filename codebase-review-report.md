@@ -1,116 +1,119 @@
 # Codebase Review Report - Auto-Dev RS
 
 ## Executive Summary
-The Auto-Dev RS project is in early-to-mid development with core infrastructure implemented (monitoring, parsing, LLM integration, synthesis pipeline, context management). The codebase has 73/87 tests passing (84% success rate) but has a critical regex bug affecting 14 tests that needs immediate attention.
-
-**Primary recommendation**: Fix the regex syntax error in `dependencies.rs:186` to restore full test coverage, then execute PRP-105 (Incremental Implementation) to advance the autonomous code generation capabilities.
+Auto-Dev RS is an ambitious autonomous development system designed to automatically implement code from specifications. The project has strong foundational infrastructure with 13 core modules including LLM integration, synthesis engine, and monitoring capabilities. Most recently enhanced code verification, loop management, and test generation. Primary recommendation: Fix failing tests and implement MCP tools integration (PRP-200 series) to enable self-development capabilities.
 
 ## Implementation Status
 
 ### Working Components
-- **Filesystem monitoring** - File watcher with debouncing (auto-dev-core/src/monitor/watcher.rs)
-- **Specification parsing** - Markdown, Gherkin, OpenAPI, JSON Schema parsers functional (auto-dev-core/src/parser/*)
-- **LLM integration** - Multi-provider support (Claude, OpenAI, local models) with router (auto-dev-core/src/llm/*)
-- **Synthesis pipeline** - Complete with analyzer, generator, merger, planner, validator stages (auto-dev-core/src/synthesis/pipeline/*)
-- **Context management** - Project understanding with embeddings and pattern detection (auto-dev-core/src/context/*)
-- **Heuristic classifier** - Working fallback for tiny model tasks without model files
-- **MCP integration** - Client and transport layer for Model Context Protocol
+- **Core Infrastructure** - Workspace structure with auto-dev-core library and auto-dev CLI binary established
+- **LLM Integration** - Multi-tier model system with Claude, OpenAI, and local Candle support implemented  
+- **Context Management** - Embeddings, project analysis, and pattern detection functional
+- **Synthesis Pipeline** - Code generation, merging, and planning stages operational
+- **Test Generation** - Framework-specific test generation for Rust, JavaScript, Python available
+- **Monitoring System** - File watcher, event processor, and debouncer active
+- **Development Loop** - Orchestrator, scheduler, health monitor, and control server ready
+- **Incremental Implementation** - Planner, executor, validator with rollback support complete
+- **Validation Framework** - Quality checks, security analysis, and verification tools integrated
+- **MCP Integration** - Client and transport layer for Model Context Protocol implemented
 
-### Broken/Incomplete
-- **Dependency analyzer** - Regex syntax error at dependencies.rs:186 causing 14 test failures
-- **Config parsing test** - test_parse_example_config failing (likely missing test file)
-- **Prompt optimization test** - test_qwen_prompt_optimization assertion failure
+### Broken/Incomplete  
+- **Test Failures** - 6 tests failing (similarity calculation, parse example config, project summary, deduplication, qwen prompt optimization, property detection)
+- **File System Tests** - 2 tests hanging indefinitely (context_update, file_deletion_update)
+- **CLI Commands** - Many validate command functions marked as dead code, not wired up
+- **Examples** - tiny_model_demo.rs exists but not configured as example target
 
-### Missing
-- **CLI commands** - All main commands return "coming soon" placeholder messages
-- **Actual code generation** - Pipeline structure exists but no LLM-powered generation yet
-- **Continuous monitoring loop** - PRP-108 not implemented
-- **Test generation** - PRP-106 not implemented
-- **Self-improvement** - PRP-109 not implemented
+### Missing Components
+- **Self-Development Features** - PRPs 200-215 define self-awareness, recursive monitoring, hot-reload not yet implemented
+- **Production CLI** - Commands return "coming soon" placeholders
+- **Continuous Monitoring Loop** - PRP-108 not yet implemented
 
 ## Code Quality
 
 ### Test Results
-- **73/87 passing (84% success rate)**
-- Primary failure: Regex syntax error affecting all context tests
-- 2 additional isolated test failures
+- **Build**: Successful with 97 warnings (mostly unused imports/variables)
+- **Tests**: 155/161 passing (96.3%)
+- **Failing Tests**:
+  - llm::dev_loop::llm_optimizer::tests::test_similarity_calculation
+  - llm::config::tests::test_parse_example_config
+  - context::tests::tests::test_project_summary
+  - dev_loop::event_processor::tests::test_deduplication
+  - llm::prompts::tests::test_qwen_prompt_optimization
+  - test_gen::generator::tests::test_property_detection
+- **Hanging Tests**: context update and file deletion tests run >60s
 
 ### Technical Debt
-- **131 TODO/FIXME comments** across 43 files
-- **157 unwrap()/expect()/panic! calls** in non-test code (error handling needs improvement)
-- **40 compiler warnings** (mostly unused imports and variables)
-
-### Examples
-- **1 example working**: tiny_model_demo.rs demonstrates heuristic classifier
+- **TODO Count**: 63 occurrences across 33 files
+- **Error Handling**: 217 unwrap()/expect()/panic! calls in non-test code
+- **Warnings**: 97 compiler warnings (unused imports, dead code, unused variables)
+- **Code Coverage**: No coverage metrics available, test infrastructure needs enhancement
 
 ## Recommendation
 
-### Next Action: Fix Critical Bug then Execute PRP-105
-
-**Immediate Fix Required**:
-Fix regex syntax error at `auto-dev-core/src/context/analyzer/dependencies.rs:186`
-- Current broken regex: `(\w+)\s*=\s*(?:"([^"]+)"|{[^}]+version\s*=\s*"([^"]+)")`
-- Issue: Invalid syntax with unescaped `{` in alternation
-
-**Then Execute**: PRP-105 (Incremental Implementation)
+**Next Action**: Fix failing tests and implement MCP tools integration (execute PRPs 200-215)
 
 **Justification**:
-- Current capability: All parsing, monitoring, and pipeline infrastructure ready
-- Gap: No actual code generation happening despite complete pipeline
-- Impact: Will enable the core autonomous development loop
+- Current capability: Strong foundation with LLM routing, synthesis, and monitoring working
+- Gap: Tests failing prevent safe deployment; self-development features missing prevent autonomous improvement  
+- Impact: Fixing tests enables production use; MCP integration enables self-modification and continuous improvement
 
 ## 90-Day Roadmap
 
-### Week 1-2: Foundation Completion
-- Fix critical regex bug → All tests passing
-- Implement PRP-105 (Incremental Implementation) → Working code generation
-- Implement PRP-108 (Continuous Monitoring Loop) → Autonomous operation
-
-### Week 3-4: Core Functionality
-- Implement PRP-106 (Test Generation) → Automated test creation
-- Implement PRP-107 (Verification & Validation) → Quality assurance
-- Wire up CLI commands → Usable tool
-
-### Week 5-8: Intelligence Layer
-- Implement PRP-109 (Self-Improvement) → Learning from patterns
-- Implement PRP-110 (LLM Optimization & Routing) → Cost-effective operation
-- Add multi-language support → Broader applicability
-
-### Week 9-12: Production Ready
-- Implement self-development PRPs (200-215) → Self-improving system
-- Reduce unwrap() usage → Production-grade error handling
-- Documentation and examples → User adoption
+1. **Week 1-2: Test Stabilization** → All tests passing, remove unwrap() calls, fix hanging tests
+2. **Week 3-4: MCP Integration** → Implement PRPs 200-204 (self-awareness, recursive monitoring, spec generation)
+3. **Week 5-8: Self-Development** → PRPs 205-209 (dynamic modules, hot-reload, sandboxing, self-test, bootstrap)
+4. **Week 9-12: Production Hardening** → PRPs 210-215 (version control, metrics, safety gates, marketplace, documentation)
 
 ## Technical Debt Priorities
 
-1. **Regex Bug**: Critical - Blocks 14 tests - **Effort: 30 minutes**
-2. **Error Handling**: Replace 157 unwrap()/expect() calls - **Effort: 1 day**
-3. **Compiler Warnings**: Clean up 40 warnings - **Effort: 2 hours**
-4. **CLI Implementation**: Wire up placeholder commands - **Effort: 2 days**
-5. **Missing Tests**: Add tests for uncovered modules - **Effort: 1 day**
+1. **Test Failures**: Critical - Blocks deployment [2 days effort]
+2. **Error Handling**: High - Replace 217 unwrap() calls with proper Result handling [3 days effort]
+3. **Dead Code**: Medium - Wire up validate commands and remove unused functions [1 day effort]
+4. **Compiler Warnings**: Low - Clean up 97 warnings for maintainability [1 day effort]
+5. **Documentation**: Low - Add inline documentation for public APIs [2 days effort]
 
 ## Implementation Decisions Recorded
 
-### Architectural Decisions Made
-1. **Tiered LLM System**: Smart routing between no-LLM, tiny, small, medium, large models
-2. **Filesystem-based State**: JSON files for transparency and version control compatibility
-3. **Pipeline Architecture**: Modular synthesis pipeline with distinct stages
-4. **Heuristic Fallback**: Pattern-based classification when models unavailable
+### Architectural Decisions
+- **Workspace Structure**: Separate core library and CLI binary for modularity
+- **Async Runtime**: Tokio for all async operations
+- **LLM Strategy**: 5-tier model system (No LLM → Tiny → Small → Medium → Large)
+- **Persistence**: JSON files for state management (no database dependencies)
 
-### Design Patterns Implemented
-1. **Strategy Pattern**: For different parsing and generation strategies
-2. **Observer Pattern**: File system monitoring with debouncing
-3. **Pipeline Pattern**: Multi-stage synthesis process
-4. **Repository Pattern**: Context storage abstraction
+### Code Quality Improvements
+- Comprehensive test framework with unit/integration/property-based testing
+- Event-driven architecture with debouncing for efficiency
+- Modular pipeline architecture for synthesis and validation
+- Strong type system usage with enums for state management
 
-### What Wasn't Implemented Yet
-1. Actual LLM-powered code generation (structure ready, integration pending)
-2. Production CLI interface (all commands return placeholders)
-3. Self-improvement mechanisms (PRPs 200-215 not started)
-4. Multi-language support beyond Rust
+### Design Patterns
+- Strategy pattern for test generation frameworks
+- Pipeline pattern for synthesis and validation
+- Observer pattern for file system monitoring
+- Command pattern for CLI operations
+
+### Technical Solutions
+- Embeddings for semantic code understanding
+- Incremental implementation with rollback capability
+- Multi-framework test generation (Rust, JS, Python)
+- Health monitoring with recovery management
+
+### What Wasn't Implemented
+- Database persistence (chose filesystem)
+- External service dependencies (kept local-first)
+- Complex UI (focused on CLI)
+- Cloud-specific features (kept platform-agnostic)
 
 ### Lessons Learned
-1. Comprehensive pipeline structure established before implementation
-2. Good separation of concerns across modules
-3. Strong foundation for autonomous operation
-4. Need better error handling patterns before production use
+- Event-driven monitoring more efficient than polling
+- Tiered LLM approach significantly reduces costs
+- Test-first development essential for autonomous systems
+- Rollback capability critical for safe incremental changes
+
+## Next Steps
+
+1. Run `cargo test -- --nocapture` to debug failing tests
+2. Fix the 6 failing tests focusing on configuration and similarity issues
+3. Address hanging file system tests with proper async timeouts
+4. Begin implementing PRP-200 (self-awareness module) as foundation for autonomous features
+5. Set up continuous integration to prevent regression
