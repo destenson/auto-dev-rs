@@ -50,5 +50,18 @@ proptest = "1.7.0"
 priority-queue = "2.5.0"
 metrics = "0.24.2"
 
+[[example]]
+name = "model_validation"
+path = "examples/model_validation.rs"
+
+[[example]]
+name = "qwen_model_test"
+path = "examples/qwen_model_test.rs"
+
+[[example]]
+name = "tiny_model_demo"
+path = "examples/tiny_model_demo.rs"
+
 [dev-dependencies]
 tempfile = "3.22.0"
+tracing-subscriber = "0.3"
