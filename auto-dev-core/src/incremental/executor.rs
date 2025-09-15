@@ -5,7 +5,6 @@ use super::{
     FileChange, ChangeType, rollback::RollbackManager, validator::IncrementValidator,
 };
 use crate::llm::provider::LLMProvider;
-use crate::synthesis::SynthesisConfig;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::{info, debug, error, warn};
@@ -59,8 +58,9 @@ impl IncrementExecutor {
         info!("Executing increment: {} - {}", increment.id, increment.specification.description);
         
         // Start attempt
-        let attempt = increment.add_attempt();
         increment.status = IncrementStatus::InProgress;
+        let attempt_idx = increment.attempts.len();
+        increment.add_attempt();
         
         // Create checkpoint if rollback is enabled
         let checkpoint_id = if self.config.enable_rollback {
@@ -80,11 +80,13 @@ impl IncrementExecutor {
                 Ok(result) => {
                     // Success! Mark increment as completed
                     increment.status = IncrementStatus::Completed;
-                    attempt.ended_at = Some(chrono::Utc::now());
-                    attempt.result = Some(AttemptResult::Success);
+                    if let Some(attempt) = increment.attempts.get_mut(attempt_idx) {
+                        attempt.ended_at = Some(chrono::Utc::now());
+                        attempt.result = Some(AttemptResult::Success);
+                    }
                     
                     // Clean up old checkpoints
-                    if let Some(checkpoint) = checkpoint_id {
+                    if checkpoint_id.is_some() {
                         self.rollback_manager.cleanup_old_checkpoints(5).await?;
                     }
                     
@@ -94,11 +96,13 @@ impl IncrementExecutor {
                 Err(e) => {
                     warn!("Execution attempt failed: {}", e);
                     last_error = Some(e);
-                    attempt.logs.push(format!("Attempt {} failed: {:?}", retry + 1, last_error));
+                    if let Some(attempt) = increment.attempts.get_mut(attempt_idx) {
+                        attempt.logs.push(format!("Attempt {} failed: {:?}", retry + 1, last_error));
+                    }
                     
                     // Rollback if enabled
-                    if let Some(checkpoint) = checkpoint_id {
-                        self.rollback_manager.rollback_to(checkpoint).await?;
+                    if let Some(ref checkpoint) = checkpoint_id {
+                        self.rollback_manager.rollback_to(checkpoint.clone()).await?;
                     }
                 }
             }
@@ -106,17 +110,19 @@ impl IncrementExecutor {
         
         // All retries failed
         increment.status = IncrementStatus::Failed;
-        attempt.ended_at = Some(chrono::Utc::now());
         
         let error_msg = last_error.map(|e| e.to_string()).unwrap_or_else(|| "Unknown error".to_string());
-        attempt.result = Some(AttemptResult::ValidationFailure(error_msg.clone()));
+        if let Some(attempt) = increment.attempts.get_mut(attempt_idx) {
+            attempt.ended_at = Some(chrono::Utc::now());
+            attempt.result = Some(AttemptResult::ValidationFailure(error_msg.clone()));
+        }
         
         error!("Failed to execute increment after {} retries: {}", self.config.max_retries, increment.id);
         Err(IncrementalError::ExecutionError(error_msg))
     }
     
     /// Execute a single attempt
-    async fn execute_attempt(&mut self, increment: &Increment) -> Result<ExecutionResult> {
+    async fn execute_attempt(&mut self, increment: &mut Increment) -> Result<ExecutionResult> {
         // Generate implementation
         let implementation = self.generate_implementation(increment).await?;
         
@@ -178,7 +184,7 @@ impl IncrementExecutor {
         let prompt = self.build_generation_prompt(increment);
         
         // Generate code using LLM
-        let response = self.llm_provider.complete(&prompt).await
+        let response = self.llm_provider.complete_prompt(&prompt).await
             .map_err(|e| IncrementalError::ExecutionError(e.to_string()))?;
         
         // Parse response into file changes

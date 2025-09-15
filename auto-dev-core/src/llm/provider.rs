@@ -186,6 +186,13 @@ pub trait LLMProvider: Send + Sync {
     
     /// Assess task complexity to determine which tier to use
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity>;
+    
+    /// Simple text completion for prompts
+    async fn complete_prompt(&self, prompt: &str) -> Result<String> {
+        // Default implementation using answer_question
+        self.answer_question(prompt).await
+            .and_then(|opt| opt.ok_or_else(|| anyhow::anyhow!("No response from LLM")))
+    }
 }
 
 /// Provider capabilities

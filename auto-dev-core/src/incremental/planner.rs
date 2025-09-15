@@ -57,14 +57,21 @@ impl IncrementPlanner {
         // Estimate total duration
         let estimated_duration = self.estimate_duration(&increments);
         
+        let execution_order = sorted.into_iter()
+            .filter_map(|idx| {
+                // Find the increment with matching node index
+                increments.iter()
+                    .find(|inc| node_map.get(&inc.id) == Some(&idx))
+                    .map(|inc| inc.id)
+            })
+            .collect();
+        
         Ok(IncrementPlan {
             increments,
             dependency_graph,
             critical_path,
             estimated_duration,
-            execution_order: sorted.into_iter()
-                .map(|idx| dependency_graph[idx])
-                .collect(),
+            execution_order,
         })
     }
     
@@ -81,8 +88,8 @@ impl IncrementPlanner {
                 id: requirement.id.clone(),
                 description: requirement.description.clone(),
                 requirements: vec![requirement.description.clone()],
-                context: requirement.rationale.clone().unwrap_or_default(),
-                examples: requirement.test_criteria.clone(),
+                context: String::new(),
+                examples: requirement.acceptance_criteria.clone(),
             });
         } else {
             // Break down complex requirements
@@ -94,7 +101,7 @@ impl IncrementPlanner {
                     description: task.clone(),
                     requirements: vec![task.clone()],
                     context: requirement.description.clone(),
-                    examples: requirement.test_criteria.clone(),
+                    examples: requirement.acceptance_criteria.clone(),
                 });
             }
         }
@@ -103,7 +110,7 @@ impl IncrementPlanner {
     }
     
     /// Create an increment from a spec fragment
-    fn create_increment(&self, fragment: SpecFragment, spec: &Specification) -> Increment {
+    fn create_increment(&self, fragment: SpecFragment, _spec: &Specification) -> Increment {
         let mut increment = Increment::new(fragment, Vec::new());
         
         // Set complexity
@@ -312,7 +319,7 @@ impl IncrementPlanner {
         &self,
         start: Uuid,
         increments: &[Increment],
-        graph: &DiGraph<Uuid, ()>,
+        _graph: &DiGraph<Uuid, ()>,
     ) -> Vec<Uuid> {
         let mut visited = HashSet::new();
         let mut path = Vec::new();
