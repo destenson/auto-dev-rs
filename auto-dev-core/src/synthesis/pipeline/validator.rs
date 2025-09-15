@@ -1,6 +1,6 @@
 //! Implementation validator
 
-use super::{PipelineStage, PipelineContext};
+use super::{PipelineContext, PipelineStage};
 use crate::synthesis::{Result, SynthesisError};
 use async_trait::async_trait;
 use std::process::Command;
@@ -22,21 +22,21 @@ impl ImplementationValidator {
             ],
         }
     }
-    
+
     /// Run all validators
     async fn validate_all(&self, context: &PipelineContext) -> ValidationResult {
         let mut result = ValidationResult::new();
-        
+
         for validator in &self.validators {
             let validation = validator.validate(context).await;
             result.merge(validation);
-            
+
             // Stop on critical failures
             if result.has_critical_errors() && context.config.incremental {
                 break;
             }
         }
-        
+
         result
     }
 }
@@ -46,40 +46,40 @@ impl PipelineStage for ImplementationValidator {
     fn name(&self) -> &'static str {
         "ImplementationValidator"
     }
-    
+
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
         tracing::info!("Validating implementation");
-        
+
         context.metadata.current_stage = self.name().to_string();
-        
+
         // Run validation
         let validation_result = self.validate_all(&context).await;
-        
+
         // Update coverage based on validation
         if let Some(ref coverage) = validation_result.coverage_update {
             context.coverage = coverage.clone();
         }
-        
+
         // Add warnings for validation issues
         for issue in &validation_result.issues {
             context.add_warning(format!("{:?}: {}", issue.severity, issue.message));
         }
-        
+
         // Fail if critical errors
         if validation_result.has_critical_errors() {
-            return Err(SynthesisError::ValidationError(
-                format!("{} critical validation errors found", 
-                       validation_result.critical_error_count())
-            ));
+            return Err(SynthesisError::ValidationError(format!(
+                "{} critical validation errors found",
+                validation_result.critical_error_count()
+            )));
         }
-        
+
         tracing::debug!(
             "Validation complete: {} passed, {} warnings, {} errors",
             validation_result.passed_count(),
             validation_result.warning_count(),
             validation_result.error_count()
         );
-        
+
         Ok(context)
     }
 }
@@ -97,13 +97,10 @@ struct CompilationValidator;
 impl Validator for CompilationValidator {
     async fn validate(&self, context: &PipelineContext) -> ValidationResult {
         let mut result = ValidationResult::new();
-        
+
         // Run cargo check
-        let output = Command::new("cargo")
-            .arg("check")
-            .arg("--message-format=json")
-            .output();
-        
+        let output = Command::new("cargo").arg("check").arg("--message-format=json").output();
+
         match output {
             Ok(output) => {
                 if output.status.success() {
@@ -117,7 +114,7 @@ impl Validator for CompilationValidator {
                 result.add_warning(format!("Could not run cargo check: {}", e));
             }
         }
-        
+
         result
     }
 }
@@ -129,18 +126,15 @@ struct TestValidator;
 impl Validator for TestValidator {
     async fn validate(&self, context: &PipelineContext) -> ValidationResult {
         let mut result = ValidationResult::new();
-        
+
         if !context.config.test_first {
             result.add_info("Test validation skipped (test_first disabled)");
             return result;
         }
-        
+
         // Run cargo test
-        let output = Command::new("cargo")
-            .arg("test")
-            .arg("--quiet")
-            .output();
-        
+        let output = Command::new("cargo").arg("test").arg("--quiet").output();
+
         match output {
             Ok(output) => {
                 if output.status.success() {
@@ -153,7 +147,7 @@ impl Validator for TestValidator {
                 result.add_warning(format!("Could not run tests: {}", e));
             }
         }
-        
+
         result
     }
 }
@@ -165,11 +159,11 @@ struct RequirementValidator;
 impl Validator for RequirementValidator {
     async fn validate(&self, context: &PipelineContext) -> ValidationResult {
         let mut result = ValidationResult::new();
-        
+
         // Check requirement coverage
         let total_reqs = context.spec.requirements.len();
         let completed_tasks = context.completed_tasks.len();
-        
+
         if completed_tasks >= total_reqs {
             result.add_success(format!("All {} requirements implemented", total_reqs));
         } else {
@@ -179,14 +173,14 @@ impl Validator for RequirementValidator {
                 percentage, completed_tasks, total_reqs
             ));
         }
-        
+
         // Update coverage report
         let mut coverage = context.coverage.clone();
         if let Some(spec_coverage) = coverage.specifications.get_mut(&context.spec.source) {
             spec_coverage.implemented_requirements = completed_tasks;
         }
         result.coverage_update = Some(coverage);
-        
+
         result
     }
 }
@@ -198,7 +192,7 @@ struct LintValidator;
 impl Validator for LintValidator {
     async fn validate(&self, _context: &PipelineContext) -> ValidationResult {
         let mut result = ValidationResult::new();
-        
+
         // Run clippy
         let output = Command::new("cargo")
             .arg("clippy")
@@ -207,7 +201,7 @@ impl Validator for LintValidator {
             .arg("-D")
             .arg("warnings")
             .output();
-        
+
         match output {
             Ok(output) => {
                 if output.status.success() {
@@ -220,7 +214,7 @@ impl Validator for LintValidator {
                 result.add_info(format!("Could not run clippy: {}", e));
             }
         }
-        
+
         result
     }
 }
@@ -233,73 +227,50 @@ struct ValidationResult {
 
 impl ValidationResult {
     fn new() -> Self {
-        Self {
-            issues: Vec::new(),
-            coverage_update: None,
-        }
+        Self { issues: Vec::new(), coverage_update: None }
     }
-    
+
     fn add_success(&mut self, message: impl Into<String>) {
-        self.issues.push(ValidationIssue {
-            severity: Severity::Success,
-            message: message.into(),
-        });
+        self.issues.push(ValidationIssue { severity: Severity::Success, message: message.into() });
     }
-    
+
     fn add_info(&mut self, message: impl Into<String>) {
-        self.issues.push(ValidationIssue {
-            severity: Severity::Info,
-            message: message.into(),
-        });
+        self.issues.push(ValidationIssue { severity: Severity::Info, message: message.into() });
     }
-    
+
     fn add_warning(&mut self, message: impl Into<String>) {
-        self.issues.push(ValidationIssue {
-            severity: Severity::Warning,
-            message: message.into(),
-        });
+        self.issues.push(ValidationIssue { severity: Severity::Warning, message: message.into() });
     }
-    
+
     fn add_error(&mut self, message: impl Into<String>) {
-        self.issues.push(ValidationIssue {
-            severity: Severity::Error,
-            message: message.into(),
-        });
+        self.issues.push(ValidationIssue { severity: Severity::Error, message: message.into() });
     }
-    
+
     fn merge(&mut self, other: ValidationResult) {
         self.issues.extend(other.issues);
         if let Some(coverage) = other.coverage_update {
             self.coverage_update = Some(coverage);
         }
     }
-    
+
     fn has_critical_errors(&self) -> bool {
         self.issues.iter().any(|i| matches!(i.severity, Severity::Error))
     }
-    
+
     fn critical_error_count(&self) -> usize {
-        self.issues.iter()
-            .filter(|i| matches!(i.severity, Severity::Error))
-            .count()
+        self.issues.iter().filter(|i| matches!(i.severity, Severity::Error)).count()
     }
-    
+
     fn passed_count(&self) -> usize {
-        self.issues.iter()
-            .filter(|i| matches!(i.severity, Severity::Success))
-            .count()
+        self.issues.iter().filter(|i| matches!(i.severity, Severity::Success)).count()
     }
-    
+
     fn warning_count(&self) -> usize {
-        self.issues.iter()
-            .filter(|i| matches!(i.severity, Severity::Warning))
-            .count()
+        self.issues.iter().filter(|i| matches!(i.severity, Severity::Warning)).count()
     }
-    
+
     fn error_count(&self) -> usize {
-        self.issues.iter()
-            .filter(|i| matches!(i.severity, Severity::Error))
-            .count()
+        self.issues.iter().filter(|i| matches!(i.severity, Severity::Error)).count()
     }
 }
 
@@ -321,15 +292,15 @@ enum Severity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_validation_result() {
         let mut result = ValidationResult::new();
-        
+
         result.add_success("Test passed");
         result.add_warning("Minor issue");
         result.add_error("Critical problem");
-        
+
         assert_eq!(result.passed_count(), 1);
         assert_eq!(result.warning_count(), 1);
         assert_eq!(result.error_count(), 1);

@@ -1,16 +1,16 @@
 //! Test generation module for automatically creating comprehensive test suites from specifications
 
+pub mod coverage;
+pub mod frameworks;
 pub mod generator;
 pub mod strategies;
-pub mod frameworks;
-pub mod coverage;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub use generator::TestGenerator;
 pub use coverage::CoverageAnalyzer;
+pub use generator::TestGenerator;
 
 /// Represents a complete test suite
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,11 +193,7 @@ impl TestCase {
             description: String::new(),
             test_type,
             inputs: Vec::new(),
-            expected: ExpectedOutcome {
-                success: true,
-                value: None,
-                error: None,
-            },
+            expected: ExpectedOutcome { success: true, value: None, error: None },
             assertions: Vec::new(),
             properties: Vec::new(),
         }

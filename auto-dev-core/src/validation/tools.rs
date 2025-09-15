@@ -1,39 +1,41 @@
 //! Tool discovery and execution system for validation
-//! 
+//!
 //! Dynamically discovers and executes validation tools at runtime,
 //! allowing for flexible tool installation and configuration.
 
-use crate::validation::{ValidationResult, ValidationWarning, Improvement, Priority, ErrorCategory};
+use crate::validation::{
+    ErrorCategory, Improvement, Priority, ValidationResult, ValidationWarning,
+};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::process::Command;
 use std::path::Path;
+use std::process::Command;
 
 /// Represents a validation tool that can be discovered and executed
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationTool {
     /// Name of the tool (e.g., "clippy", "cargo-audit")
     pub name: String,
-    
+
     /// Command to check if tool is installed
     pub check_command: Vec<String>,
-    
+
     /// Command to execute the tool
     pub run_command: Vec<String>,
-    
+
     /// Category of validation this tool performs
     pub category: ToolCategory,
-    
+
     /// Priority of this tool (higher priority tools run first)
     pub priority: u8,
-    
+
     /// Whether this tool is required (vs optional)
     pub required: bool,
-    
+
     /// Installation instructions if tool is missing
     pub install_instructions: Option<String>,
-    
+
     /// Parser for the tool's output
     pub output_parser: OutputParserType,
 }
@@ -68,30 +70,31 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        let mut registry = Self {
-            tools: HashMap::new(),
-            discovered_tools: HashMap::new(),
-        };
-        
+        let mut registry = Self { tools: HashMap::new(), discovered_tools: HashMap::new() };
+
         // Register default tools (but don't require them)
         registry.register_default_tools();
         registry
     }
-    
+
     /// Register default Rust ecosystem tools
     fn register_default_tools(&mut self) {
         // Core cargo tools (likely to be available)
         self.register_tool(ValidationTool {
             name: "cargo-check".to_string(),
             check_command: vec!["cargo".to_string(), "check".to_string(), "--version".to_string()],
-            run_command: vec!["cargo".to_string(), "check".to_string(), "--all-targets".to_string()],
+            run_command: vec![
+                "cargo".to_string(),
+                "check".to_string(),
+                "--all-targets".to_string(),
+            ],
             category: ToolCategory::Compilation,
             priority: 100,
             required: false,
             install_instructions: None,
             output_parser: OutputParserType::ExitCode,
         });
-        
+
         self.register_tool(ValidationTool {
             name: "cargo-test".to_string(),
             check_command: vec!["cargo".to_string(), "test".to_string(), "--version".to_string()],
@@ -102,16 +105,18 @@ impl ToolRegistry {
             install_instructions: None,
             output_parser: OutputParserType::LineByLine,
         });
-        
+
         // Optional but recommended tools
         self.register_tool(ValidationTool {
             name: "clippy".to_string(),
             check_command: vec!["cargo".to_string(), "clippy".to_string(), "--version".to_string()],
             run_command: vec![
-                "cargo".to_string(), "clippy".to_string(),
+                "cargo".to_string(),
+                "clippy".to_string(),
                 "--all-targets".to_string(),
                 "--".to_string(),
-                "-W".to_string(), "clippy::all".to_string(),
+                "-W".to_string(),
+                "clippy::all".to_string(),
             ],
             category: ToolCategory::Linting,
             priority: 80,
@@ -119,18 +124,23 @@ impl ToolRegistry {
             install_instructions: Some("rustup component add clippy".to_string()),
             output_parser: OutputParserType::Regex(r"(?:warning|error): (.+)".to_string()),
         });
-        
+
         self.register_tool(ValidationTool {
             name: "rustfmt".to_string(),
             check_command: vec!["cargo".to_string(), "fmt".to_string(), "--version".to_string()],
-            run_command: vec!["cargo".to_string(), "fmt".to_string(), "--".to_string(), "--check".to_string()],
+            run_command: vec![
+                "cargo".to_string(),
+                "fmt".to_string(),
+                "--".to_string(),
+                "--check".to_string(),
+            ],
             category: ToolCategory::Formatting,
             priority: 70,
             required: false,
             install_instructions: Some("rustup component add rustfmt".to_string()),
             output_parser: OutputParserType::ExitCode,
         });
-        
+
         // Optional third-party tools
         self.register_tool(ValidationTool {
             name: "cargo-audit".to_string(),
@@ -142,18 +152,27 @@ impl ToolRegistry {
             install_instructions: Some("cargo install cargo-audit".to_string()),
             output_parser: OutputParserType::Json,
         });
-        
+
         self.register_tool(ValidationTool {
             name: "cargo-outdated".to_string(),
-            check_command: vec!["cargo".to_string(), "outdated".to_string(), "--version".to_string()],
-            run_command: vec!["cargo".to_string(), "outdated".to_string(), "--format".to_string(), "json".to_string()],
+            check_command: vec![
+                "cargo".to_string(),
+                "outdated".to_string(),
+                "--version".to_string(),
+            ],
+            run_command: vec![
+                "cargo".to_string(),
+                "outdated".to_string(),
+                "--format".to_string(),
+                "json".to_string(),
+            ],
             category: ToolCategory::Dependencies,
             priority: 50,
             required: false,
             install_instructions: Some("cargo install cargo-outdated".to_string()),
             output_parser: OutputParserType::Json,
         });
-        
+
         self.register_tool(ValidationTool {
             name: "cargo-deny".to_string(),
             check_command: vec!["cargo".to_string(), "deny".to_string(), "--version".to_string()],
@@ -164,29 +183,42 @@ impl ToolRegistry {
             install_instructions: Some("cargo install cargo-deny".to_string()),
             output_parser: OutputParserType::LineByLine,
         });
-        
+
         self.register_tool(ValidationTool {
             name: "cargo-geiger".to_string(),
             check_command: vec!["cargo".to_string(), "geiger".to_string(), "--version".to_string()],
-            run_command: vec!["cargo".to_string(), "geiger".to_string(), "--output-format".to_string(), "json".to_string()],
+            run_command: vec![
+                "cargo".to_string(),
+                "geiger".to_string(),
+                "--output-format".to_string(),
+                "json".to_string(),
+            ],
             category: ToolCategory::Security,
             priority: 45,
             required: false,
             install_instructions: Some("cargo install cargo-geiger".to_string()),
             output_parser: OutputParserType::Json,
         });
-        
+
         self.register_tool(ValidationTool {
             name: "cargo-tarpaulin".to_string(),
-            check_command: vec!["cargo".to_string(), "tarpaulin".to_string(), "--version".to_string()],
-            run_command: vec!["cargo".to_string(), "tarpaulin".to_string(), "--print-summary".to_string()],
+            check_command: vec![
+                "cargo".to_string(),
+                "tarpaulin".to_string(),
+                "--version".to_string(),
+            ],
+            run_command: vec![
+                "cargo".to_string(),
+                "tarpaulin".to_string(),
+                "--print-summary".to_string(),
+            ],
             category: ToolCategory::Testing,
             priority: 40,
             required: false,
             install_instructions: Some("cargo install cargo-tarpaulin".to_string()),
             output_parser: OutputParserType::Regex(r"(\d+\.\d+)% coverage".to_string()),
         });
-        
+
         self.register_tool(ValidationTool {
             name: "tokei".to_string(),
             check_command: vec!["tokei".to_string(), "--version".to_string()],
@@ -198,19 +230,22 @@ impl ToolRegistry {
             output_parser: OutputParserType::Json,
         });
     }
-    
+
     /// Register a new tool
     pub fn register_tool(&mut self, tool: ValidationTool) {
         self.tools.insert(tool.name.clone(), tool);
     }
-    
+
     /// Register a custom tool from configuration
     pub fn register_custom_tool(&mut self, config: CustomToolConfig) {
         let tool = ValidationTool {
             name: config.name,
             check_command: config.check_command,
             run_command: config.run_command,
-            category: config.category.map(ToolCategory::Custom).unwrap_or(ToolCategory::Custom("custom".to_string())),
+            category: config
+                .category
+                .map(ToolCategory::Custom)
+                .unwrap_or(ToolCategory::Custom("custom".to_string())),
             priority: config.priority.unwrap_or(10),
             required: config.required.unwrap_or(false),
             install_instructions: config.install_instructions,
@@ -218,16 +253,16 @@ impl ToolRegistry {
         };
         self.register_tool(tool);
     }
-    
+
     /// Discover which tools are available on the system
     pub async fn discover_tools(&mut self) -> Result<DiscoveryReport> {
         let mut available = Vec::new();
         let mut missing = Vec::new();
-        
+
         for (name, tool) in &self.tools {
             let is_available = self.check_tool_availability(tool).await?;
             self.discovered_tools.insert(name.clone(), is_available);
-            
+
             if is_available {
                 available.push(name.clone());
             } else {
@@ -238,41 +273,37 @@ impl ToolRegistry {
                 });
             }
         }
-        
+
         Ok(DiscoveryReport {
             available_tools: available,
             missing_tools: missing,
             total_registered: self.tools.len(),
         })
     }
-    
+
     /// Check if a specific tool is available
     async fn check_tool_availability(&self, tool: &ValidationTool) -> Result<bool> {
         if tool.check_command.is_empty() {
             return Ok(false);
         }
-        
-        let output = Command::new(&tool.check_command[0])
-            .args(&tool.check_command[1..])
-            .output();
-        
+
+        let output = Command::new(&tool.check_command[0]).args(&tool.check_command[1..]).output();
+
         Ok(output.is_ok() && output.unwrap().status.success())
     }
-    
+
     /// Run all available tools
     pub async fn run_available_tools(&self, project_path: &str) -> Result<ValidationResult> {
         let mut results = Vec::new();
-        let mut tools_to_run: Vec<_> = self.tools.values()
-            .filter(|tool| {
-                self.discovered_tools.get(&tool.name)
-                    .copied()
-                    .unwrap_or(false)
-            })
+        let mut tools_to_run: Vec<_> = self
+            .tools
+            .values()
+            .filter(|tool| self.discovered_tools.get(&tool.name).copied().unwrap_or(false))
             .collect();
-        
+
         // Sort by priority (higher priority first)
         tools_to_run.sort_by(|a, b| b.priority.cmp(&a.priority));
-        
+
         for tool in tools_to_run {
             match self.run_tool(tool, project_path).await {
                 Ok(result) => results.push(result),
@@ -282,24 +313,28 @@ impl ToolRegistry {
                 }
             }
         }
-        
+
         Ok(ValidationResult::aggregate(results))
     }
-    
+
     /// Run a specific tool
-    async fn run_tool(&self, tool: &ValidationTool, project_path: &str) -> Result<ValidationResult> {
+    async fn run_tool(
+        &self,
+        tool: &ValidationTool,
+        project_path: &str,
+    ) -> Result<ValidationResult> {
         if tool.run_command.is_empty() {
             return Ok(ValidationResult::new());
         }
-        
+
         let output = Command::new(&tool.run_command[0])
             .args(&tool.run_command[1..])
             .current_dir(project_path)
             .output()?;
-        
+
         // Parse output based on parser type
         let mut result = ValidationResult::new();
-        
+
         match &tool.output_parser {
             OutputParserType::ExitCode => {
                 if !output.status.success() {
@@ -323,7 +358,7 @@ impl ToolRegistry {
                 let stderr_text = String::from_utf8_lossy(&output.stderr);
                 let stdout_text = String::from_utf8_lossy(&output.stdout);
                 let output_text = format!("{}{}", stderr_text, stdout_text);
-                
+
                 for cap in regex.captures_iter(&output_text) {
                     if let Some(message) = cap.get(1) {
                         result.warnings.push(ValidationWarning {
@@ -351,10 +386,10 @@ impl ToolRegistry {
                 // This could be extended with a plugin system
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Convert tool category to error category
     fn category_to_error_category(&self, category: &ToolCategory) -> ErrorCategory {
         match category {
@@ -369,11 +404,11 @@ impl ToolRegistry {
             ToolCategory::Custom(_) => ErrorCategory::Quality,
         }
     }
-    
+
     /// Get recommendations for missing tools
     pub fn get_tool_recommendations(&self, report: &DiscoveryReport) -> Vec<Improvement> {
         let mut recommendations = Vec::new();
-        
+
         for missing in &report.missing_tools {
             if let Some(instructions) = &missing.install_instructions {
                 let priority = if missing.required {
@@ -383,7 +418,7 @@ impl ToolRegistry {
                 } else {
                     Priority::Low
                 };
-                
+
                 recommendations.push(Improvement {
                     category: "tools".to_string(),
                     description: format!("Install {} with: {}", missing.name, instructions),
@@ -391,7 +426,7 @@ impl ToolRegistry {
                 });
             }
         }
-        
+
         recommendations
     }
 }
@@ -429,10 +464,10 @@ pub struct CustomToolConfig {
 pub struct ToolsConfig {
     /// Additional tools to register
     pub custom_tools: Vec<CustomToolConfig>,
-    
+
     /// Tools to disable from defaults
     pub disabled_tools: Vec<String>,
-    
+
     /// Override settings for default tools
     pub tool_overrides: HashMap<String, ToolOverride>,
 }
@@ -459,7 +494,7 @@ pub async fn load_tools_config(path: &Path) -> Result<ToolsConfig> {
     if !path.exists() {
         return Ok(ToolsConfig::default());
     }
-    
+
     let content = tokio::fs::read_to_string(path).await?;
     let config: ToolsConfig = toml::from_str(&content)?;
     Ok(config)
@@ -474,12 +509,12 @@ mod tests {
         let registry = ToolRegistry::new();
         assert!(!registry.tools.is_empty());
     }
-    
+
     #[test]
     fn test_custom_tool_registration() {
         let mut registry = ToolRegistry::new();
         let initial_count = registry.tools.len();
-        
+
         registry.register_custom_tool(CustomToolConfig {
             name: "my-tool".to_string(),
             check_command: vec!["my-tool".to_string(), "--version".to_string()],
@@ -490,7 +525,7 @@ mod tests {
             install_instructions: Some("cargo install my-tool".to_string()),
             output_parser: Some(OutputParserType::ExitCode),
         });
-        
+
         assert_eq!(registry.tools.len(), initial_count + 1);
         assert!(registry.tools.contains_key("my-tool"));
     }

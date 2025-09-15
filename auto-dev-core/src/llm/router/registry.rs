@@ -29,19 +29,21 @@ impl ModelRegistry {
     pub async fn load_config(&self, config_path: &str) -> Result<()> {
         let config_str = tokio::fs::read_to_string(config_path).await?;
         let config: RegistryConfig = toml::from_str(&config_str)?;
-        
+
         for model in config.models {
             self.register_model(model).await?;
         }
-        
+
         for provider in config.providers {
             self.register_provider(provider).await?;
         }
-        
-        info!("Loaded {} models and {} providers from config",
-              self.models.read().await.len(),
-              self.providers.read().await.len());
-        
+
+        info!(
+            "Loaded {} models and {} providers from config",
+            self.models.read().await.len(),
+            self.providers.read().await.len()
+        );
+
         Ok(())
     }
 
@@ -49,16 +51,18 @@ impl ModelRegistry {
     pub async fn register_model(&self, config: ModelConfig) -> Result<()> {
         let model_id = config.id.clone();
         let tier = config.tier;
-        
+
         // Add to models map
         self.models.write().await.insert(model_id.clone(), config.clone());
-        
+
         // Update tier mappings
-        self.tier_mappings.write().await
+        self.tier_mappings
+            .write()
+            .await
             .entry(tier)
             .or_insert_with(Vec::new)
             .push(model_id.clone());
-        
+
         info!("Registered model: {} (tier: {:?})", model_id, tier);
         Ok(())
     }
@@ -74,11 +78,9 @@ impl ModelRegistry {
     pub async fn get_models_for_tier(&self, tier: ModelTier) -> Vec<ModelConfig> {
         let models = self.models.read().await;
         let tier_mappings = self.tier_mappings.read().await;
-        
+
         if let Some(model_ids) = tier_mappings.get(&tier) {
-            model_ids.iter()
-                .filter_map(|id| models.get(id).cloned())
-                .collect()
+            model_ids.iter().filter_map(|id| models.get(id).cloned()).collect()
         } else {
             Vec::new()
         }
@@ -103,25 +105,20 @@ impl ModelRegistry {
 
     /// Find cheapest model for a tier
     pub async fn find_cheapest_model(&self, tier: ModelTier) -> Option<ModelConfig> {
-        self.get_models_for_tier(tier).await
+        self.get_models_for_tier(tier)
+            .await
             .into_iter()
-            .min_by(|a, b| {
-                a.cost_per_1k_tokens.partial_cmp(&b.cost_per_1k_tokens).unwrap()
-            })
+            .min_by(|a, b| a.cost_per_1k_tokens.partial_cmp(&b.cost_per_1k_tokens).unwrap())
     }
 
     /// Find fastest model for a tier
     pub async fn find_fastest_model(&self, tier: ModelTier) -> Option<ModelConfig> {
-        self.get_models_for_tier(tier).await
-            .into_iter()
-            .min_by_key(|m| m.average_latency_ms)
+        self.get_models_for_tier(tier).await.into_iter().min_by_key(|m| m.average_latency_ms)
     }
 
     /// Find model with largest context window
     pub async fn find_largest_context_model(&self, tier: ModelTier) -> Option<ModelConfig> {
-        self.get_models_for_tier(tier).await
-            .into_iter()
-            .max_by_key(|m| m.context_window)
+        self.get_models_for_tier(tier).await.into_iter().max_by_key(|m| m.context_window)
     }
 
     /// Update model availability
@@ -136,16 +133,13 @@ impl ModelRegistry {
 
     /// Get available models for a tier
     pub async fn get_available_models(&self, tier: ModelTier) -> Vec<ModelConfig> {
-        self.get_models_for_tier(tier).await
-            .into_iter()
-            .filter(|m| m.available)
-            .collect()
+        self.get_models_for_tier(tier).await.into_iter().filter(|m| m.available).collect()
     }
 
     /// Create default registry with common models
     pub async fn create_default() -> Self {
         let registry = Self::new();
-        
+
         // Register default models
         let default_models = vec![
             // Tier 0: No LLM
@@ -190,10 +184,7 @@ impl ModelRegistry {
                 cost_per_1k_tokens: 0.0,
                 average_latency_ms: 100,
                 context_window: 2048,
-                capabilities: vec![
-                    Capability::Classification,
-                    Capability::SimpleQuestions,
-                ],
+                capabilities: vec![Capability::Classification, Capability::SimpleQuestions],
                 available: false,
                 local_path: None,
                 api_endpoint: Some("http://localhost:11434".to_string()),
@@ -226,10 +217,7 @@ impl ModelRegistry {
                 cost_per_1k_tokens: 0.0002,
                 average_latency_ms: 800,
                 context_window: 8192,
-                capabilities: vec![
-                    Capability::CodeGeneration,
-                    Capability::Questions,
-                ],
+                capabilities: vec![Capability::CodeGeneration, Capability::Questions],
                 available: false,
                 local_path: None,
                 api_endpoint: Some("https://api.together.xyz".to_string()),
@@ -312,14 +300,13 @@ impl ModelRegistry {
                 requires_auth: true,
             },
         ];
-        
+
         for model in default_models {
             registry.register_model(model).await.unwrap();
         }
-        
-        info!("Created default registry with {} models", 
-              registry.models.read().await.len());
-        
+
+        info!("Created default registry with {} models", registry.models.read().await.len());
+
         registry
     }
 }
@@ -343,8 +330,7 @@ pub struct ModelConfig {
 
 impl ModelConfig {
     pub fn can_handle(&self, required_capabilities: &[Capability]) -> bool {
-        required_capabilities.iter()
-            .all(|cap| self.capabilities.contains(cap))
+        required_capabilities.iter().all(|cap| self.capabilities.contains(cap))
     }
 
     pub fn is_local(&self) -> bool {
@@ -413,13 +399,18 @@ mod tests {
     #[tokio::test]
     async fn test_registry_creation() {
         let registry = ModelRegistry::create_default().await;
-        
+
         let all_models = registry.get_all_models().await;
         assert!(all_models.len() > 5);
-        
+
         // Check we have models for each tier
-        for tier in [ModelTier::NoLLM, ModelTier::Tiny, ModelTier::Small,
-                    ModelTier::Medium, ModelTier::Large] {
+        for tier in [
+            ModelTier::NoLLM,
+            ModelTier::Tiny,
+            ModelTier::Small,
+            ModelTier::Medium,
+            ModelTier::Large,
+        ] {
             let tier_models = registry.get_models_for_tier(tier).await;
             assert!(!tier_models.is_empty(), "No models for tier {:?}", tier);
         }
@@ -428,15 +419,15 @@ mod tests {
     #[tokio::test]
     async fn test_model_selection() {
         let registry = ModelRegistry::create_default().await;
-        
+
         // Find cheapest small model
         let cheapest = registry.find_cheapest_model(ModelTier::Small).await;
         assert!(cheapest.is_some());
-        
+
         // Find fastest tiny model
         let fastest = registry.find_fastest_model(ModelTier::Tiny).await;
         assert!(fastest.is_some());
-        
+
         // Check local models have zero cost
         let local_model = registry.get_model("qwen-0.5b").await.unwrap();
         assert_eq!(local_model.cost_per_1k_tokens, 0.0);

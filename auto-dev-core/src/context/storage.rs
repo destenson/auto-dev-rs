@@ -1,13 +1,11 @@
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
-use crate::context::analyzer::{
-    ProjectStructure, CodePattern, CodingConventions, DependencyGraph
-};
-use crate::context::manager::ArchitectureDecision;
+use crate::context::analyzer::{CodePattern, CodingConventions, DependencyGraph, ProjectStructure};
 use crate::context::embeddings::EmbeddingStore;
+use crate::context::manager::ArchitectureDecision;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContext {
@@ -99,10 +97,7 @@ impl Default for ProjectContext {
             dependencies: DependencyGraph::default(),
             decisions: Vec::new(),
             embeddings: None,
-            history: ContextHistory {
-                events: Vec::new(),
-                max_events: 1000,
-            },
+            history: ContextHistory { events: Vec::new(), max_events: 1000 },
         }
     }
 }
@@ -116,32 +111,29 @@ pub struct ContextStorage {
 impl ContextStorage {
     pub fn new(project_root: &Path) -> anyhow::Result<Self> {
         let context_dir = project_root.join(".auto-dev").join("context");
-        
-        Ok(Self {
-            base_path: project_root.to_path_buf(),
-            context_dir,
-        })
+
+        Ok(Self { base_path: project_root.to_path_buf(), context_dir })
     }
 
     pub async fn load_or_create(&self) -> anyhow::Result<ProjectContext> {
         // Ensure directory exists
         fs::create_dir_all(&self.context_dir).await?;
-        
+
         let context_file = self.context_dir.join("project.json");
-        
+
         if context_file.exists() {
             self.load().await
         } else {
             let mut context = ProjectContext::default();
-            
+
             // Try to infer project name from directory
             if let Some(name) = self.base_path.file_name() {
                 context.metadata.name = name.to_string_lossy().to_string();
             }
-            
+
             // Detect languages and build systems
             self.detect_project_metadata(&mut context).await?;
-            
+
             Ok(context)
         }
     }
@@ -150,31 +142,31 @@ impl ContextStorage {
         let context_file = self.context_dir.join("project.json");
         let content = fs::read_to_string(&context_file).await?;
         let mut context: ProjectContext = serde_json::from_str(&content)?;
-        
+
         // Load additional data files
         self.load_patterns(&mut context).await?;
         self.load_conventions(&mut context).await?;
         self.load_dependencies(&mut context).await?;
         self.load_decisions(&mut context).await?;
-        
+
         Ok(context)
     }
 
     pub async fn save(&self, context: &ProjectContext) -> anyhow::Result<()> {
         // Ensure directory exists
         fs::create_dir_all(&self.context_dir).await?;
-        
+
         // Save main context file
         let context_file = self.context_dir.join("project.json");
         let content = serde_json::to_string_pretty(&context)?;
         fs::write(&context_file, content).await?;
-        
+
         // Save additional data files
         self.save_patterns(&context.patterns).await?;
         self.save_conventions(&context.conventions).await?;
         self.save_dependencies(&context.dependencies).await?;
         self.save_decisions(&context.decisions).await?;
-        
+
         Ok(())
     }
 
@@ -184,7 +176,7 @@ impl ContextStorage {
             context.metadata.languages.push(Language::Rust);
             context.metadata.build_systems.push(BuildSystem::Cargo);
         }
-        
+
         // Check for package.json
         if self.base_path.join("package.json").exists() {
             let package_json = self.base_path.join("package.json");
@@ -194,7 +186,7 @@ impl ContextStorage {
                 } else {
                     context.metadata.languages.push(Language::JavaScript);
                 }
-                
+
                 if content.contains("\"yarn\"") {
                     context.metadata.build_systems.push(BuildSystem::Yarn);
                 } else if content.contains("\"pnpm\"") {
@@ -204,43 +196,45 @@ impl ContextStorage {
                 }
             }
         }
-        
+
         // Check for go.mod
         if self.base_path.join("go.mod").exists() {
             context.metadata.languages.push(Language::Go);
         }
-        
+
         // Check for pom.xml
         if self.base_path.join("pom.xml").exists() {
             context.metadata.languages.push(Language::Java);
             context.metadata.build_systems.push(BuildSystem::Maven);
         }
-        
+
         // Check for build.gradle
-        if self.base_path.join("build.gradle").exists() || 
-           self.base_path.join("build.gradle.kts").exists() {
+        if self.base_path.join("build.gradle").exists()
+            || self.base_path.join("build.gradle.kts").exists()
+        {
             context.metadata.languages.push(Language::Java);
             context.metadata.build_systems.push(BuildSystem::Gradle);
         }
-        
+
         // Check for requirements.txt or setup.py
-        if self.base_path.join("requirements.txt").exists() || 
-           self.base_path.join("setup.py").exists() ||
-           self.base_path.join("pyproject.toml").exists() {
+        if self.base_path.join("requirements.txt").exists()
+            || self.base_path.join("setup.py").exists()
+            || self.base_path.join("pyproject.toml").exists()
+        {
             context.metadata.languages.push(Language::Python);
         }
-        
+
         // Check for CMakeLists.txt
         if self.base_path.join("CMakeLists.txt").exists() {
             context.metadata.build_systems.push(BuildSystem::CMake);
             context.metadata.languages.push(Language::Cpp);
         }
-        
+
         // Check for Makefile
         if self.base_path.join("Makefile").exists() {
             context.metadata.build_systems.push(BuildSystem::Make);
         }
-        
+
         Ok(())
     }
 
@@ -296,7 +290,7 @@ impl ContextStorage {
         let decisions_dir = self.context_dir.join("decisions");
         if decisions_dir.exists() {
             let mut decisions = Vec::new();
-            
+
             let mut entries = fs::read_dir(&decisions_dir).await?;
             while let Some(entry) = entries.next_entry().await? {
                 if entry.path().extension().and_then(|s| s.to_str()) == Some("json") {
@@ -306,7 +300,7 @@ impl ContextStorage {
                     }
                 }
             }
-            
+
             context.decisions = decisions;
         }
         Ok(())
@@ -315,14 +309,14 @@ impl ContextStorage {
     async fn save_decisions(&self, decisions: &[ArchitectureDecision]) -> anyhow::Result<()> {
         let decisions_dir = self.context_dir.join("decisions");
         fs::create_dir_all(&decisions_dir).await?;
-        
+
         for decision in decisions {
             let file_name = format!("{}.json", decision.id);
             let file_path = decisions_dir.join(file_name);
             let content = serde_json::to_string_pretty(decision)?;
             fs::write(&file_path, content).await?;
         }
-        
+
         Ok(())
     }
 

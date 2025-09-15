@@ -54,23 +54,23 @@ pub enum Commands {
     /// Analyze files and projects
     #[command(about = "Analyze and classify files or entire projects")]
     Analyze(AnalyzeArgs),
-    
+
     /// Control the autonomous development loop
     #[command(about = "Manage the continuous monitoring and autonomous development loop")]
     Loop(super::commands::loop_control::LoopCommand),
-    
+
     /// Start the autonomous development loop (alias for 'loop start --background')
     #[command(about = "Start the autonomous development loop in background")]
     Run,
-    
+
     /// Start the autonomous development loop (alias for 'loop start --background')
     #[command(about = "Start the autonomous development loop in background")]
     Start,
-    
+
     /// Initialize auto-dev in the current directory
     #[command(about = "Initialize auto-dev configuration and directory structure")]
     Init,
-    
+
     /// Dogfood mode for self-development
     #[command(about = "Use auto-dev-rs on its own codebase for self-development")]
     Dogfood(super::commands::dogfood::DogfoodCommand),
@@ -140,19 +140,19 @@ pub struct ParseArgs {
     /// Path to specification file or directory
     #[arg(help = "Path to specification file or directory to parse")]
     pub path: String,
-    
+
     /// Include TODO comments as requirements
     #[arg(long, help = "Extract TODO comments and convert them to requirements")]
     pub include_todos: bool,
-    
+
     /// Show priority breakdown of requirements
     #[arg(long, help = "Display requirements grouped by priority")]
     pub show_priorities: bool,
-    
+
     /// Target self (parse auto-dev-rs's own source)
     #[arg(long, help = "Parse auto-dev-rs's own codebase for specifications")]
     pub target_self: bool,
-    
+
     /// Validate extracted specifications
     #[arg(long, help = "Validate that extracted specifications are actionable")]
     pub validate: bool,

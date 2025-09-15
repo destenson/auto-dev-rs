@@ -2,12 +2,12 @@
 //
 // Provides inter-module communication through message passing
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc, broadcast};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{RwLock, broadcast, mpsc};
 use uuid::Uuid;
 
 /// Message that can be sent between modules
@@ -83,7 +83,9 @@ pub trait MessageHandler: Send + Sync {
 
     /// Check if a message type is supported
     fn supports(&self, message_type: &MessageType) -> bool {
-        self.supported_types().iter().any(|t| std::mem::discriminant(t) == std::mem::discriminant(message_type))
+        self.supported_types()
+            .iter()
+            .any(|t| std::mem::discriminant(t) == std::mem::discriminant(message_type))
     }
 }
 
@@ -106,7 +108,7 @@ impl MessageBus {
     /// Create a new message bus
     pub fn new() -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
             broadcast_channel: broadcast_tx,
@@ -145,7 +147,7 @@ impl MessageBus {
     /// Broadcast a message to all subscribers
     pub async fn broadcast(&self, mut message: Message) -> Result<()> {
         message.message_type = MessageType::Broadcast;
-        
+
         // Store in history
         self.add_to_history(message.clone()).await;
 
@@ -172,12 +174,8 @@ impl MessageBus {
         filter: Box<dyn Fn(&Message) -> bool + Send + Sync>,
     ) -> mpsc::UnboundedReceiver<Message> {
         let (tx, rx) = mpsc::unbounded_channel();
-        
-        let subscription = Subscription {
-            id: Uuid::new_v4().to_string(),
-            filter,
-            sender: tx,
-        };
+
+        let subscription = Subscription { id: Uuid::new_v4().to_string(), filter, sender: tx };
 
         let mut subs = self.subscriptions.write().await;
         subs.entry(target).or_insert_with(Vec::new).push(subscription);
@@ -192,44 +190,41 @@ impl MessageBus {
 
     /// Request-response pattern
     pub async fn request(&self, target: &str, message: Message) -> Result<Message> {
-        let reply_channel = self.subscribe(
-            message.source.clone(),
-            Box::new({
-                let msg_id = message.id.clone();
-                move |m| m.reply_to.as_ref() == Some(&msg_id)
-            }),
-        ).await;
+        let reply_channel = self
+            .subscribe(
+                message.source.clone(),
+                Box::new({
+                    let msg_id = message.id.clone();
+                    move |m| m.reply_to.as_ref() == Some(&msg_id)
+                }),
+            )
+            .await;
 
         // Send the request
         self.send(target, message).await?;
 
         // Wait for response with timeout
-        tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            async {
-                let mut receiver = reply_channel;
-                receiver.recv().await
-                    .ok_or_else(|| anyhow::anyhow!("No response received"))
-            },
-        ).await
-            .map_err(|_| anyhow::anyhow!("Request timed out"))?
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let mut receiver = reply_channel;
+            receiver.recv().await.ok_or_else(|| anyhow::anyhow!("No response received"))
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Request timed out"))?
     }
 
     /// Get message history
     pub async fn get_history(&self, limit: Option<usize>) -> Vec<Message> {
         let history = self.message_history.read().await;
         let limit = limit.unwrap_or(history.len());
-        
-        history.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+
+        history.iter().rev().take(limit).cloned().collect()
     }
 
     /// Get messages by correlation ID
     pub async fn get_by_correlation_id(&self, correlation_id: &str) -> Vec<Message> {
-        self.message_history.read().await
+        self.message_history
+            .read()
+            .await
             .iter()
             .filter(|m| m.correlation_id.as_ref() == Some(&correlation_id.to_string()))
             .cloned()
@@ -240,7 +235,7 @@ impl MessageBus {
     async fn add_to_history(&self, message: Message) {
         let mut history = self.message_history.write().await;
         history.push(message);
-        
+
         // Trim history if it exceeds max size
         if history.len() > self.max_history_size {
             let excess = history.len() - self.max_history_size;
@@ -287,9 +282,7 @@ pub struct MessageRouter {
 impl MessageRouter {
     /// Create a new message router
     pub fn new() -> Self {
-        Self {
-            handlers: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { handlers: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     /// Register a message handler for a module
@@ -305,7 +298,7 @@ impl MessageRouter {
     /// Route a message to the appropriate handler
     pub async fn route(&self, message: Message) -> Result<Option<Message>> {
         let mut handlers = self.handlers.write().await;
-        
+
         if let Some(handler) = handlers.get_mut(&message.target) {
             if handler.supports(&message.message_type) {
                 handler.handle_message(message).await
@@ -355,11 +348,8 @@ mod tests {
     #[tokio::test]
     async fn test_message_bus() {
         let bus = MessageBus::new();
-        
-        let mut receiver = bus.subscribe(
-            "test_module".to_string(),
-            Box::new(|_| true),
-        ).await;
+
+        let mut receiver = bus.subscribe("test_module".to_string(), Box::new(|_| true)).await;
 
         let msg = Message::new(
             "sender".to_string(),

@@ -2,16 +2,16 @@
 //
 // Manages module execution, state, and isolation
 
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::timeout;
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::modules::interface::{ModuleState, ModuleInterface};
+use crate::modules::interface::{ModuleInterface, ModuleState};
 use crate::modules::registry::ModuleRegistry;
 
 /// Execution context passed to modules
@@ -70,12 +70,7 @@ pub struct ExecutionMetrics {
 
 impl Default for ExecutionMetrics {
     fn default() -> Self {
-        Self {
-            memory_used: 0,
-            cpu_time_ms: 0,
-            messages_sent: 0,
-            messages_received: 0,
-        }
+        Self { memory_used: 0, cpu_time_ms: 0, messages_sent: 0, messages_received: 0 }
     }
 }
 
@@ -112,13 +107,13 @@ impl ModuleRuntime {
     /// Initialize a module
     pub async fn initialize_module(&self, module_id: &str) -> Result<()> {
         let mut registry = self.registry.write().await;
-        
-        let module = registry.get_mut(module_id)
+
+        let module = registry
+            .get_mut(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         // Initialize the module
-        module.as_interface_mut().initialize().await
-            .context("Failed to initialize module")?;
+        module.as_interface_mut().initialize().await.context("Failed to initialize module")?;
 
         // Create execution state
         let state = module.as_interface().get_state()?;
@@ -132,10 +127,7 @@ impl ModuleRuntime {
         self.executions.write().await.insert(module_id.to_string(), execution);
 
         // Create execution lock
-        self.execution_lock.write().await.insert(
-            module_id.to_string(),
-            Arc::new(Mutex::new(())),
-        );
+        self.execution_lock.write().await.insert(module_id.to_string(), Arc::new(Mutex::new(())));
 
         Ok(())
     }
@@ -147,7 +139,8 @@ impl ModuleRuntime {
         // Get execution lock to prevent concurrent execution
         let lock = {
             let locks = self.execution_lock.read().await;
-            locks.get(module_id)
+            locks
+                .get(module_id)
                 .ok_or_else(|| anyhow::anyhow!("Module not initialized: {}", module_id))?
                 .clone()
         };
@@ -199,8 +192,9 @@ impl ModuleRuntime {
     /// Internal execution without locks
     async fn execute_internal(&self, module_id: &str, input: Value) -> Result<Value> {
         let registry = self.registry.read().await;
-        
-        let module = registry.get(module_id)
+
+        let module = registry
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         module.as_interface().execute(input).await
@@ -216,7 +210,7 @@ impl ModuleRuntime {
 
         if let Some(lock) = lock {
             let _guard = lock.lock().await;
-            
+
             // Shutdown the module
             let mut registry = self.registry.write().await;
             if let Some(module) = registry.get_mut(module_id) {
@@ -234,8 +228,9 @@ impl ModuleRuntime {
     /// Get module state
     pub async fn get_module_state(&self, module_id: &str) -> Result<ModuleState> {
         let registry = self.registry.read().await;
-        
-        let module = registry.get(module_id)
+
+        let module = registry
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         module.as_interface().get_state()
@@ -244,8 +239,9 @@ impl ModuleRuntime {
     /// Restore module state
     pub async fn restore_module_state(&self, module_id: &str, state: ModuleState) -> Result<()> {
         let mut registry = self.registry.write().await;
-        
-        let module = registry.get_mut(module_id)
+
+        let module = registry
+            .get_mut(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         module.as_interface_mut().restore_state(state)?;
@@ -261,8 +257,9 @@ impl ModuleRuntime {
     /// Health check for a module
     pub async fn health_check(&self, module_id: &str) -> Result<bool> {
         let registry = self.registry.read().await;
-        
-        let module = registry.get(module_id)
+
+        let module = registry
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         module.as_interface().health_check().await
@@ -271,24 +268,22 @@ impl ModuleRuntime {
     /// Get execution metrics for a module
     pub async fn get_metrics(&self, module_id: &str) -> Result<ExecutionMetrics> {
         let executions = self.executions.read().await;
-        
-        executions.get(module_id)
+
+        executions
+            .get(module_id)
             .map(|exec| exec.metrics.clone())
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))
     }
 
     /// Check if a module is currently running
     pub async fn is_running(&self, module_id: &str) -> bool {
-        self.executions.read().await
-            .get(module_id)
-            .map(|exec| exec.is_running)
-            .unwrap_or(false)
+        self.executions.read().await.get(module_id).map(|exec| exec.is_running).unwrap_or(false)
     }
 
     /// Stop a running module (force stop)
     pub async fn stop_module(&self, module_id: &str) -> Result<()> {
         let mut executions = self.executions.write().await;
-        
+
         if let Some(exec) = executions.get_mut(module_id) {
             if exec.is_running {
                 exec.is_running = false;
@@ -304,7 +299,9 @@ impl ModuleRuntime {
 
     /// Get all running modules
     pub async fn get_running_modules(&self) -> Vec<String> {
-        self.executions.read().await
+        self.executions
+            .read()
+            .await
             .iter()
             .filter(|(_, exec)| exec.is_running)
             .map(|(id, _)| id.clone())

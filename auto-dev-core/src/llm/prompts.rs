@@ -2,7 +2,7 @@
 //!
 //! Provides specialized prompts for Qwen and other models based on their strengths
 
-use super::provider::{ModelTier, Specification, ProjectContext};
+use super::provider::{ModelTier, ProjectContext, Specification};
 use serde::{Deserialize, Serialize};
 
 /// Prompt templates optimized for specific tasks and models
@@ -31,7 +31,7 @@ impl PromptTemplates {
             ModelTier::NoLLM => String::new(),
         }
     }
-    
+
     /// Get optimized prompt for yes/no questions
     pub fn yes_no_prompt(question: &str, context: Option<&str>, tier: ModelTier) -> String {
         match tier {
@@ -52,7 +52,7 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for pattern detection
     pub fn pattern_detection_prompt(code: &str, pattern: &str, tier: ModelTier) -> String {
         match tier {
@@ -74,7 +74,7 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for requirement checking
     pub fn requirement_check_prompt(requirement: &str, code: &str, tier: ModelTier) -> String {
         match tier {
@@ -97,7 +97,7 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for simple completions
     pub fn completion_prompt(prefix: &str, suffix: Option<&str>, tier: ModelTier) -> String {
         match tier {
@@ -118,16 +118,13 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for language detection
     pub fn language_detection_prompt(code: &str, tier: ModelTier) -> String {
         match tier {
             ModelTier::Tiny => {
                 // Qwen-optimized: Just the essential
-                format!(
-                    "Language?\n{}\nAnswer:",
-                    &code[..code.len().min(200)]
-                )
+                format!("Language?\n{}\nAnswer:", &code[..code.len().min(200)])
             }
             _ => {
                 format!(
@@ -137,16 +134,13 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for code quality check
     pub fn quality_check_prompt(code: &str, tier: ModelTier) -> String {
         match tier {
             ModelTier::Tiny => {
                 // Qwen-optimized: Binary quality assessment
-                format!(
-                    "Code quality?\n{}\ngood/bad:",
-                    &code[..code.len().min(300)]
-                )
+                format!("Code quality?\n{}\ngood/bad:", &code[..code.len().min(300)])
             }
             _ => {
                 format!(
@@ -157,7 +151,7 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get optimized prompt for definition questions
     pub fn definition_prompt(term: &str, tier: ModelTier) -> String {
         match tier {
@@ -170,7 +164,7 @@ impl PromptTemplates {
             }
         }
     }
-    
+
     /// Get system prompt optimized for model tier
     pub fn system_prompt(tier: ModelTier, task_type: &str) -> Option<String> {
         match tier {
@@ -181,13 +175,11 @@ impl PromptTemplates {
             ModelTier::Small => {
                 Some(format!("You are a helpful assistant for {}. Be concise.", task_type))
             }
-            ModelTier::Medium | ModelTier::Large => {
-                Some(format!(
-                    "You are an expert assistant specializing in {}. \
+            ModelTier::Medium | ModelTier::Large => Some(format!(
+                "You are an expert assistant specializing in {}. \
                      Provide clear, accurate, and well-structured responses.",
-                    task_type
-                ))
-            }
+                task_type
+            )),
             ModelTier::NoLLM => None,
         }
     }
@@ -209,15 +201,11 @@ impl QwenPromptOptimizer {
             .replace("I want you to ", "")
             .replace("\n\n\n", "\n")
             .replace("\n\n", "\n");
-        
+
         // Truncate to reasonable length for Qwen
-        if optimized.len() > 500 {
-            format!("{}...", &optimized[..500])
-        } else {
-            optimized
-        }
+        if optimized.len() > 500 { format!("{}...", &optimized[..500]) } else { optimized }
     }
-    
+
     /// Create a structured prompt for better Qwen performance
     pub fn structured_prompt(task: &str, input: &str, expected_format: &str) -> String {
         format!(
@@ -227,16 +215,16 @@ impl QwenPromptOptimizer {
             expected_format
         )
     }
-    
+
     /// Create a few-shot prompt for Qwen
     pub fn few_shot_prompt(examples: &[(String, String)], query: &str) -> String {
         let mut prompt = String::new();
-        
+
         // Limit to 2-3 examples for Qwen
         for (input, output) in examples.iter().take(3) {
             prompt.push_str(&format!("Q: {}\nA: {}\n", input, output));
         }
-        
+
         prompt.push_str(&format!("Q: {}\nA:", query));
         prompt
     }
@@ -276,7 +264,7 @@ impl TaskPrompt {
             expected_output_format: "code|doc|test|config|other".to_string(),
         }
     }
-    
+
     /// Create an optimized prompt for Qwen yes/no
     pub fn qwen_yes_no() -> Self {
         Self {
@@ -287,7 +275,7 @@ impl TaskPrompt {
             expected_output_format: "yes|no".to_string(),
         }
     }
-    
+
     /// Create an optimized prompt for Qwen pattern detection
     pub fn qwen_pattern() -> Self {
         Self {
@@ -328,26 +316,23 @@ impl PromptChain {
                 next_on_no: None,
             },
         ];
-        
+
         Self { steps }
     }
-    
+
     /// Execute the chain and collect results
-    pub async fn execute<F>(
-        &self,
-        executor: F,
-    ) -> Result<Vec<String>, anyhow::Error>
+    pub async fn execute<F>(&self, executor: F) -> Result<Vec<String>, anyhow::Error>
     where
         F: Fn(&str, ModelTier) -> Result<String, anyhow::Error>,
     {
         let mut results = Vec::new();
         let mut current_step = 0;
-        
+
         while current_step < self.steps.len() {
             let step = &self.steps[current_step];
             let result = executor(&step.prompt, step.tier)?;
             results.push(result.clone());
-            
+
             // Determine next step
             if result.to_lowercase().contains("yes") {
                 if let Some(next) = step.next_on_yes {
@@ -363,7 +348,7 @@ impl PromptChain {
                 }
             }
         }
-        
+
         Ok(results)
     }
 }
@@ -379,7 +364,7 @@ struct ChainStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_qwen_prompt_optimization() {
         let verbose = "Please could you tell me what this code does?";
@@ -387,26 +372,24 @@ mod tests {
         assert!(!optimized.contains("Please"));
         assert!(!optimized.contains("could you"));
     }
-    
+
     #[test]
     fn test_classification_prompts() {
         let content = "fn main() { println!(\"Hello\"); }";
-        
+
         let tiny_prompt = PromptTemplates::classification_prompt(content, ModelTier::Tiny);
         assert!(tiny_prompt.len() < 300);
         assert!(tiny_prompt.contains("Answer:"));
-        
+
         let large_prompt = PromptTemplates::classification_prompt(content, ModelTier::Large);
         assert!(large_prompt.len() > tiny_prompt.len());
     }
-    
+
     #[test]
     fn test_few_shot_prompt() {
-        let examples = vec![
-            ("2+2".to_string(), "4".to_string()),
-            ("3+3".to_string(), "6".to_string()),
-        ];
-        
+        let examples =
+            vec![("2+2".to_string(), "4".to_string()), ("3+3".to_string(), "6".to_string())];
+
         let prompt = QwenPromptOptimizer::few_shot_prompt(&examples, "4+4");
         assert!(prompt.contains("Q: 2+2"));
         assert!(prompt.contains("A: 4"));

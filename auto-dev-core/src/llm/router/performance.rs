@@ -37,15 +37,16 @@ impl PerformanceMonitor {
         quality_score: Option<f32>,
     ) {
         let mut metrics_map = self.metrics.write().await;
-        let metrics = metrics_map.entry(model_id.to_string())
+        let metrics = metrics_map
+            .entry(model_id.to_string())
             .or_insert_with(|| ModelMetrics::new(model_id.to_string(), tier));
-        
+
         // Update success/failure counts
         if success {
             metrics.success_count += 1;
             metrics.total_latency += latency;
             metrics.total_tokens += tokens;
-            
+
             if let Some(score) = quality_score {
                 metrics.quality_scores.push(score);
                 if metrics.quality_scores.len() > 100 {
@@ -55,16 +56,16 @@ impl PerformanceMonitor {
         } else {
             metrics.failure_count += 1;
         }
-        
+
         // Update latency percentiles
         metrics.latencies.push_back(latency);
         if metrics.latencies.len() > self.config.percentile_window {
             metrics.latencies.pop_front();
         }
-        
+
         // Recalculate aggregates
         metrics.recalculate();
-        
+
         // Add to history
         let mut history = self.history.write().await;
         history.add_event(PerformanceEvent {
@@ -76,16 +77,18 @@ impl PerformanceMonitor {
             tokens,
             quality_score,
         });
-        
+
         // Check for performance issues
         if metrics.failure_rate() > self.config.max_failure_rate {
-            warn!("Model {} has high failure rate: {:.2}%",
-                  model_id, metrics.failure_rate() * 100.0);
+            warn!(
+                "Model {} has high failure rate: {:.2}%",
+                model_id,
+                metrics.failure_rate() * 100.0
+            );
         }
-        
+
         if metrics.average_latency() > self.config.max_latency {
-            warn!("Model {} has high latency: {:?}",
-                  model_id, metrics.average_latency());
+            warn!("Model {} has high latency: {:?}", model_id, metrics.average_latency());
         }
     }
 
@@ -103,7 +106,7 @@ impl PerformanceMonitor {
     pub async fn recommend_tier_adjustments(&self) -> Vec<TierAdjustment> {
         let metrics = self.metrics.read().await;
         let mut adjustments = Vec::new();
-        
+
         for (model_id, model_metrics) in metrics.iter() {
             // Check if model is underperforming
             if model_metrics.failure_rate() > 0.2 {
@@ -111,34 +114,34 @@ impl PerformanceMonitor {
                     model_id: model_id.clone(),
                     current_tier: model_metrics.tier,
                     recommended_tier: self.next_tier(model_metrics.tier),
-                    reason: format!("High failure rate: {:.1}%", 
-                                  model_metrics.failure_rate() * 100.0),
+                    reason: format!(
+                        "High failure rate: {:.1}%",
+                        model_metrics.failure_rate() * 100.0
+                    ),
                 });
             }
-            
+
             // Check if model is too slow
             if model_metrics.average_latency() > Duration::from_secs(10) {
                 adjustments.push(TierAdjustment {
                     model_id: model_id.clone(),
                     current_tier: model_metrics.tier,
                     recommended_tier: self.next_tier(model_metrics.tier),
-                    reason: format!("High latency: {:?}", 
-                                  model_metrics.average_latency()),
+                    reason: format!("High latency: {:?}", model_metrics.average_latency()),
                 });
             }
-            
+
             // Check if quality is too low
             if model_metrics.average_quality() < self.config.min_quality_score {
                 adjustments.push(TierAdjustment {
                     model_id: model_id.clone(),
                     current_tier: model_metrics.tier,
                     recommended_tier: self.next_tier(model_metrics.tier),
-                    reason: format!("Low quality score: {:.2}", 
-                                  model_metrics.average_quality()),
+                    reason: format!("Low quality score: {:.2}", model_metrics.average_quality()),
                 });
             }
         }
-        
+
         adjustments
     }
 
@@ -146,25 +149,25 @@ impl PerformanceMonitor {
     pub async fn get_performance_report(&self) -> PerformanceReport {
         let metrics = self.metrics.read().await;
         let history = self.history.read().await;
-        
+
         let mut total_requests = 0usize;
         let mut total_successes = 0usize;
         let mut total_tokens = 0usize;
         let mut tier_performance = HashMap::new();
-        
+
         for model_metrics in metrics.values() {
             total_requests += model_metrics.success_count + model_metrics.failure_count;
             total_successes += model_metrics.success_count;
             total_tokens += model_metrics.total_tokens;
-            
-            let tier_stats = tier_performance.entry(model_metrics.tier)
-                .or_insert_with(TierPerformance::default);
+
+            let tier_stats =
+                tier_performance.entry(model_metrics.tier).or_insert_with(TierPerformance::default);
             tier_stats.requests += model_metrics.success_count + model_metrics.failure_count;
             tier_stats.successes += model_metrics.success_count;
             tier_stats.total_latency += model_metrics.total_latency;
             tier_stats.tokens += model_metrics.total_tokens;
         }
-        
+
         PerformanceReport {
             total_requests,
             total_successes,
@@ -191,12 +194,13 @@ impl PerformanceMonitor {
     }
 
     fn rank_models(&self, metrics: &HashMap<String, ModelMetrics>) -> Vec<ModelRanking> {
-        let mut rankings: Vec<_> = metrics.iter()
+        let mut rankings: Vec<_> = metrics
+            .iter()
             .map(|(id, m)| {
                 let score = m.success_rate() * 0.4
                     + (1.0 - m.normalized_latency()) * 0.3
                     + m.average_quality() * 0.3;
-                
+
                 ModelRanking {
                     model_id: id.clone(),
                     tier: m.tier,
@@ -207,7 +211,7 @@ impl PerformanceMonitor {
                 }
             })
             .collect();
-        
+
         rankings.sort_by(|a, b| b.performance_score.partial_cmp(&a.performance_score).unwrap());
         rankings
     }
@@ -255,28 +259,25 @@ impl ModelMetrics {
     fn recalculate(&mut self) {
         // Calculate success rate
         let total = self.success_count + self.failure_count;
-        self.success_rate = if total > 0 {
-            self.success_count as f32 / total as f32
-        } else {
-            0.0
-        };
-        
+        self.success_rate = if total > 0 { self.success_count as f32 / total as f32 } else { 0.0 };
+
         // Calculate average latency
         if self.success_count > 0 {
-            self.average_latency_ms = self.total_latency.as_millis() as u64 / self.success_count as u64;
+            self.average_latency_ms =
+                self.total_latency.as_millis() as u64 / self.success_count as u64;
         }
-        
+
         // Calculate percentiles
         if !self.latencies.is_empty() {
             let mut sorted: Vec<_> = self.latencies.iter().collect();
             sorted.sort();
-            
+
             let len = sorted.len();
             self.p50_latency_ms = sorted[len / 2].as_millis() as u64;
             self.p95_latency_ms = sorted[len * 95 / 100].as_millis() as u64;
             self.p99_latency_ms = sorted[len * 99 / 100].as_millis() as u64;
         }
-        
+
         // Calculate tokens per second
         if self.total_latency.as_secs() > 0 {
             self.tokens_per_second = self.total_tokens as f32 / self.total_latency.as_secs_f32();
@@ -318,10 +319,7 @@ struct PerformanceHistory {
 
 impl PerformanceHistory {
     fn new(max_size: usize) -> Self {
-        Self {
-            events: VecDeque::new(),
-            max_size,
-        }
+        Self { events: VecDeque::new(), max_size }
     }
 
     fn add_event(&mut self, event: PerformanceEvent) {
@@ -332,11 +330,7 @@ impl PerformanceHistory {
     }
 
     fn recent_events(&self, count: usize) -> Vec<PerformanceEvent> {
-        self.events.iter()
-            .rev()
-            .take(count)
-            .cloned()
-            .collect()
+        self.events.iter().rev().take(count).cloned().collect()
     }
 }
 
@@ -406,11 +400,7 @@ pub struct TierPerformance {
 
 impl TierPerformance {
     pub fn success_rate(&self) -> f32 {
-        if self.requests > 0 {
-            self.successes as f32 / self.requests as f32
-        } else {
-            0.0
-        }
+        if self.requests > 0 { self.successes as f32 / self.requests as f32 } else { 0.0 }
     }
 
     pub fn average_latency(&self) -> Duration {
@@ -440,36 +430,35 @@ mod tests {
     #[tokio::test]
     async fn test_performance_tracking() {
         let monitor = PerformanceMonitor::new(PerformanceConfig::default());
-        
+
         // Track some successful requests
-        monitor.update_metrics(
-            "gpt-4",
-            ModelTier::Large,
-            true,
-            Duration::from_millis(500),
-            1000,
-            Some(0.9),
-        ).await;
-        
-        monitor.update_metrics(
-            "gpt-4",
-            ModelTier::Large,
-            true,
-            Duration::from_millis(600),
-            1200,
-            Some(0.85),
-        ).await;
-        
+        monitor
+            .update_metrics(
+                "gpt-4",
+                ModelTier::Large,
+                true,
+                Duration::from_millis(500),
+                1000,
+                Some(0.9),
+            )
+            .await;
+
+        monitor
+            .update_metrics(
+                "gpt-4",
+                ModelTier::Large,
+                true,
+                Duration::from_millis(600),
+                1200,
+                Some(0.85),
+            )
+            .await;
+
         // Track a failure
-        monitor.update_metrics(
-            "gpt-4",
-            ModelTier::Large,
-            false,
-            Duration::from_millis(0),
-            0,
-            None,
-        ).await;
-        
+        monitor
+            .update_metrics("gpt-4", ModelTier::Large, false, Duration::from_millis(0), 0, None)
+            .await;
+
         let metrics = monitor.get_metrics("gpt-4").await.unwrap();
         assert_eq!(metrics.success_count, 2);
         assert_eq!(metrics.failure_count, 1);
@@ -479,28 +468,32 @@ mod tests {
     #[tokio::test]
     async fn test_tier_recommendations() {
         let monitor = PerformanceMonitor::new(PerformanceConfig::default());
-        
+
         // Track high failure rate
         for _ in 0..10 {
-            monitor.update_metrics(
+            monitor
+                .update_metrics(
+                    "weak-model",
+                    ModelTier::Small,
+                    false,
+                    Duration::from_millis(100),
+                    0,
+                    None,
+                )
+                .await;
+        }
+
+        monitor
+            .update_metrics(
                 "weak-model",
                 ModelTier::Small,
-                false,
+                true,
                 Duration::from_millis(100),
-                0,
-                None,
-            ).await;
-        }
-        
-        monitor.update_metrics(
-            "weak-model",
-            ModelTier::Small,
-            true,
-            Duration::from_millis(100),
-            100,
-            Some(0.5),
-        ).await;
-        
+                100,
+                Some(0.5),
+            )
+            .await;
+
         let adjustments = monitor.recommend_tier_adjustments().await;
         assert!(!adjustments.is_empty());
         assert_eq!(adjustments[0].recommended_tier, ModelTier::Medium);

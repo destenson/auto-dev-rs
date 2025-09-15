@@ -2,12 +2,12 @@
 //
 // Tracks loaded modules, manages lifecycle, and handles dependencies
 
-use std::collections::{HashMap, HashSet};
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
-use crate::modules::interface::{ModuleInterface, ModuleCapability, ModuleVersion, ModuleMetadata};
+use crate::modules::interface::{ModuleCapability, ModuleInterface, ModuleMetadata, ModuleVersion};
 use crate::modules::loader::LoadedModule;
 
 /// Module status in the registry
@@ -49,17 +49,13 @@ pub struct ModuleRegistry {
 impl ModuleRegistry {
     /// Create a new module registry
     pub fn new() -> Self {
-        Self {
-            modules: HashMap::new(),
-            dependency_graph: HashMap::new(),
-        }
+        Self { modules: HashMap::new(), dependency_graph: HashMap::new() }
     }
 
     /// Register a new module
     pub async fn register(&mut self, mut module: LoadedModule) -> Result<String> {
         // Initialize the module
-        module.as_interface_mut().initialize().await
-            .context("Failed to initialize module")?;
+        module.as_interface_mut().initialize().await.context("Failed to initialize module")?;
 
         let metadata = module.metadata();
         let module_id = metadata.name.clone();
@@ -102,18 +98,16 @@ impl ModuleRegistry {
     /// Unregister a module
     pub async fn unregister(&mut self, module_id: &str) -> Result<()> {
         // Check if module exists
-        let entry = self.modules.get(module_id)
+        let entry = self
+            .modules
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         // Check for dependents
         if let Some(dependents) = self.dependency_graph.get(module_id) {
             if !dependents.is_empty() {
                 let deps: Vec<String> = dependents.iter().cloned().collect();
-                anyhow::bail!(
-                    "Cannot unregister module '{}' - required by: {:?}",
-                    module_id,
-                    deps
-                );
+                anyhow::bail!("Cannot unregister module '{}' - required by: {:?}", module_id, deps);
             }
         }
 
@@ -134,7 +128,9 @@ impl ModuleRegistry {
     /// Update a module (for hot-reload)
     pub async fn update(&mut self, module_id: &str, mut new_module: LoadedModule) -> Result<()> {
         // Get existing entry
-        let old_entry = self.modules.get_mut(module_id)
+        let old_entry = self
+            .modules
+            .get_mut(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         // Initialize new module
@@ -168,23 +164,27 @@ impl ModuleRegistry {
 
     /// Update module status
     pub fn set_status(&mut self, module_id: &str, status: ModuleStatus) -> Result<()> {
-        let entry = self.modules.get_mut(module_id)
+        let entry = self
+            .modules
+            .get_mut(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
-        
+
         entry.info.status = status;
         entry.info.last_accessed = Utc::now();
-        
+
         Ok(())
     }
 
     /// Increment execution count
     pub fn increment_execution_count(&mut self, module_id: &str) -> Result<()> {
-        let entry = self.modules.get_mut(module_id)
+        let entry = self
+            .modules
+            .get_mut(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
-        
+
         entry.info.execution_count += 1;
         entry.info.last_accessed = Utc::now();
-        
+
         Ok(())
     }
 
@@ -198,10 +198,7 @@ impl ModuleRegistry {
 
     /// List all modules
     pub fn list_all(&self) -> Vec<ModuleInfo> {
-        self.modules
-            .values()
-            .map(|entry| entry.info.clone())
-            .collect()
+        self.modules.values().map(|entry| entry.info.clone()).collect()
     }
 
     /// List modules by status
@@ -218,7 +215,9 @@ impl ModuleRegistry {
         self.modules
             .values()
             .filter(|entry| {
-                entry.module.as_interface()
+                entry
+                    .module
+                    .as_interface()
                     .get_capabilities()
                     .iter()
                     .any(|cap| matches!(cap, capability))
@@ -230,7 +229,7 @@ impl ModuleRegistry {
     /// Resolve module dependencies
     fn resolve_dependencies(&self, metadata: &ModuleMetadata) -> Result<Vec<String>> {
         let mut resolved = Vec::new();
-        
+
         for dep in &metadata.dependencies {
             if dep.optional {
                 // Skip optional dependencies for now
@@ -239,17 +238,14 @@ impl ModuleRegistry {
 
             // Find matching module
             let found = self.modules.iter().find(|(id, entry)| {
-                **id == dep.name && Self::version_matches(&entry.info.metadata.version, &dep.version_requirement)
+                **id == dep.name
+                    && Self::version_matches(&entry.info.metadata.version, &dep.version_requirement)
             });
 
             if let Some((id, _)) = found {
                 resolved.push(id.clone());
             } else {
-                anyhow::bail!(
-                    "Dependency not satisfied: {} {}",
-                    dep.name,
-                    dep.version_requirement
-                );
+                anyhow::bail!("Dependency not satisfied: {} {}", dep.name, dep.version_requirement);
             }
         }
 

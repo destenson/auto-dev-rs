@@ -1,5 +1,5 @@
 //! Filesystem monitoring and change detection system
-//! 
+//!
 //! This module provides comprehensive file watching capabilities with:
 //! - Event debouncing to handle rapid changes
 //! - File type classification

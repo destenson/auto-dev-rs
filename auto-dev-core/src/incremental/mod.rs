@@ -1,53 +1,53 @@
 //! Incremental implementation and progressive enhancement module
-//! 
+//!
 //! This module implements a system for incremental code generation that builds
 //! functionality progressively, ensuring each step compiles and passes tests
 //! before proceeding to the next.
 
-pub mod planner;
 pub mod executor;
-pub mod validator;
-pub mod rollback;
+pub mod planner;
 pub mod progress;
+pub mod rollback;
+pub mod validator;
 
-use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use thiserror::Error;
+use uuid::Uuid;
 
-pub use planner::{IncrementPlanner, IncrementPlan};
-pub use executor::{IncrementExecutor, ExecutionResult};
+pub use executor::{ExecutionResult, IncrementExecutor};
+pub use planner::{IncrementPlan, IncrementPlanner};
+pub use progress::{ProgressEvent, ProgressReport, ProgressTracker};
+pub use rollback::{CheckpointId, RollbackManager};
 pub use validator::{IncrementValidator, ValidationResult};
-pub use rollback::{RollbackManager, CheckpointId};
-pub use progress::{ProgressTracker, ProgressReport, ProgressEvent};
 
 #[derive(Debug, Error)]
 pub enum IncrementalError {
     #[error("Planning failed: {0}")]
     PlanningError(String),
-    
+
     #[error("Execution failed: {0}")]
     ExecutionError(String),
-    
+
     #[error("Validation failed: {0}")]
     ValidationError(String),
-    
+
     #[error("Rollback failed: {0}")]
     RollbackError(String),
-    
+
     #[error("Dependency not satisfied: {0}")]
     DependencyError(String),
-    
+
     #[error("Compilation failed: {0}")]
     CompilationError(String),
-    
+
     #[error("Test failed: {0}")]
     TestFailure(String),
-    
+
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }
@@ -239,25 +239,25 @@ impl Increment {
             updated_at: now,
         }
     }
-    
+
     /// Check if increment is ready to execute
     pub fn is_ready(&self, completed: &[Uuid]) -> bool {
-        self.status == IncrementStatus::Pending &&
-            self.dependencies.iter().all(|dep| completed.contains(dep))
+        self.status == IncrementStatus::Pending
+            && self.dependencies.iter().all(|dep| completed.contains(dep))
     }
-    
+
     /// Mark increment as in progress
     pub fn start(&mut self) {
         self.status = IncrementStatus::InProgress;
         self.updated_at = Utc::now();
     }
-    
+
     /// Mark increment as completed
     pub fn complete(&mut self) {
         self.status = IncrementStatus::Completed;
         self.updated_at = Utc::now();
     }
-    
+
     /// Mark increment as failed
     pub fn fail(&mut self, reason: String) {
         self.status = IncrementStatus::Failed;
@@ -267,7 +267,7 @@ impl Increment {
             attempt.result = Some(AttemptResult::ValidationFailure(reason));
         }
     }
-    
+
     /// Add an attempt record
     pub fn add_attempt(&mut self) -> &mut Attempt {
         let attempt = Attempt {
@@ -285,7 +285,7 @@ impl Increment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_increment_creation() {
         let spec = SpecFragment {
@@ -295,12 +295,12 @@ mod tests {
             context: "Test context".to_string(),
             examples: vec![],
         };
-        
+
         let increment = Increment::new(spec, vec![]);
         assert_eq!(increment.status, IncrementStatus::Pending);
         assert!(increment.is_ready(&[]));
     }
-    
+
     #[test]
     fn test_dependency_checking() {
         let spec = SpecFragment {
@@ -310,10 +310,10 @@ mod tests {
             context: String::new(),
             examples: vec![],
         };
-        
+
         let dep_id = Uuid::new_v4();
         let increment = Increment::new(spec, vec![dep_id]);
-        
+
         assert!(!increment.is_ready(&[]));
         assert!(increment.is_ready(&[dep_id]));
     }

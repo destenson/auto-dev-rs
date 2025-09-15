@@ -42,19 +42,14 @@ impl FileWatcher {
     pub fn new(config: WatcherConfig) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         let classifier = Arc::new(FileClassifier::new());
-        
-        Self {
-            config,
-            classifier,
-            tx,
-            rx: Some(rx),
-        }
+
+        Self { config, classifier, tx, rx: Some(rx) }
     }
 
     /// Start watching for file changes
     pub async fn start(mut self) -> Result<mpsc::UnboundedReceiver<FileChange>> {
         let rx = self.rx.take().expect("Receiver already taken");
-        
+
         // Build gitignore matcher
         let mut gitignore_builder = GitignoreBuilder::new(&self.config.paths[0]);
         for pattern in &self.config.monitor_config.ignore_patterns {
@@ -67,18 +62,19 @@ impl FileWatcher {
         let monitor_config = self.config.monitor_config.clone();
 
         // Create the notify watcher
-        let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-            match res {
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
                 Ok(event) => {
-                    if let Some(change) = process_event(event, &classifier, &gitignore, &monitor_config) {
+                    if let Some(change) =
+                        process_event(event, &classifier, &gitignore, &monitor_config)
+                    {
                         if let Err(e) = tx.send(change) {
                             error!("Failed to send change event: {}", e);
                         }
                     }
                 }
                 Err(e) => error!("Watch error: {:?}", e),
-            }
-        })?;
+            })?;
 
         // Add paths to watch
         for path in &self.config.paths {
@@ -87,7 +83,7 @@ impl FileWatcher {
             } else {
                 RecursiveMode::NonRecursive
             };
-            
+
             watcher.watch(path, mode)?;
             info!("Watching path: {:?} (recursive: {})", path, self.config.recursive);
         }
@@ -126,7 +122,7 @@ fn process_event(
 ) -> Option<FileChange> {
     // Extract the path from the event
     let path = event.paths.first()?.clone();
-    
+
     // Check if path should be ignored
     if gitignore.matched(&path, path.is_dir()).is_ignore() {
         debug!("Ignoring path due to gitignore: {:?}", path);
@@ -154,32 +150,27 @@ fn process_event(
 
     // Classify the file
     let category = classifier.classify(&path);
-    
+
     // Skip if not a monitored category
     if category == crate::monitor::FileCategory::Other {
         debug!("Skipping non-monitored file: {:?}", path);
         return None;
     }
 
-    Some(FileChange {
-        path,
-        category,
-        change_type,
-        timestamp: SystemTime::now(),
-    })
+    Some(FileChange { path, category, change_type, timestamp: SystemTime::now() })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_file_watcher_detects_changes() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.md");
-        
+
         let config = WatcherConfig {
             paths: vec![temp_dir.path().to_path_buf()],
             recursive: true,
@@ -191,10 +182,10 @@ mod tests {
 
         // Create a file
         std::fs::write(&test_file, "test content").unwrap();
-        
+
         // Wait for event
         sleep(Duration::from_millis(100)).await;
-        
+
         if let Ok(change) = rx.try_recv() {
             assert_eq!(change.change_type, ChangeType::Created);
             assert_eq!(change.path, test_file);

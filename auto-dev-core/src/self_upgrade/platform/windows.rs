@@ -1,6 +1,6 @@
 //! Windows specific binary replacement
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
 use tracing::{info, warn};
@@ -9,7 +9,7 @@ use tracing::{info, warn};
 pub fn swap_binary(current: &Path, new: &Path) -> Result<()> {
     // Windows doesn't allow replacing a running executable directly
     // Use a batch script to perform the replacement after a delay
-    
+
     let batch_content = format!(
         r#"@echo off
 timeout /t 2 /nobreak > nul
@@ -26,18 +26,18 @@ del "%~f0"
         current.display(),
         current.display()
     );
-    
+
     let batch_file = current.with_extension("upgrade.bat");
     std::fs::write(&batch_file, batch_content)?;
-    
+
     // Execute the batch file
     Command::new("cmd")
         .args(&["/c", "start", "/min", batch_file.to_str().unwrap()])
         .spawn()
         .context("Failed to start upgrade batch file")?;
-    
+
     info!("Upgrade batch file started, application will restart shortly");
-    
+
     // Exit current process
     std::process::exit(0);
 }
@@ -45,11 +45,8 @@ del "%~f0"
 /// Restart the application
 pub fn restart_with_args(binary: &Path, args: &[&str]) -> Result<()> {
     // Start new process
-    Command::new(binary)
-        .args(args)
-        .spawn()
-        .context("Failed to start new process")?;
-    
+    Command::new(binary).args(args).spawn().context("Failed to start new process")?;
+
     // Exit current process
     std::process::exit(0);
 }

@@ -4,7 +4,7 @@
 //! and task-specific optimizations with a focus on Qwen usage.
 
 use super::provider::ModelTier;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,19 +14,19 @@ use std::path::{Path, PathBuf};
 pub struct LLMConfig {
     /// Routing configuration
     pub routing: RoutingConfig,
-    
+
     /// Provider configurations
     pub providers: ProvidersConfig,
-    
+
     /// Task-specific configurations
     pub tasks: TasksConfig,
-    
+
     /// Qwen-specific optimizations
     pub qwen: QwenConfig,
-    
+
     /// Cache configuration
     pub cache: CacheConfig,
-    
+
     /// Monitoring and logging
     pub monitoring: MonitoringConfig,
 }
@@ -47,49 +47,42 @@ impl Default for LLMConfig {
 impl LLMConfig {
     /// Load configuration from file
     pub fn from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .context("Failed to read config file")?;
-        
-        let config: Self = toml::from_str(&content)
-            .context("Failed to parse config file")?;
-        
+        let content = std::fs::read_to_string(path).context("Failed to read config file")?;
+
+        let config: Self = toml::from_str(&content).context("Failed to parse config file")?;
+
         Ok(config)
     }
-    
+
     /// Save configuration to file
     pub fn save(&self, path: &Path) -> Result<()> {
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
-        
-        std::fs::write(path, content)
-            .context("Failed to write config file")?;
-        
+        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+
+        std::fs::write(path, content).context("Failed to write config file")?;
+
         Ok(())
     }
-    
+
     /// Create an optimized config for Qwen-focused usage
     pub fn qwen_optimized() -> Self {
         let mut config = Self::default();
-        
+
         // Optimize routing for Qwen
         config.routing.prefer_local = true;
-        config.routing.task_routing.insert(
-            "classification".to_string(),
-            vec![ModelTier::Tiny, ModelTier::Small],
-        );
-        config.routing.task_routing.insert(
-            "pattern_detection".to_string(),
-            vec![ModelTier::Tiny, ModelTier::Small],
-        );
-        config.routing.task_routing.insert(
-            "yes_no".to_string(),
-            vec![ModelTier::Tiny],
-        );
-        config.routing.task_routing.insert(
-            "requirement_check".to_string(),
-            vec![ModelTier::Tiny, ModelTier::Small],
-        );
-        
+        config
+            .routing
+            .task_routing
+            .insert("classification".to_string(), vec![ModelTier::Tiny, ModelTier::Small]);
+        config
+            .routing
+            .task_routing
+            .insert("pattern_detection".to_string(), vec![ModelTier::Tiny, ModelTier::Small]);
+        config.routing.task_routing.insert("yes_no".to_string(), vec![ModelTier::Tiny]);
+        config
+            .routing
+            .task_routing
+            .insert("requirement_check".to_string(), vec![ModelTier::Tiny, ModelTier::Small]);
+
         // Enable Qwen
         config.qwen.enabled = true;
         config.qwen.primary_tasks = vec![
@@ -99,7 +92,7 @@ impl LLMConfig {
             "requirement_check".to_string(),
             "simple_completion".to_string(),
         ];
-        
+
         config
     }
 }
@@ -109,22 +102,22 @@ impl LLMConfig {
 pub struct RoutingConfig {
     /// Prefer local models over cloud
     pub prefer_local: bool,
-    
+
     /// Enable intelligent routing
     pub intelligent_routing: bool,
-    
+
     /// Cost optimization level (0-10)
     pub cost_optimization_level: u8,
-    
+
     /// Performance priority (0-10)
     pub performance_priority: u8,
-    
+
     /// Task-specific routing rules
     pub task_routing: HashMap<String, Vec<ModelTier>>,
-    
+
     /// Complexity thresholds
     pub complexity_thresholds: ComplexityThresholds,
-    
+
     /// Fallback strategy
     pub fallback_strategy: FallbackStrategy,
 }
@@ -132,21 +125,13 @@ pub struct RoutingConfig {
 impl Default for RoutingConfig {
     fn default() -> Self {
         let mut task_routing = HashMap::new();
-        
+
         // Default routing for common tasks
-        task_routing.insert(
-            "classification".to_string(),
-            vec![ModelTier::Tiny, ModelTier::Small],
-        );
-        task_routing.insert(
-            "code_generation".to_string(),
-            vec![ModelTier::Medium, ModelTier::Large],
-        );
-        task_routing.insert(
-            "complex_analysis".to_string(),
-            vec![ModelTier::Large],
-        );
-        
+        task_routing.insert("classification".to_string(), vec![ModelTier::Tiny, ModelTier::Small]);
+        task_routing
+            .insert("code_generation".to_string(), vec![ModelTier::Medium, ModelTier::Large]);
+        task_routing.insert("complex_analysis".to_string(), vec![ModelTier::Large]);
+
         Self {
             prefer_local: true,
             intelligent_routing: true,
@@ -164,13 +149,13 @@ impl Default for RoutingConfig {
 pub struct ComplexityThresholds {
     /// Token count threshold for tiny models
     pub tiny_max_tokens: usize,
-    
+
     /// Token count threshold for small models
     pub small_max_tokens: usize,
-    
+
     /// Token count threshold for medium models
     pub medium_max_tokens: usize,
-    
+
     /// Complexity score thresholds
     pub tiny_max_score: f32,
     pub small_max_score: f32,
@@ -195,25 +180,20 @@ impl Default for ComplexityThresholds {
 pub struct FallbackStrategy {
     /// Enable automatic fallback to higher tiers
     pub enabled: bool,
-    
+
     /// Maximum tier to fallback to
     pub max_tier: ModelTier,
-    
+
     /// Retry count before fallback
     pub retry_count: u32,
-    
+
     /// Timeout before fallback (seconds)
     pub timeout_secs: u64,
 }
 
 impl Default for FallbackStrategy {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            max_tier: ModelTier::Large,
-            retry_count: 2,
-            timeout_secs: 30,
-        }
+        Self { enabled: true, max_tier: ModelTier::Large, retry_count: 2, timeout_secs: 30 }
     }
 }
 
@@ -222,25 +202,25 @@ impl Default for FallbackStrategy {
 pub struct ProvidersConfig {
     /// OpenAI configuration
     pub openai: Option<ProviderConfig>,
-    
+
     /// Claude configuration
     pub claude: Option<ProviderConfig>,
-    
+
     /// Groq configuration
     pub groq: Option<ProviderConfig>,
-    
+
     /// Lambda Labs configuration
     pub lambda: Option<ProviderConfig>,
-    
+
     /// Together AI configuration
     pub together: Option<ProviderConfig>,
-    
+
     /// Ollama configuration
     pub ollama: Option<OllamaConfig>,
-    
+
     /// CLI tools configuration
     pub cli_tools: CliToolsConfig,
-    
+
     /// Custom providers
     pub custom: Vec<CustomProviderConfig>,
 }
@@ -343,16 +323,16 @@ pub struct CustomProviderConfig {
 pub struct TasksConfig {
     /// Classification task config
     pub classification: TaskConfig,
-    
+
     /// Pattern detection config
     pub pattern_detection: TaskConfig,
-    
+
     /// Code generation config
     pub code_generation: TaskConfig,
-    
+
     /// Code review config
     pub code_review: TaskConfig,
-    
+
     /// Custom task configs
     pub custom: HashMap<String, TaskConfig>,
 }
@@ -403,28 +383,28 @@ pub struct TaskConfig {
 pub struct QwenConfig {
     /// Enable Qwen models
     pub enabled: bool,
-    
+
     /// Model file path (for GGUF)
     pub model_path: Option<PathBuf>,
-    
+
     /// Use Ollama for Qwen
     pub use_ollama: bool,
-    
+
     /// Ollama model name
     pub ollama_model: String,
-    
+
     /// Primary tasks for Qwen
     pub primary_tasks: Vec<String>,
-    
+
     /// Confidence threshold for Qwen responses
     pub confidence_threshold: f32,
-    
+
     /// Maximum context size
     pub max_context_tokens: usize,
-    
+
     /// Temperature for generation
     pub temperature: f32,
-    
+
     /// Prompt optimization
     pub optimize_prompts: bool,
 }
@@ -455,16 +435,16 @@ impl Default for QwenConfig {
 pub struct CacheConfig {
     /// Enable response caching
     pub enabled: bool,
-    
+
     /// Maximum cache size (entries)
     pub max_entries: usize,
-    
+
     /// Default TTL (seconds)
     pub default_ttl_secs: u64,
-    
+
     /// Cache directory
     pub cache_dir: Option<PathBuf>,
-    
+
     /// Enable persistent cache
     pub persistent: bool,
 }
@@ -486,16 +466,16 @@ impl Default for CacheConfig {
 pub struct MonitoringConfig {
     /// Enable metrics collection
     pub metrics_enabled: bool,
-    
+
     /// Enable detailed logging
     pub detailed_logging: bool,
-    
+
     /// Track token usage
     pub track_token_usage: bool,
-    
+
     /// Track costs
     pub track_costs: bool,
-    
+
     /// Metrics export path
     pub metrics_path: Option<PathBuf>,
 }
@@ -571,14 +551,14 @@ track_costs = true
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_config() {
         let config = LLMConfig::default();
         assert!(config.routing.prefer_local);
         assert!(config.qwen.enabled);
     }
-    
+
     #[test]
     fn test_qwen_optimized_config() {
         let config = LLMConfig::qwen_optimized();
@@ -586,12 +566,12 @@ mod tests {
         assert!(config.qwen.primary_tasks.contains(&"classification".to_string()));
         assert!(config.routing.task_routing.contains_key("classification"));
     }
-    
+
     #[test]
     fn test_parse_example_config() {
         let config: Result<LLMConfig, _> = toml::from_str(EXAMPLE_CONFIG);
         assert!(config.is_ok());
-        
+
         let config = config.unwrap();
         assert_eq!(config.qwen.ollama_model, "qwen2.5-coder:0.5b");
     }

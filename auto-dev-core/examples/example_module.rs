@@ -2,12 +2,12 @@
 //
 // This example shows how to create a module that can be loaded by the module system
 
-use auto_dev_core::modules::interface::{
-    ModuleInterface, ModuleMetadata, ModuleCapability, ModuleState, ModuleVersion, ModuleDependency
-};
-use async_trait::async_trait;
-use serde_json::Value;
 use anyhow::Result;
+use async_trait::async_trait;
+use auto_dev_core::modules::interface::{
+    ModuleCapability, ModuleDependency, ModuleInterface, ModuleMetadata, ModuleState, ModuleVersion,
+};
+use serde_json::Value;
 use std::collections::HashMap;
 
 /// Example language parser module
@@ -24,21 +24,13 @@ impl ExampleParserModule {
             version: ModuleVersion::new(1, 0, 0),
             author: "auto-dev".to_string(),
             description: "Example parser module for Python code".to_string(),
-            capabilities: vec![
-                ModuleCapability::Parser { 
-                    language: "python".to_string() 
-                },
-            ],
+            capabilities: vec![ModuleCapability::Parser { language: "python".to_string() }],
             dependencies: vec![],
         };
 
         let state = ModuleState::new(metadata.version.clone());
 
-        Self {
-            metadata,
-            state,
-            parse_count: 0,
-        }
+        Self { metadata, state, parse_count: 0 }
     }
 
     fn parse_python(&self, code: &str) -> Result<Value> {
@@ -93,11 +85,9 @@ impl ModuleInterface for ExampleParserModule {
     async fn handle_message(&mut self, message: Value) -> Result<Option<Value>> {
         if let Some(msg_type) = message.get("type").and_then(|v| v.as_str()) {
             match msg_type {
-                "get_stats" => {
-                    Ok(Some(serde_json::json!({
-                        "parse_count": self.parse_count,
-                    })))
-                }
+                "get_stats" => Ok(Some(serde_json::json!({
+                    "parse_count": self.parse_count,
+                }))),
                 "reset_stats" => {
                     self.parse_count = 0;
                     Ok(Some(serde_json::json!({
@@ -118,10 +108,7 @@ impl ModuleInterface for ExampleParserModule {
 
     fn get_state(&self) -> Result<ModuleState> {
         let mut state = self.state.clone();
-        state.set(
-            "parse_count".to_string(),
-            Value::Number(self.parse_count.into()),
-        );
+        state.set("parse_count".to_string(), Value::Number(self.parse_count.into()));
         Ok(state)
     }
 
@@ -151,26 +138,19 @@ impl ExampleSynthesisModule {
             version: ModuleVersion::new(1, 0, 0),
             author: "auto-dev".to_string(),
             description: "Example synthesis strategy module".to_string(),
-            capabilities: vec![
-                ModuleCapability::SynthesisStrategy { 
-                    name: "template_based".to_string() 
-                },
-            ],
-            dependencies: vec![
-                ModuleDependency {
-                    name: "example_parser".to_string(),
-                    version_requirement: "1.0.0".to_string(),
-                    optional: false,
-                },
-            ],
+            capabilities: vec![ModuleCapability::SynthesisStrategy {
+                name: "template_based".to_string(),
+            }],
+            dependencies: vec![ModuleDependency {
+                name: "example_parser".to_string(),
+                version_requirement: "1.0.0".to_string(),
+                optional: false,
+            }],
         };
 
         let state = ModuleState::new(metadata.version.clone());
 
-        Self {
-            metadata,
-            state,
-        }
+        Self { metadata, state }
     }
 }
 
@@ -188,10 +168,8 @@ impl ModuleInterface for ExampleSynthesisModule {
     async fn execute(&self, input: Value) -> Result<Value> {
         // Simple template-based code generation
         if let Some(template) = input.get("template").and_then(|v| v.as_str()) {
-            let variables = input.get("variables")
-                .and_then(|v| v.as_object())
-                .cloned()
-                .unwrap_or_default();
+            let variables =
+                input.get("variables").and_then(|v| v.as_object()).cloned().unwrap_or_default();
 
             let mut result = template.to_string();
             for (key, value) in variables {
@@ -234,8 +212,8 @@ impl ModuleInterface for ExampleSynthesisModule {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    use auto_dev_core::modules::{ModuleSystem, ModuleFormat, ExecutionContext};
-    
+    use auto_dev_core::modules::{ExecutionContext, ModuleFormat, ModuleSystem};
+
     println!("Example Module System Demo");
     println!("==========================");
 
@@ -244,20 +222,20 @@ async fn main() -> Result<()> {
 
     // In a real scenario, modules would be loaded from files
     // For this example, we'll demonstrate the API usage
-    
+
     println!("\nModule system created successfully!");
-    
+
     // Example of how to use the module system
     let context = ExecutionContext::new(serde_json::json!({
         "code": "def hello():\n    print('Hello')\n\ndef world():\n    pass"
     }));
-    
+
     println!("\nExample execution context created");
-    
+
     // List modules (should be empty initially)
     let modules = module_system.list_modules().await?;
     println!("\nCurrently loaded modules: {}", modules.len());
-    
+
     Ok(())
 }
 
@@ -268,15 +246,15 @@ mod tests {
     #[tokio::test]
     async fn test_example_parser_module() {
         let mut module = ExampleParserModule::new();
-        
+
         // Test initialization
         assert!(module.initialize().await.is_ok());
-        
+
         // Test parsing
         let input = serde_json::json!({
             "code": "def test_function():\n    pass"
         });
-        
+
         let result = module.execute(input).await.unwrap();
         assert_eq!(result["language"], "python");
         assert_eq!(result["functions"][0], "test_function");
@@ -285,10 +263,10 @@ mod tests {
     #[tokio::test]
     async fn test_example_synthesis_module() {
         let mut module = ExampleSynthesisModule::new();
-        
+
         // Test initialization
         assert!(module.initialize().await.is_ok());
-        
+
         // Test template-based generation
         let input = serde_json::json!({
             "template": "class {{name}} {\n    constructor() {\n        this.type = '{{type}}';\n    }\n}",
@@ -297,10 +275,10 @@ mod tests {
                 "type": "example"
             }
         });
-        
+
         let result = module.execute(input).await.unwrap();
         let generated = result["generated_code"].as_str().unwrap();
-        
+
         assert!(generated.contains("class TestClass"));
         assert!(generated.contains("this.type = 'example'"));
     }
@@ -308,24 +286,21 @@ mod tests {
     #[tokio::test]
     async fn test_module_state_management() {
         let mut module = ExampleParserModule::new();
-        
+
         // Initialize
         module.initialize().await.unwrap();
-        
+
         // Modify state
         module.parse_count = 42;
-        
+
         // Get state
         let state = module.get_state().unwrap();
-        assert_eq!(
-            state.get("parse_count").and_then(|v| v.as_u64()),
-            Some(42)
-        );
-        
+        assert_eq!(state.get("parse_count").and_then(|v| v.as_u64()), Some(42));
+
         // Create new module and restore state
         let mut new_module = ExampleParserModule::new();
         new_module.restore_state(state).unwrap();
-        
+
         assert_eq!(new_module.parse_count, 42);
     }
 }

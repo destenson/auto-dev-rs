@@ -1,11 +1,11 @@
 //! Synthesis state management
 
-use super::{Result, SynthesisError, ArchitectureDecision};
+use super::{ArchitectureDecision, Result, SynthesisError};
 use crate::parser::model::Specification;
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Current state of the synthesis process
@@ -35,11 +35,11 @@ impl SynthesisState {
             last_updated: Utc::now(),
         }
     }
-    
+
     /// Load state from disk or create new
     pub fn load_or_create(state_dir: &Path) -> Result<Self> {
         let state_file = state_dir.join("synthesis_state.json");
-        
+
         if state_file.exists() {
             let content = std::fs::read_to_string(&state_file)?;
             let state: Self = serde_json::from_str(&content)?;
@@ -48,7 +48,7 @@ impl SynthesisState {
             Ok(Self::new())
         }
     }
-    
+
     /// Save state to disk
     pub fn save(&self, state_dir: &Path) -> Result<()> {
         std::fs::create_dir_all(state_dir)?;
@@ -57,38 +57,38 @@ impl SynthesisState {
         std::fs::write(state_file, content)?;
         Ok(())
     }
-    
+
     /// Update specification status
     pub fn update_specification_status(&mut self, path: &Path, status: SpecificationStatus) {
         self.specifications.insert(path.to_path_buf(), status);
         self.last_updated = Utc::now();
     }
-    
+
     /// Add a pending task
     pub fn add_task(&mut self, task: ImplementationTask) {
         self.pending_tasks.push(task);
         self.last_updated = Utc::now();
     }
-    
+
     /// Mark task as completed
     pub fn mark_task_completed(&mut self, task: ImplementationTask) {
         self.pending_tasks.retain(|t| t.id != task.id);
         self.completed_tasks.push(task);
         self.last_updated = Utc::now();
     }
-    
+
     /// Record an architecture decision
     pub fn record_decision(&mut self, decision: ArchitectureDecision) {
         self.decisions.push(decision);
         self.last_updated = Utc::now();
     }
-    
+
     /// Update coverage report
     pub fn update_coverage(&mut self, coverage: &super::coverage::CoverageReport) {
         self.coverage = coverage.clone();
         self.last_updated = Utc::now();
     }
-    
+
     /// Create a checkpoint for rollback
     pub fn checkpoint(&mut self, description: String) -> String {
         let checkpoint = Checkpoint {
@@ -97,31 +97,30 @@ impl SynthesisState {
             state: Box::new(self.clone()),
             created_at: Utc::now(),
         };
-        
+
         let id = checkpoint.id.clone();
         self.checkpoints.push(checkpoint);
         id
     }
-    
+
     /// Rollback to a checkpoint
     pub fn rollback(&mut self, checkpoint_id: &str) -> Result<()> {
-        let checkpoint = self.checkpoints.iter()
-            .find(|c| c.id == checkpoint_id)
-            .ok_or_else(|| SynthesisError::StateError(
-                format!("Checkpoint {} not found", checkpoint_id)
-            ))?;
-        
+        let checkpoint =
+            self.checkpoints.iter().find(|c| c.id == checkpoint_id).ok_or_else(|| {
+                SynthesisError::StateError(format!("Checkpoint {} not found", checkpoint_id))
+            })?;
+
         *self = *checkpoint.state.clone();
         Ok(())
     }
-    
+
     /// Get implementation progress percentage
     pub fn get_progress(&self) -> f32 {
         let total = self.pending_tasks.len() + self.completed_tasks.len();
         if total == 0 {
             return 0.0;
         }
-        
+
         (self.completed_tasks.len() as f32 / total as f32) * 100.0
     }
 }
@@ -193,13 +192,13 @@ impl ImplementationTask {
             completed_at: None,
         }
     }
-    
+
     /// Mark task as completed
     pub fn complete(&mut self) {
         self.status = TaskStatus::Completed;
         self.completed_at = Some(Utc::now());
     }
-    
+
     /// Add a generation attempt
     pub fn add_attempt(&mut self, attempt: GenerationAttempt) {
         self.attempts.push(attempt);
@@ -239,42 +238,42 @@ pub struct Checkpoint {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_state_creation() {
         let state = SynthesisState::new();
         assert!(state.specifications.is_empty());
         assert!(state.pending_tasks.is_empty());
     }
-    
+
     #[test]
     fn test_state_persistence() {
         let temp_dir = TempDir::new().unwrap();
         let state = SynthesisState::new();
-        
+
         assert!(state.save(temp_dir.path()).is_ok());
-        
+
         let loaded = SynthesisState::load_or_create(temp_dir.path()).unwrap();
         assert!(loaded.specifications.is_empty());
     }
-    
+
     #[test]
     fn test_checkpoint_rollback() {
         let mut state = SynthesisState::new();
-        
+
         let task = ImplementationTask::new(
             "spec1".to_string(),
             "Test task".to_string(),
             PathBuf::from("test.rs"),
         );
-        
+
         state.add_task(task.clone());
         let checkpoint_id = state.checkpoint("Before completion".to_string());
-        
+
         state.mark_task_completed(task);
         assert_eq!(state.completed_tasks.len(), 1);
         assert_eq!(state.pending_tasks.len(), 0);
-        
+
         state.rollback(&checkpoint_id).unwrap();
         assert_eq!(state.completed_tasks.len(), 0);
         assert_eq!(state.pending_tasks.len(), 1);

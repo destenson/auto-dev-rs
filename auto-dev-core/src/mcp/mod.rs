@@ -19,25 +19,25 @@ pub const MCP_VERSION: &str = "1.0.0";
 pub enum McpMessage {
     #[serde(rename = "initialize")]
     Initialize(InitializeRequest),
-    
+
     #[serde(rename = "initialized")]
     Initialized,
-    
+
     #[serde(rename = "tools/list")]
     ToolsList,
-    
+
     #[serde(rename = "tools/call")]
     ToolCall(ToolCallRequest),
-    
+
     #[serde(rename = "resources/list")]
     ResourcesList,
-    
+
     #[serde(rename = "resources/read")]
     ResourceRead(ResourceReadRequest),
-    
+
     #[serde(rename = "prompts/list")]
     PromptsList,
-    
+
     #[serde(rename = "prompts/get")]
     PromptGet(PromptGetRequest),
 }

@@ -5,7 +5,7 @@
 //! inspired by OpenRouter's approach but optimized for local models.
 
 use super::{ClassificationResult, QuestionType};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -125,11 +125,11 @@ pub struct Explanation {
 /// Model tier for routing decisions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ModelTier {
-    NoLLM,      // Heuristics only
-    Tiny,       // 0.5B models like Qwen
-    Small,      // 7B models
-    Medium,     // 13-34B models
-    Large,      // 70B+ models
+    NoLLM,  // Heuristics only
+    Tiny,   // 0.5B models like Qwen
+    Small,  // 7B models
+    Medium, // 13-34B models
+    Large,  // 70B+ models
 }
 
 /// Task complexity assessment
@@ -146,16 +146,16 @@ pub struct TaskComplexity {
 pub trait LLMProvider: Send + Sync {
     /// Get the name of this provider
     fn name(&self) -> &str;
-    
+
     /// Get the model tier this provider serves
     fn tier(&self) -> ModelTier;
-    
+
     /// Check if the provider is available
     async fn is_available(&self) -> bool;
-    
+
     /// Get estimated cost per 1K tokens (in cents)
     fn cost_per_1k_tokens(&self) -> f32;
-    
+
     /// Generate code from specification
     async fn generate_code(
         &self,
@@ -163,34 +163,28 @@ pub trait LLMProvider: Send + Sync {
         context: &ProjectContext,
         options: &GenerationOptions,
     ) -> Result<GeneratedCode>;
-    
+
     /// Explain implementation details
-    async fn explain_implementation(
-        &self,
-        code: &str,
-        spec: &Specification,
-    ) -> Result<Explanation>;
-    
+    async fn explain_implementation(&self, code: &str, spec: &Specification)
+    -> Result<Explanation>;
+
     /// Review code against requirements
-    async fn review_code(
-        &self,
-        code: &str,
-        requirements: &[Requirement],
-    ) -> Result<ReviewResult>;
-    
+    async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult>;
+
     /// Simple Q&A (mainly for tiny models)
     async fn answer_question(&self, question: &str) -> Result<Option<String>>;
-    
+
     /// Classify content (mainly for tiny models)
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult>;
-    
+
     /// Assess task complexity to determine which tier to use
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity>;
-    
+
     /// Simple text completion for prompts
     async fn complete_prompt(&self, prompt: &str) -> Result<String> {
         // Default implementation using answer_question
-        self.answer_question(prompt).await
+        self.answer_question(prompt)
+            .await
             .and_then(|opt| opt.ok_or_else(|| anyhow::anyhow!("No response from LLM")))
     }
 }

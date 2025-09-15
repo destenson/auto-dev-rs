@@ -3,16 +3,16 @@
 // Handles loading and unloading of modules in various formats
 // (WASM, native dynamic libraries, etc.)
 
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
 
 use crate::modules::interface::{ModuleInterface, ModuleMetadata};
-use crate::modules::wasm_host::WasmModule;
 use crate::modules::native_host::NativeModule;
+use crate::modules::wasm_host::WasmModule;
 
 /// Supported module formats
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -24,13 +24,11 @@ pub enum ModuleFormat {
 
 impl ModuleFormat {
     pub fn from_extension(path: &Path) -> Option<Self> {
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .and_then(|ext| match ext {
-                "wasm" => Some(ModuleFormat::Wasm),
-                "so" | "dll" | "dylib" => Some(ModuleFormat::Native),
-                _ => None,
-            })
+        path.extension().and_then(|ext| ext.to_str()).and_then(|ext| match ext {
+            "wasm" => Some(ModuleFormat::Wasm),
+            "so" | "dll" | "dylib" => Some(ModuleFormat::Native),
+            _ => None,
+        })
     }
 }
 
@@ -80,20 +78,17 @@ impl ModuleLoader {
         let mut config = wasmtime::Config::new();
         config.async_support(true);
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        
+
         let engine = wasmtime::Engine::new(&config)?;
 
-        Ok(Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            wasm_engine: Arc::new(engine),
-        })
+        Ok(Self { cache: Arc::new(RwLock::new(HashMap::new())), wasm_engine: Arc::new(engine) })
     }
 
     /// Load a module from the specified path
     pub async fn load(&self, path: PathBuf, format: ModuleFormat) -> Result<LoadedModule> {
         // Check if module is already loaded
         let cache_key = path.to_string_lossy().to_string();
-        
+
         {
             let cache = self.cache.read().await;
             if cache.contains_key(&cache_key) {
@@ -104,13 +99,14 @@ impl ModuleLoader {
         // Load based on format
         let module = match format {
             ModuleFormat::Wasm => {
-                let wasm_module = WasmModule::load(&path, &self.wasm_engine).await
+                let wasm_module = WasmModule::load(&path, &self.wasm_engine)
+                    .await
                     .context("Failed to load WASM module")?;
                 LoadedModule::Wasm(wasm_module)
             }
             ModuleFormat::Native => {
-                let native_module = NativeModule::load(&path)
-                    .context("Failed to load native module")?;
+                let native_module =
+                    NativeModule::load(&path).context("Failed to load native module")?;
                 LoadedModule::Native(native_module)
             }
             ModuleFormat::Script => {
@@ -119,12 +115,8 @@ impl ModuleLoader {
         };
 
         // Cache the loaded module
-        let entry = CacheEntry {
-            module,
-            path: path.clone(),
-            format,
-            loaded_at: chrono::Utc::now(),
-        };
+        let entry =
+            CacheEntry { module, path: path.clone(), format, loaded_at: chrono::Utc::now() };
 
         let mut cache = self.cache.write().await;
         let module_id = entry.module.metadata().name.clone();
@@ -137,7 +129,7 @@ impl ModuleLoader {
     /// Unload a module
     pub async fn unload(&self, module_id: &str) -> Result<()> {
         let mut cache = self.cache.write().await;
-        
+
         if let Some(mut entry) = cache.remove(module_id) {
             // Shutdown the module gracefully
             entry.module.as_interface_mut().shutdown().await?;
@@ -150,8 +142,9 @@ impl ModuleLoader {
     /// Get the format of a loaded module
     pub fn get_format(&self, module_id: &str) -> Result<ModuleFormat> {
         let cache = futures::executor::block_on(self.cache.read());
-        
-        cache.get(module_id)
+
+        cache
+            .get(module_id)
             .map(|entry| entry.format)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))
     }
@@ -196,27 +189,28 @@ impl ModuleLoader {
     /// Reload a module with a new version
     pub async fn reload(&self, module_id: &str, new_path: PathBuf) -> Result<()> {
         let format = self.get_format(module_id)?;
-        
+
         // Validate new module
         self.validate(&new_path, format).await?;
-        
+
         // Get current module state
         let state = {
             let cache = self.cache.read().await;
-            let entry = cache.get(module_id)
+            let entry = cache
+                .get(module_id)
                 .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
             entry.module.as_interface().get_state()?
         };
-        
+
         // Unload old module
         self.unload(module_id).await?;
-        
+
         // Load new module
         let mut new_module = self.load(new_path, format).await?;
-        
+
         // Restore state
         new_module.as_interface_mut().restore_state(state)?;
-        
+
         Ok(())
     }
 }
@@ -249,10 +243,7 @@ mod tests {
             ModuleFormat::from_extension(Path::new("module.so")),
             Some(ModuleFormat::Native)
         );
-        assert_eq!(
-            ModuleFormat::from_extension(Path::new("module.txt")),
-            None
-        );
+        assert_eq!(ModuleFormat::from_extension(Path::new("module.txt")), None);
     }
 
     #[tokio::test]

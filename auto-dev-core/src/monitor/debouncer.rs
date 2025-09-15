@@ -20,15 +20,12 @@ pub struct DebouncerConfig {
 
 impl Default for DebouncerConfig {
     fn default() -> Self {
-        Self {
-            delay_ms: 500,
-            max_buffer_size: 1000,
-        }
+        Self { delay_ms: 500, max_buffer_size: 1000 }
     }
 }
 
 /// Debouncer for file system events
-/// 
+///
 /// Aggregates rapid changes to the same file and emits
 /// a single event after a configurable delay
 pub struct Debouncer {
@@ -48,20 +45,17 @@ impl Debouncer {
     /// Create a new debouncer
     pub fn new(config: DebouncerConfig) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        
-        Self {
-            config,
-            pending: Arc::new(DashMap::new()),
-            tx,
-            rx: Some(rx),
-        }
+
+        Self { config, pending: Arc::new(DashMap::new()), tx, rx: Some(rx) }
     }
 
     /// Start the debouncer and return a receiver for debounced events
-    pub fn start(mut self) -> (mpsc::UnboundedSender<FileChange>, mpsc::UnboundedReceiver<FileChange>) {
+    pub fn start(
+        mut self,
+    ) -> (mpsc::UnboundedSender<FileChange>, mpsc::UnboundedReceiver<FileChange>) {
         let rx = self.rx.take().expect("Receiver already taken");
         let (input_tx, mut input_rx) = mpsc::unbounded_channel();
-        
+
         let pending = self.pending.clone();
         let config = self.config.clone();
         let output_tx = self.tx.clone();
@@ -133,11 +127,7 @@ fn handle_change(
         })
         .or_insert_with(|| {
             trace!("New pending change for {:?}", path);
-            PendingChange {
-                change,
-                last_update: now,
-                count: 1,
-            }
+            PendingChange { change, last_update: now, count: 1 }
         });
 }
 
@@ -149,7 +139,7 @@ fn emit_ready_changes(
 ) {
     let now = Instant::now();
     let delay = Duration::from_millis(config.delay_ms);
-    
+
     let mut to_emit = Vec::new();
 
     // Find changes that are ready to emit
@@ -178,10 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_debouncer_aggregates_rapid_changes() {
-        let config = DebouncerConfig {
-            delay_ms: 100,
-            max_buffer_size: 100,
-        };
+        let config = DebouncerConfig { delay_ms: 100, max_buffer_size: 100 };
 
         let debouncer = Debouncer::new(config);
         let (tx, mut rx) = debouncer.start();
@@ -212,10 +199,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_debouncer_separate_files() {
-        let config = DebouncerConfig {
-            delay_ms: 100,
-            max_buffer_size: 100,
-        };
+        let config = DebouncerConfig { delay_ms: 100, max_buffer_size: 100 };
 
         let debouncer = Debouncer::new(config);
         let (tx, mut rx) = debouncer.start();

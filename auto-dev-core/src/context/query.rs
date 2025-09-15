@@ -1,9 +1,9 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
-use crate::context::storage::ProjectContext;
-use crate::context::analyzer::{CodePattern, PatternType, CodingConventions};
+use crate::context::analyzer::{CodePattern, CodingConventions, PatternType};
 use crate::context::manager::{ArchitectureDecision, CodeExample};
+use crate::context::storage::ProjectContext;
 
 #[derive(Debug, Clone)]
 pub struct ContextQuery {
@@ -44,21 +44,11 @@ impl ContextQuery {
     }
 
     pub fn find_patterns_by_file(&self, file_path: &PathBuf) -> Vec<CodePattern> {
-        self.context
-            .patterns
-            .iter()
-            .filter(|p| p.locations.contains(file_path))
-            .cloned()
-            .collect()
+        self.context.patterns.iter().filter(|p| p.locations.contains(file_path)).cloned().collect()
     }
 
     pub fn find_patterns_by_frequency(&self, min_frequency: f32) -> Vec<CodePattern> {
-        self.context
-            .patterns
-            .iter()
-            .filter(|p| p.frequency >= min_frequency)
-            .cloned()
-            .collect()
+        self.context.patterns.iter().filter(|p| p.frequency >= min_frequency).cloned().collect()
     }
 
     pub fn get_most_common_patterns(&self, limit: usize) -> Vec<CodePattern> {
@@ -71,13 +61,11 @@ impl ContextQuery {
         &self.context.conventions
     }
 
-    pub fn get_decisions_by_date(&self, after: chrono::DateTime<chrono::Utc>) -> Vec<ArchitectureDecision> {
-        self.context
-            .decisions
-            .iter()
-            .filter(|d| d.timestamp > after)
-            .cloned()
-            .collect()
+    pub fn get_decisions_by_date(
+        &self,
+        after: chrono::DateTime<chrono::Utc>,
+    ) -> Vec<ArchitectureDecision> {
+        self.context.decisions.iter().filter(|d| d.timestamp > after).cloned().collect()
     }
 
     pub fn get_recent_decisions(&self, limit: usize) -> Vec<ArchitectureDecision> {
@@ -92,48 +80,28 @@ impl ContextQuery {
             .decisions
             .iter()
             .filter(|d| {
-                d.title.to_lowercase().contains(&query_lower) ||
-                d.description.to_lowercase().contains(&query_lower) ||
-                d.rationale.to_lowercase().contains(&query_lower)
+                d.title.to_lowercase().contains(&query_lower)
+                    || d.description.to_lowercase().contains(&query_lower)
+                    || d.rationale.to_lowercase().contains(&query_lower)
             })
             .cloned()
             .collect()
     }
 
     pub fn get_project_languages(&self) -> Vec<String> {
-        self.context
-            .metadata
-            .languages
-            .iter()
-            .map(|l| format!("{:?}", l))
-            .collect()
+        self.context.metadata.languages.iter().map(|l| format!("{:?}", l)).collect()
     }
 
     pub fn get_project_frameworks(&self) -> Vec<String> {
-        self.context
-            .metadata
-            .frameworks
-            .iter()
-            .map(|f| f.name.clone())
-            .collect()
+        self.context.metadata.frameworks.iter().map(|f| f.name.clone()).collect()
     }
 
     pub fn get_external_dependencies(&self) -> Vec<String> {
-        self.context
-            .dependencies
-            .external_dependencies
-            .iter()
-            .map(|d| d.name.clone())
-            .collect()
+        self.context.dependencies.external_dependencies.iter().map(|d| d.name.clone()).collect()
     }
 
     pub fn find_circular_dependencies(&self) -> Vec<Vec<String>> {
-        self.context
-            .dependencies
-            .circular_dependencies
-            .iter()
-            .map(|cd| cd.cycle.clone())
-            .collect()
+        self.context.dependencies.circular_dependencies.iter().map(|cd| cd.cycle.clone()).collect()
     }
 
     pub fn get_module_dependencies(&self, module_name: &str) -> Vec<String> {
@@ -237,11 +205,14 @@ impl ContextQuery {
             return 0.0;
         }
 
-        let test_modules = self.context
+        let test_modules = self
+            .context
             .dependencies
             .modules
             .iter()
-            .filter(|m| matches!(m.module_type, crate::context::analyzer::dependencies::ModuleType::Test))
+            .filter(|m| {
+                matches!(m.module_type, crate::context::analyzer::dependencies::ModuleType::Test)
+            })
             .count();
 
         (test_modules as f32 / total_modules as f32) * 100.0

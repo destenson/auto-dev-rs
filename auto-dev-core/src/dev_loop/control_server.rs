@@ -23,11 +23,7 @@ impl ControlServer {
         shutdown_tx: mpsc::Sender<()>,
         command_tx: mpsc::Sender<ControlCommand>,
     ) -> Self {
-        Self {
-            port,
-            shutdown_tx,
-            command_tx,
-        }
+        Self { port, shutdown_tx, command_tx }
     }
 
     /// Start the control server
@@ -35,21 +31,21 @@ impl ControlServer {
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = TcpListener::bind(&addr).await?;
         info!("Control server listening on {}", addr);
-        
+
         // Save port to file for client discovery
         let port_file = PathBuf::from(".auto-dev/loop/control.port");
         if let Some(parent) = port_file.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
         tokio::fs::write(&port_file, self.port.to_string()).await?;
-        
+
         loop {
             tokio::select! {
                 Ok((stream, addr)) = listener.accept() => {
                     debug!("Control connection from {}", addr);
                     let shutdown_tx = self.shutdown_tx.clone();
                     let command_tx = self.command_tx.clone();
-                    
+
                     tokio::spawn(async move {
                         if let Err(e) = handle_connection(stream, shutdown_tx, command_tx).await {
                             error!("Error handling control connection: {}", e);
@@ -70,11 +66,11 @@ async fn handle_connection(
     let (reader, mut writer) = stream.split();
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
-    
+
     while reader.read_line(&mut line).await? > 0 {
         let request: ControlRequest = serde_json::from_str(&line)?;
         debug!("Received control request: {:?}", request);
-        
+
         let response = match request {
             ControlRequest::Shutdown => {
                 info!("Shutdown requested via control server");
@@ -97,18 +93,16 @@ async fn handle_connection(
                 // Get metrics from orchestrator
                 ControlResponse::Metrics(LoopMetrics::default())
             }
-            ControlRequest::Ping => {
-                ControlResponse::Pong
-            }
+            ControlRequest::Ping => ControlResponse::Pong,
         };
-        
+
         let response_json = serde_json::to_string(&response)? + "\n";
         writer.write_all(response_json.as_bytes()).await?;
         writer.flush().await?;
-        
+
         line.clear();
     }
-    
+
     Ok(())
 }
 
@@ -164,7 +158,7 @@ impl ControlClient {
         if let Some(port) = self.port {
             return Ok(port);
         }
-        
+
         let port_file = PathBuf::from(".auto-dev/loop/control.port");
         if port_file.exists() {
             let content = tokio::fs::read_to_string(&port_file).await?;
@@ -180,19 +174,19 @@ impl ControlClient {
     pub async fn send_request(&mut self, request: ControlRequest) -> Result<ControlResponse> {
         let port = self.discover_port().await?;
         let addr = format!("127.0.0.1:{}", port);
-        
+
         let mut stream = TcpStream::connect(&addr).await?;
-        
+
         // Send request
         let request_json = serde_json::to_string(&request)? + "\n";
         stream.write_all(request_json.as_bytes()).await?;
         stream.flush().await?;
-        
+
         // Read response
         let mut reader = BufReader::new(stream);
         let mut line = String::new();
         reader.read_line(&mut line).await?;
-        
+
         let response: ControlResponse = serde_json::from_str(&line)?;
         Ok(response)
     }

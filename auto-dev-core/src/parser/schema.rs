@@ -1,9 +1,9 @@
 #![allow(unused)]
 //! JSON/YAML schema parser
 
-use serde_json::{Value as JsonValue};
-use serde_yaml::{Value as YamlValue};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use serde_json::Value as JsonValue;
+use serde_yaml::Value as YamlValue;
 use std::path::PathBuf;
 
 use crate::parser::model::*;
@@ -21,10 +21,9 @@ impl SchemaParser {
     /// Parse a JSON schema document
     pub fn parse_json(&self, content: &str) -> Result<Specification> {
         let mut spec = Specification::new(PathBuf::new());
-        
-        let value: JsonValue = serde_json::from_str(content)
-            .context("Failed to parse JSON")?;
-        
+
+        let value: JsonValue = serde_json::from_str(content).context("Failed to parse JSON")?;
+
         // Check for JSON Schema format first
         if value.get("$schema").is_some() {
             self.parse_json_schema(&mut spec, &value)?;
@@ -34,7 +33,7 @@ impl SchemaParser {
                 spec.data_models.push(model);
             }
         }
-        
+
         // Check for configuration or specification format
         if let Some(obj) = value.as_object() {
             for (key, val) in obj {
@@ -43,70 +42,63 @@ impl SchemaParser {
                 }
             }
         }
-        
+
         Ok(spec)
     }
 
     /// Parse a YAML schema document
     pub fn parse_yaml(&self, content: &str) -> Result<Specification> {
         let mut spec = Specification::new(PathBuf::new());
-        
-        let value: YamlValue = serde_yaml::from_str(content)
-            .context("Failed to parse YAML")?;
-        
+
+        let value: YamlValue = serde_yaml::from_str(content).context("Failed to parse YAML")?;
+
         // Convert YAML to JSON for uniform processing
         let json_str = serde_json::to_string(&value)?;
         let json_value: JsonValue = serde_json::from_str(&json_str)?;
-        
+
         // Extract data models
         if let Some(model) = self.extract_data_model_from_json(&json_value)? {
             spec.data_models.push(model);
         }
-        
+
         // Check for specific YAML patterns
         self.extract_yaml_specifications(&mut spec, &value)?;
-        
+
         Ok(spec)
     }
 
     /// Parse JSON Schema format
     fn parse_json_schema(&self, spec: &mut Specification, value: &JsonValue) -> Result<()> {
-        let title = value.get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Schema");
-        
-        let description = value.get("description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        
+        let title = value.get("title").and_then(|v| v.as_str()).unwrap_or("Schema");
+
+        let description = value.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
         if let Some(properties) = value.get("properties").and_then(|v| v.as_object()) {
             let mut fields = Vec::new();
-            
-            let required_fields = value.get("required")
+
+            let required_fields = value
+                .get("required")
                 .and_then(|v| v.as_array())
                 .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .map(String::from)
-                        .collect::<Vec<_>>()
+                    arr.iter().filter_map(|v| v.as_str()).map(String::from).collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            
+
             for (name, prop) in properties {
                 let field = self.extract_field_from_property(name, prop, &required_fields)?;
                 fields.push(field);
             }
-            
+
             let model = DataModel {
                 name: title.to_string(),
                 fields,
                 description: description.to_string(),
                 json_schema: Some(value.clone()),
             };
-            
+
             spec.data_models.push(model);
         }
-        
+
         Ok(())
     }
 
@@ -117,21 +109,15 @@ impl SchemaParser {
         property: &JsonValue,
         required_fields: &[String],
     ) -> Result<Field> {
-        let data_type = property.get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("any")
-            .to_string();
-        
-        let description = property.get("description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        
-        let default_value = property.get("default")
-            .map(|v| v.to_string());
-        
+        let data_type = property.get("type").and_then(|v| v.as_str()).unwrap_or("any").to_string();
+
+        let description =
+            property.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+        let default_value = property.get("default").map(|v| v.to_string());
+
         let mut validation = Vec::new();
-        
+
         // Extract validation rules
         if let Some(min) = property.get("minimum") {
             validation.push(format!("minimum: {}", min));
@@ -143,13 +129,11 @@ impl SchemaParser {
             validation.push(format!("pattern: {}", pattern));
         }
         if let Some(enum_values) = property.get("enum").and_then(|v| v.as_array()) {
-            let values: Vec<String> = enum_values.iter()
-                .filter_map(|v| v.as_str())
-                .map(String::from)
-                .collect();
+            let values: Vec<String> =
+                enum_values.iter().filter_map(|v| v.as_str()).map(String::from).collect();
             validation.push(format!("enum: [{}]", values.join(", ")));
         }
-        
+
         Ok(Field {
             name: name.to_string(),
             data_type,
@@ -165,22 +149,22 @@ impl SchemaParser {
         if !value.is_object() {
             return Ok(None);
         }
-        
+
         let obj = value.as_object().unwrap();
-        
+
         // Check if this looks like a data model definition
         if obj.is_empty() {
             return Ok(None);
         }
-        
+
         let mut fields = Vec::new();
-        
+
         for (key, val) in obj {
             // Skip metadata fields
             if key.starts_with('$') || key.starts_with('_') {
                 continue;
             }
-            
+
             let field = Field {
                 name: key.clone(),
                 data_type: self.infer_type_from_value(val),
@@ -189,14 +173,14 @@ impl SchemaParser {
                 default_value: None,
                 validation: Vec::new(),
             };
-            
+
             fields.push(field);
         }
-        
+
         if fields.is_empty() {
             return Ok(None);
         }
-        
+
         Ok(Some(DataModel {
             name: "DataModel".to_string(),
             fields,
@@ -235,16 +219,13 @@ impl SchemaParser {
             if let Some(arr) = value.as_array() {
                 for (idx, item) in arr.iter().enumerate() {
                     if let Some(text) = item.as_str() {
-                        let req = Requirement::new(
-                            format!("REQ-{:03}", idx + 1),
-                            text.to_string(),
-                        );
+                        let req = Requirement::new(format!("REQ-{:03}", idx + 1), text.to_string());
                         spec.requirements.push(req);
                     }
                 }
             }
         }
-        
+
         // Extract constraints if present
         if key.contains("constraint") || key.contains("rule") {
             if let Some(text) = value.as_str() {
@@ -257,12 +238,16 @@ impl SchemaParser {
                 spec.constraints.push(constraint);
             }
         }
-        
+
         Ok(())
     }
 
     /// Extract specifications from YAML value
-    fn extract_yaml_specifications(&self, spec: &mut Specification, value: &YamlValue) -> Result<()> {
+    fn extract_yaml_specifications(
+        &self,
+        spec: &mut Specification,
+        value: &YamlValue,
+    ) -> Result<()> {
         match value {
             YamlValue::Mapping(map) => {
                 for (key, val) in map {
@@ -271,10 +256,11 @@ impl SchemaParser {
                         if key_str.to_lowercase().contains("requirement") {
                             self.extract_requirements_from_yaml(spec, val)?;
                         }
-                        
+
                         // Check for API definitions
-                        if key_str.to_lowercase().contains("api") || 
-                           key_str.to_lowercase().contains("endpoint") {
+                        if key_str.to_lowercase().contains("api")
+                            || key_str.to_lowercase().contains("endpoint")
+                        {
                             self.extract_api_from_yaml(spec, val)?;
                         }
                     }
@@ -282,12 +268,16 @@ impl SchemaParser {
             }
             _ => {}
         }
-        
+
         Ok(())
     }
 
     /// Extract requirements from YAML value
-    fn extract_requirements_from_yaml(&self, spec: &mut Specification, value: &YamlValue) -> Result<()> {
+    fn extract_requirements_from_yaml(
+        &self,
+        spec: &mut Specification,
+        value: &YamlValue,
+    ) -> Result<()> {
         match value {
             YamlValue::Sequence(seq) => {
                 for (idx, item) in seq.iter().enumerate() {
@@ -309,7 +299,7 @@ impl SchemaParser {
             }
             _ => {}
         }
-        
+
         Ok(())
     }
 
@@ -334,7 +324,7 @@ impl SchemaParser {
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -378,17 +368,15 @@ mod tests {
             },
             "required": ["id", "email"]
         }"#;
-        
+
         let spec = parser.parse_json(schema).unwrap();
         assert_eq!(spec.data_models.len(), 1);
-        
+
         let model = &spec.data_models[0];
         assert_eq!(model.name, "User");
         assert_eq!(model.fields.len(), 3);
-        
-        let email_field = model.fields.iter()
-            .find(|f| f.name == "email")
-            .unwrap();
+
+        let email_field = model.fields.iter().find(|f| f.name == "email").unwrap();
         assert!(email_field.required);
     }
 
@@ -401,7 +389,7 @@ requirements:
   - System should validate email format
   - Password must be encrypted
         "#;
-        
+
         let spec = parser.parse_yaml(yaml).unwrap();
         assert_eq!(spec.requirements.len(), 3);
     }
@@ -409,12 +397,15 @@ requirements:
     #[test]
     fn test_infer_types() {
         let parser = SchemaParser::new();
-        
+
         assert_eq!(parser.infer_type_from_value(&JsonValue::Bool(true)), "boolean");
         assert_eq!(parser.infer_type_from_value(&JsonValue::from(42)), "integer");
         assert_eq!(parser.infer_type_from_value(&JsonValue::from(3.14)), "number");
         assert_eq!(parser.infer_type_from_value(&JsonValue::from("text")), "string");
         assert_eq!(parser.infer_type_from_value(&JsonValue::Array(vec![])), "array");
-        assert_eq!(parser.infer_type_from_value(&JsonValue::Object(serde_json::Map::new())), "object");
+        assert_eq!(
+            parser.infer_type_from_value(&JsonValue::Object(serde_json::Map::new())),
+            "object"
+        );
     }
 }

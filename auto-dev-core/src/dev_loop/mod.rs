@@ -1,25 +1,25 @@
 //! Continuous monitoring and autonomous development loop module
 
-pub mod orchestrator;
-pub mod event_processor;
-pub mod decision_engine;
-pub mod scheduler;
-pub mod llm_optimizer;
-pub mod health_monitor;
 pub mod control_server;
+pub mod decision_engine;
+pub mod event_processor;
+pub mod health_monitor;
+pub mod llm_optimizer;
+pub mod orchestrator;
+pub mod scheduler;
 
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use priority_queue::PriorityQueue;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
-pub use orchestrator::Orchestrator;
-pub use event_processor::EventProcessor;
 pub use decision_engine::DecisionEngine;
-pub use llm_optimizer::LLMOptimizer;
+pub use event_processor::EventProcessor;
 pub use health_monitor::HealthMonitor;
+pub use llm_optimizer::LLMOptimizer;
+pub use orchestrator::Orchestrator;
 
 /// Main development loop state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +95,7 @@ pub enum Decision {
     Refactor(RefactorTask),
     Skip(String), // Reason for skipping
     RequiresLLM(LLMRequest),
-    UsePattern(String), // Pattern ID
+    UsePattern(String),  // Pattern ID
     UseTemplate(String), // Template ID
     UseCached(CachedResponse),
     AdaptSimilar(SimilarSolution),
@@ -162,11 +162,11 @@ pub struct LLMRequest {
 /// Model tier for LLM routing
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ModelTier {
-    Tier1Pattern,     // Use existing patterns (no LLM)
-    Tier2Template,    // Use templates with substitution (no LLM)
-    Tier3Cached,      // Use cached LLM responses
-    Tier4Similar,     // Find similar past solutions (no LLM)
-    Tier5LLM,         // Required LLM call
+    Tier1Pattern,  // Use existing patterns (no LLM)
+    Tier2Template, // Use templates with substitution (no LLM)
+    Tier3Cached,   // Use cached LLM responses
+    Tier4Similar,  // Find similar past solutions (no LLM)
+    Tier5LLM,      // Required LLM call
 }
 
 /// Cached LLM response
@@ -293,12 +293,9 @@ mod tests {
 
     #[test]
     fn test_event_creation() {
-        let event = Event::new(
-            EventType::SpecificationChanged,
-            PathBuf::from("test.md"),
-        )
-        .with_priority(Priority::High);
-        
+        let event = Event::new(EventType::SpecificationChanged, PathBuf::from("test.md"))
+            .with_priority(Priority::High);
+
         assert_eq!(event.priority, Priority::High);
         assert_eq!(event.event_type, EventType::SpecificationChanged);
     }

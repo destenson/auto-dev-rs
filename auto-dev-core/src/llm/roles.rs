@@ -3,9 +3,9 @@
 //! Provides specialized prompts for examining projects from various roles
 //! in a development team, enabling more focused and relevant analysis.
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use anyhow::Result;
 
 /// Different roles in a development project
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -20,20 +20,20 @@ pub enum DevelopmentRole {
     MLEngineer,
     MobileEngineer,
     EmbeddedEngineer,
-    
+
     // Quality & Testing
     QAEngineer,
     TestAutomationEngineer,
     PerformanceEngineer,
     SecurityEngineer,
-    
+
     // Leadership & Management
     TechLead,
     EngineeringManager,
     ProductManager,
     ProjectManager,
     ScrumMaster,
-    
+
     // Specialized Roles
     DatabaseAdministrator,
     SystemAdministrator,
@@ -41,16 +41,16 @@ pub enum DevelopmentRole {
     UIUXDesigner,
     TechnicalWriter,
     DataScientist,
-    
+
     // Business & Support
     BusinessAnalyst,
     CustomerSupport,
     SolutionsArchitect,
-    
+
     // Compliance & Governance
     ComplianceOfficer,
     SecurityAuditor,
-    
+
     // Custom Roles
     Custom(String),
 }
@@ -84,38 +84,38 @@ impl CustomRole {
             tools_used: Vec::new(),
         }
     }
-    
+
     /// Build a custom role with fluent interface
     pub fn with_description(mut self, description: String) -> Self {
         self.description = description;
         self
     }
-    
+
     pub fn with_system_prompt(mut self, prompt: String) -> Self {
         self.system_prompt = prompt;
         self
     }
-    
+
     pub fn with_focus_area(mut self, area: String) -> Self {
         self.focus_areas.push(area);
         self
     }
-    
+
     pub fn with_question(mut self, question: String) -> Self {
         self.questions.push(question);
         self
     }
-    
+
     pub fn with_checklist_item(mut self, item: ChecklistItem) -> Self {
         self.checklist_items.push(item);
         self
     }
-    
+
     pub fn with_expertise(mut self, area: String) -> Self {
         self.expertise_areas.push(area);
         self
     }
-    
+
     pub fn with_tool(mut self, tool: String) -> Self {
         self.tools_used.push(tool);
         self
@@ -129,39 +129,37 @@ pub struct CustomRoleRegistry {
 
 impl CustomRoleRegistry {
     pub fn new() -> Self {
-        Self {
-            roles: HashMap::new(),
-        }
+        Self { roles: HashMap::new() }
     }
-    
+
     /// Register a custom role
     pub fn register(&mut self, role: CustomRole) {
         self.roles.insert(role.name.clone(), role);
     }
-    
+
     /// Get a custom role by name
     pub fn get(&self, name: &str) -> Option<&CustomRole> {
         self.roles.get(name)
     }
-    
+
     /// List all custom roles
     pub fn list(&self) -> Vec<String> {
         self.roles.keys().cloned().collect()
     }
-    
+
     /// Load custom roles from a configuration file
     pub fn load_from_file(path: &std::path::Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let roles: Vec<CustomRole> = serde_json::from_str(&content)?;
-        
+
         let mut registry = Self::new();
         for role in roles {
             registry.register(role);
         }
-        
+
         Ok(registry)
     }
-    
+
     /// Save custom roles to a configuration file
     pub fn save_to_file(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let roles: Vec<&CustomRole> = self.roles.values().collect();
@@ -169,11 +167,11 @@ impl CustomRoleRegistry {
         std::fs::write(path, content)?;
         Ok(())
     }
-    
+
     /// Create predefined custom roles for emerging fields
     pub fn create_predefined_custom_roles() -> Self {
         let mut registry = Self::new();
-        
+
         // AI Ethics Officer
         registry.register(
             CustomRole::new("AI Ethics Officer".to_string())
@@ -181,15 +179,16 @@ impl CustomRoleRegistry {
                 .with_system_prompt(
                     "You are an AI Ethics Officer responsible for ensuring AI systems are \
                      fair, transparent, and ethical. You focus on bias detection, fairness \
-                     metrics, explainability, and responsible AI practices.".to_string()
+                     metrics, explainability, and responsible AI practices."
+                        .to_string(),
                 )
                 .with_focus_area("Bias detection and mitigation".to_string())
                 .with_focus_area("Model fairness and transparency".to_string())
                 .with_focus_area("Privacy preservation".to_string())
                 .with_question("What biases might exist in this system?".to_string())
-                .with_question("How is fairness measured and ensured?".to_string())
+                .with_question("How is fairness measured and ensured?".to_string()),
         );
-        
+
         // Blockchain Architect
         registry.register(
             CustomRole::new("Blockchain Architect".to_string())
@@ -197,15 +196,16 @@ impl CustomRoleRegistry {
                 .with_system_prompt(
                     "You are a Blockchain Architect specializing in distributed ledger \
                      technology, smart contracts, and decentralized applications. You focus \
-                     on consensus mechanisms, cryptographic security, and scalability.".to_string()
+                     on consensus mechanisms, cryptographic security, and scalability."
+                        .to_string(),
                 )
                 .with_focus_area("Smart contract security".to_string())
                 .with_focus_area("Consensus mechanism design".to_string())
                 .with_focus_area("Gas optimization".to_string())
                 .with_expertise("Solidity".to_string())
-                .with_expertise("Web3".to_string())
+                .with_expertise("Web3".to_string()),
         );
-        
+
         // Quantum Computing Engineer
         registry.register(
             CustomRole::new("Quantum Computing Engineer".to_string())
@@ -213,44 +213,51 @@ impl CustomRoleRegistry {
                 .with_system_prompt(
                     "You are a Quantum Computing Engineer working on quantum algorithms, \
                      quantum circuit design, and hybrid classical-quantum systems. You \
-                     understand quantum gates, superposition, and entanglement.".to_string()
+                     understand quantum gates, superposition, and entanglement."
+                        .to_string(),
                 )
                 .with_focus_area("Quantum algorithm design".to_string())
                 .with_focus_area("Quantum error correction".to_string())
-                .with_focus_area("Hybrid computing strategies".to_string())
+                .with_focus_area("Hybrid computing strategies".to_string()),
         );
-        
+
         // AR/VR Developer
         registry.register(
             CustomRole::new("AR/VR Developer".to_string())
-                .with_description("Creates immersive augmented and virtual reality experiences".to_string())
+                .with_description(
+                    "Creates immersive augmented and virtual reality experiences".to_string(),
+                )
                 .with_system_prompt(
                     "You are an AR/VR Developer creating immersive experiences. You focus on \
                      3D graphics, spatial computing, user interaction in 3D space, performance \
-                     optimization for VR headsets, and motion sickness mitigation.".to_string()
+                     optimization for VR headsets, and motion sickness mitigation."
+                        .to_string(),
                 )
                 .with_focus_area("3D rendering optimization".to_string())
                 .with_focus_area("Spatial user interfaces".to_string())
                 .with_focus_area("Motion tracking and interaction".to_string())
                 .with_tool("Unity".to_string())
-                .with_tool("Unreal Engine".to_string())
+                .with_tool("Unreal Engine".to_string()),
         );
-        
+
         // IoT Solutions Architect
         registry.register(
             CustomRole::new("IoT Solutions Architect".to_string())
-                .with_description("Designs Internet of Things systems and edge computing solutions".to_string())
+                .with_description(
+                    "Designs Internet of Things systems and edge computing solutions".to_string(),
+                )
                 .with_system_prompt(
                     "You are an IoT Solutions Architect designing connected device ecosystems. \
                      You focus on edge computing, device management, data aggregation, security \
-                     for constrained devices, and real-time data processing.".to_string()
+                     for constrained devices, and real-time data processing."
+                        .to_string(),
                 )
                 .with_focus_area("Edge computing strategies".to_string())
                 .with_focus_area("Device security and authentication".to_string())
                 .with_focus_area("Protocol selection (MQTT, CoAP)".to_string())
-                .with_focus_area("Power optimization".to_string())
+                .with_focus_area("Power optimization".to_string()),
         );
-        
+
         // Green Software Engineer
         registry.register(
             CustomRole::new("Green Software Engineer".to_string())
@@ -258,15 +265,16 @@ impl CustomRoleRegistry {
                 .with_system_prompt(
                     "You are a Green Software Engineer focused on reducing the environmental \
                      impact of software. You optimize for energy efficiency, carbon footprint \
-                     reduction, and sustainable computing practices.".to_string()
+                     reduction, and sustainable computing practices."
+                        .to_string(),
                 )
                 .with_focus_area("Energy consumption optimization".to_string())
                 .with_focus_area("Carbon footprint measurement".to_string())
                 .with_focus_area("Sustainable architecture patterns".to_string())
                 .with_question("What is the carbon footprint of this system?".to_string())
-                .with_question("How can we reduce energy consumption?".to_string())
+                .with_question("How can we reduce energy consumption?".to_string()),
         );
-        
+
         registry
     }
 }
@@ -283,7 +291,7 @@ impl RolePrompts {
                 name
             );
         }
-        
+
         match role {
             // Engineering Roles
             DevelopmentRole::SoftwareArchitect => {
@@ -300,7 +308,7 @@ impl RolePrompts {
                  Analyze code and documentation with an emphasis on architectural decisions, \
                  design patterns, system boundaries, and long-term maintainability.".to_string()
             }
-            
+
             DevelopmentRole::BackendEngineer => {
                 "You are a Senior Backend Engineer specializing in server-side development. \
                  Your expertise includes:
@@ -315,7 +323,7 @@ impl RolePrompts {
                  Focus on server-side logic, data persistence, API contracts, performance \
                  optimization, and backend security best practices.".to_string()
             }
-            
+
             DevelopmentRole::FrontendEngineer => {
                 "You are a Senior Frontend Engineer expert in modern web development. \
                  You specialize in:
@@ -330,7 +338,7 @@ impl RolePrompts {
                  Evaluate code for UI/UX quality, component reusability, performance, \
                  accessibility, and frontend best practices.".to_string()
             }
-            
+
             DevelopmentRole::DevOpsEngineer => {
                 "You are a Senior DevOps Engineer focused on automation and reliability. \
                  Your expertise covers:
@@ -345,7 +353,7 @@ impl RolePrompts {
                  Analyze deployment configurations, automation scripts, monitoring setup, \
                  and operational readiness.".to_string()
             }
-            
+
             DevelopmentRole::QAEngineer => {
                 "You are a Senior QA Engineer ensuring software quality. You focus on:
                  - Test strategy and test planning
@@ -359,7 +367,7 @@ impl RolePrompts {
                  Examine code for testability, identify missing test scenarios, evaluate \
                  test coverage, and suggest comprehensive testing strategies.".to_string()
             }
-            
+
             DevelopmentRole::SecurityEngineer => {
                 "You are a Senior Security Engineer specializing in application security. \
                  Your focus areas include:
@@ -374,7 +382,7 @@ impl RolePrompts {
                  Analyze code for security vulnerabilities, review authentication mechanisms, \
                  assess data protection measures, and ensure compliance.".to_string()
             }
-            
+
             DevelopmentRole::TechLead => {
                 "You are a Technical Lead balancing technical excellence with delivery. \
                  You consider:
@@ -389,7 +397,7 @@ impl RolePrompts {
                  Evaluate technical decisions, code quality, team practices, and provide \
                  balanced recommendations considering both technical and business needs.".to_string()
             }
-            
+
             DevelopmentRole::DataEngineer => {
                 "You are a Senior Data Engineer specializing in data pipelines. Focus on:
                  - Data pipeline architecture and ETL/ELT processes
@@ -403,7 +411,7 @@ impl RolePrompts {
                  Analyze data flows, transformation logic, data quality checks, and \
                  scalability of data processing systems.".to_string()
             }
-            
+
             DevelopmentRole::MLEngineer => {
                 "You are a Machine Learning Engineer bridging ML research and production. \
                  Your expertise includes:
@@ -418,7 +426,7 @@ impl RolePrompts {
                  Focus on ML system design, model deployment strategies, monitoring, \
                  and production readiness of ML components.".to_string()
             }
-            
+
             DevelopmentRole::ProductManager => {
                 "You are a Product Manager focused on value delivery. You consider:
                  - User stories and acceptance criteria
@@ -432,7 +440,7 @@ impl RolePrompts {
                  Evaluate features from a product perspective, assess user value, \
                  and ensure alignment with business objectives.".to_string()
             }
-            
+
             DevelopmentRole::DatabaseAdministrator => {
                 "You are a Database Administrator ensuring data integrity and performance. \
                  Focus on:
@@ -447,7 +455,7 @@ impl RolePrompts {
                  Analyze database designs, query patterns, performance bottlenecks, \
                  and data consistency measures.".to_string()
             }
-            
+
             DevelopmentRole::CloudArchitect => {
                 "You are a Cloud Architect designing scalable cloud solutions. Focus on:
                  - Cloud service selection (AWS/Azure/GCP)
@@ -461,7 +469,7 @@ impl RolePrompts {
                  Evaluate cloud architecture, service usage, cost efficiency, and \
                  cloud-native best practices.".to_string()
             }
-            
+
             DevelopmentRole::UIUXDesigner => {
                 "You are a UI/UX Designer focused on user experience. Consider:
                  - User journey and workflows
@@ -475,7 +483,7 @@ impl RolePrompts {
                  Evaluate user interfaces for usability, consistency, accessibility, \
                  and alignment with design principles.".to_string()
             }
-            
+
             DevelopmentRole::PerformanceEngineer => {
                 "You are a Performance Engineer optimizing system efficiency. Focus on:
                  - Performance bottlenecks and profiling
@@ -489,7 +497,7 @@ impl RolePrompts {
                  Analyze code for performance issues, suggest optimizations, and \
                  identify scalability concerns.".to_string()
             }
-            
+
             DevelopmentRole::TestAutomationEngineer => {
                 "You are a Test Automation Engineer building reliable test suites. Focus on:
                  - Test automation framework design
@@ -503,7 +511,7 @@ impl RolePrompts {
                  Evaluate test automation code quality, coverage, maintainability, \
                  and execution efficiency.".to_string()
             }
-            
+
             DevelopmentRole::BusinessAnalyst => {
                 "You are a Business Analyst bridging business and technology. Focus on:
                  - Business requirements and processes
@@ -517,7 +525,7 @@ impl RolePrompts {
                  Analyze solutions from a business perspective, ensure requirements \
                  alignment, and identify process improvements.".to_string()
             }
-            
+
             DevelopmentRole::ScrumMaster => {
                 "You are a Scrum Master facilitating agile development. Consider:
                  - Sprint planning and story sizing
@@ -531,7 +539,7 @@ impl RolePrompts {
                  Evaluate work items for clarity, sizing accuracy, and identify \
                  potential impediments to delivery.".to_string()
             }
-            
+
             DevelopmentRole::TechnicalWriter => {
                 "You are a Technical Writer creating clear documentation. Focus on:
                  - Documentation completeness and accuracy
@@ -545,78 +553,78 @@ impl RolePrompts {
                  Evaluate documentation quality, identify gaps, and suggest \
                  improvements for clarity and completeness.".to_string()
             }
-            
+
             DevelopmentRole::FullStackEngineer => {
                 "You are a Full Stack Engineer with expertise across the entire stack. \
                  You balance frontend and backend concerns, understanding both user experience \
                  and system architecture. Focus on end-to-end feature implementation, \
                  API contracts, full-stack performance, and development efficiency.".to_string()
             }
-            
+
             DevelopmentRole::MobileEngineer => {
                 "You are a Mobile Engineer specializing in native and cross-platform apps. \
                  Focus on mobile performance, battery optimization, offline functionality, \
                  push notifications, app store requirements, and platform-specific patterns.".to_string()
             }
-            
+
             DevelopmentRole::EmbeddedEngineer => {
                 "You are an Embedded Systems Engineer working with resource-constrained devices. \
                  Focus on memory management, real-time requirements, hardware interfaces, \
                  power consumption, and firmware updates.".to_string()
             }
-            
+
             DevelopmentRole::EngineeringManager => {
                 "You are an Engineering Manager balancing technical and people leadership. \
                  Consider team velocity, technical debt, career development, process improvements, \
                  stakeholder communication, and delivery timelines.".to_string()
             }
-            
+
             DevelopmentRole::ProjectManager => {
                 "You are a Project Manager ensuring successful delivery. Focus on scope management, \
                  timeline tracking, risk mitigation, stakeholder alignment, resource allocation, \
                  and project dependencies.".to_string()
             }
-            
+
             DevelopmentRole::SystemAdministrator => {
                 "You are a System Administrator maintaining infrastructure. Focus on system health, \
                  backup strategies, access management, patch management, monitoring setup, \
                  and operational procedures.".to_string()
             }
-            
+
             DevelopmentRole::DataScientist => {
                 "You are a Data Scientist extracting insights from data. Focus on statistical analysis, \
                  hypothesis testing, feature engineering, model selection, experiment design, \
                  and result interpretation.".to_string()
             }
-            
+
             DevelopmentRole::CustomerSupport => {
                 "You are a Customer Support specialist ensuring user success. Focus on user pain points, \
                  documentation clarity, common issues, support workflows, and customer feedback integration.".to_string()
             }
-            
+
             DevelopmentRole::SolutionsArchitect => {
                 "You are a Solutions Architect designing customer-facing solutions. Focus on requirements \
                  alignment, integration patterns, scalability, cost optimization, and technical feasibility.".to_string()
             }
-            
+
             DevelopmentRole::ComplianceOfficer => {
                 "You are a Compliance Officer ensuring regulatory adherence. Focus on data privacy, \
                  audit trails, regulatory requirements, compliance documentation, and risk assessment.".to_string()
             }
-            
+
             DevelopmentRole::SecurityAuditor => {
                 "You are a Security Auditor performing comprehensive security assessments. Focus on \
                  vulnerability scanning, penetration testing results, security controls evaluation, \
                  compliance verification, and remediation recommendations.".to_string()
             }
-            
+
             DevelopmentRole::Custom(_) => {
                 // Handled at the beginning of the function
                 unreachable!()
             }
         }
     }
-    
+
     /// Get analysis focus areas for a role
     pub fn get_focus_areas(role: &DevelopmentRole) -> Vec<String> {
         match role {
@@ -627,7 +635,7 @@ impl RolePrompts {
                 "Technology choices".to_string(),
                 "Non-functional requirements".to_string(),
             ],
-            
+
             DevelopmentRole::SecurityEngineer => vec![
                 "Authentication and authorization".to_string(),
                 "Input validation".to_string(),
@@ -635,7 +643,7 @@ impl RolePrompts {
                 "Security vulnerabilities".to_string(),
                 "Compliance requirements".to_string(),
             ],
-            
+
             DevelopmentRole::DevOpsEngineer => vec![
                 "Deployment automation".to_string(),
                 "Infrastructure configuration".to_string(),
@@ -643,7 +651,7 @@ impl RolePrompts {
                 "CI/CD pipelines".to_string(),
                 "Disaster recovery".to_string(),
             ],
-            
+
             DevelopmentRole::QAEngineer => vec![
                 "Test coverage".to_string(),
                 "Edge cases".to_string(),
@@ -651,11 +659,11 @@ impl RolePrompts {
                 "Quality metrics".to_string(),
                 "Bug patterns".to_string(),
             ],
-            
+
             _ => vec!["General analysis".to_string()],
         }
     }
-    
+
     /// Get questions a role would ask about the project
     pub fn get_role_questions(role: &DevelopmentRole) -> Vec<String> {
         match role {
@@ -666,7 +674,7 @@ impl RolePrompts {
                 "How is technical debt being managed?".to_string(),
                 "What are the integration points and dependencies?".to_string(),
             ],
-            
+
             DevelopmentRole::SecurityEngineer => vec![
                 "How is authentication implemented?".to_string(),
                 "What sensitive data is being handled?".to_string(),
@@ -674,7 +682,7 @@ impl RolePrompts {
                 "How is data encrypted at rest and in transit?".to_string(),
                 "What compliance requirements must be met?".to_string(),
             ],
-            
+
             DevelopmentRole::ProductManager => vec![
                 "What user problems does this solve?".to_string(),
                 "What are the key success metrics?".to_string(),
@@ -682,7 +690,7 @@ impl RolePrompts {
                 "What is the go-to-market strategy?".to_string(),
                 "How does this compare to competitors?".to_string(),
             ],
-            
+
             DevelopmentRole::DevOpsEngineer => vec![
                 "How is the application deployed?".to_string(),
                 "What monitoring is in place?".to_string(),
@@ -690,11 +698,11 @@ impl RolePrompts {
                 "What is the disaster recovery plan?".to_string(),
                 "How is infrastructure managed?".to_string(),
             ],
-            
+
             _ => vec!["What are the main challenges in this project?".to_string()],
         }
     }
-    
+
     /// Get the review checklist for a role
     pub fn get_review_checklist(role: &DevelopmentRole) -> Vec<ChecklistItem> {
         match role {
@@ -705,7 +713,7 @@ impl RolePrompts {
                 ChecklistItem::new("Dependencies well managed", Priority::Medium),
                 ChecklistItem::new("Documentation of decisions", Priority::Medium),
             ],
-            
+
             DevelopmentRole::SecurityEngineer => vec![
                 ChecklistItem::new("No hardcoded secrets", Priority::Critical),
                 ChecklistItem::new("Input validation present", Priority::Critical),
@@ -713,7 +721,7 @@ impl RolePrompts {
                 ChecklistItem::new("Data encryption in place", Priority::High),
                 ChecklistItem::new("Security headers configured", Priority::Medium),
             ],
-            
+
             DevelopmentRole::QAEngineer => vec![
                 ChecklistItem::new("Unit tests present", Priority::High),
                 ChecklistItem::new("Integration tests written", Priority::High),
@@ -721,7 +729,7 @@ impl RolePrompts {
                 ChecklistItem::new("Test data management", Priority::Medium),
                 ChecklistItem::new("Performance tests defined", Priority::Low),
             ],
-            
+
             _ => vec![ChecklistItem::new("Basic requirements met", Priority::High)],
         }
     }
@@ -773,11 +781,7 @@ pub struct ChecklistItem {
 
 impl ChecklistItem {
     pub fn new(description: &str, priority: Priority) -> Self {
-        Self {
-            description: description.to_string(),
-            priority,
-            checked: false,
-        }
+        Self { description: description.to_string(), priority, checked: false }
     }
 }
 
@@ -803,14 +807,9 @@ impl RoleContext {
         let focus_areas = RolePrompts::get_focus_areas(&role);
         let questions = RolePrompts::get_role_questions(&role);
         let checklist = RolePrompts::get_review_checklist(&role);
-        Self {
-            role,
-            focus_areas,
-            questions,
-            checklist,
-        }
+        Self { role, focus_areas, questions, checklist }
     }
-    
+
     /// Get the complete prompt for analysis
     pub fn get_analysis_prompt(&self, project_context: &str) -> String {
         format!(
@@ -836,14 +835,12 @@ impl MultiRoleAnalyzer {
     pub fn new(roles: Vec<DevelopmentRole>) -> Self {
         Self { roles }
     }
-    
+
     /// Get all role contexts for analysis
     pub fn get_all_contexts(&self) -> Vec<RoleContext> {
-        self.roles.iter()
-            .map(|role| RoleContext::new(role.clone()))
-            .collect()
+        self.roles.iter().map(|role| RoleContext::new(role.clone())).collect()
     }
-    
+
     /// Get critical roles for a project type
     pub fn get_critical_roles(project_type: &str) -> Vec<DevelopmentRole> {
         match project_type.to_lowercase().as_str() {
@@ -853,35 +850,35 @@ impl MultiRoleAnalyzer {
                 DevelopmentRole::DevOpsEngineer,
                 DevelopmentRole::SecurityEngineer,
             ],
-            
+
             "api" | "backend" => vec![
                 DevelopmentRole::BackendEngineer,
                 DevelopmentRole::DatabaseAdministrator,
                 DevelopmentRole::SecurityEngineer,
                 DevelopmentRole::DevOpsEngineer,
             ],
-            
+
             "mobile" => vec![
                 DevelopmentRole::MobileEngineer,
                 DevelopmentRole::BackendEngineer,
                 DevelopmentRole::UIUXDesigner,
                 DevelopmentRole::QAEngineer,
             ],
-            
+
             "data" | "pipeline" => vec![
                 DevelopmentRole::DataEngineer,
                 DevelopmentRole::DatabaseAdministrator,
                 DevelopmentRole::DevOpsEngineer,
                 DevelopmentRole::DataScientist,
             ],
-            
+
             "ml" | "ai" => vec![
                 DevelopmentRole::MLEngineer,
                 DevelopmentRole::DataEngineer,
                 DevelopmentRole::DevOpsEngineer,
                 DevelopmentRole::DataScientist,
             ],
-            
+
             _ => vec![
                 DevelopmentRole::SoftwareArchitect,
                 DevelopmentRole::TechLead,
@@ -895,14 +892,14 @@ impl MultiRoleAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_role_prompts() {
         let prompt = RolePrompts::get_system_prompt(&DevelopmentRole::SecurityEngineer);
         assert!(prompt.contains("Security Engineer"));
         assert!(prompt.contains("OWASP"));
     }
-    
+
     #[test]
     fn test_role_context() {
         let context = RoleContext::new(DevelopmentRole::SoftwareArchitect);
@@ -910,13 +907,13 @@ mod tests {
         assert!(!context.questions.is_empty());
         assert!(!context.checklist.is_empty());
     }
-    
+
     #[test]
     fn test_critical_roles() {
         let web_roles = MultiRoleAnalyzer::get_critical_roles("web");
         assert!(web_roles.contains(&DevelopmentRole::FrontendEngineer));
         assert!(web_roles.contains(&DevelopmentRole::BackendEngineer));
-        
+
         let ml_roles = MultiRoleAnalyzer::get_critical_roles("ml");
         assert!(ml_roles.contains(&DevelopmentRole::MLEngineer));
         assert!(ml_roles.contains(&DevelopmentRole::DataEngineer));

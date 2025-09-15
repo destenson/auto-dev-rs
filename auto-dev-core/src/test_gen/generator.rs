@@ -1,8 +1,8 @@
 //! Main test generator that orchestrates test creation from specifications
 
-use crate::parser::model::{Specification, Requirement};
+use super::{Assertion, Property, TestCase, TestInput, TestSuite, TestType};
 use crate::llm::provider::LLMProvider;
-use super::{TestSuite, TestCase, TestType, TestInput, Assertion, Property};
+use crate::parser::model::{Requirement, Specification};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,15 +51,15 @@ impl TestGenerator {
 
     /// Generate tests from a specification
     pub async fn generate_tests(
-        &self, 
+        &self,
         spec: &Specification,
         llm: Option<&dyn LLMProvider>,
     ) -> Result<TestSuite> {
         let mut suite = TestSuite::new("generated_tests");
-        
+
         // Extract test requirements from specification
         let requirements = self.spec_analyzer.extract_requirements(spec)?;
-        
+
         // Generate different types of tests
         if self.config.generate_unit_tests {
             let unit_tests = self.generate_unit_tests(&requirements, llm).await?;
@@ -67,51 +67,51 @@ impl TestGenerator {
                 suite.add_test(test);
             }
         }
-        
+
         if self.config.generate_property_tests {
             let property_tests = self.generate_property_tests(&requirements)?;
             for test in property_tests {
                 suite.add_test(test);
             }
         }
-        
+
         if self.config.generate_edge_cases {
             let edge_tests = self.generate_edge_case_tests(&requirements)?;
             for test in edge_tests {
                 suite.add_test(test);
             }
         }
-        
+
         if self.config.generate_integration_tests {
             let integration_tests = self.generate_integration_tests(&requirements, llm).await?;
             for test in integration_tests {
                 suite.add_test(test);
             }
         }
-        
+
         Ok(suite)
     }
-    
+
     async fn generate_unit_tests(
         &self,
         requirements: &[TestRequirement],
         llm: Option<&dyn LLMProvider>,
     ) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        
+
         for req in requirements {
             if req.requirement_type == RequirementType::Functional {
                 let test = self.test_builder.build_unit_test(req, llm).await?;
                 tests.push(test);
             }
         }
-        
+
         Ok(tests)
     }
-    
+
     fn generate_property_tests(&self, requirements: &[TestRequirement]) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        
+
         for req in requirements {
             if let Some(properties) = self.property_generator.detect_properties(req) {
                 for property in properties {
@@ -120,13 +120,13 @@ impl TestGenerator {
                 }
             }
         }
-        
+
         Ok(tests)
     }
-    
+
     fn generate_edge_case_tests(&self, requirements: &[TestRequirement]) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        
+
         for req in requirements {
             let edge_cases = self.detect_edge_cases(req);
             for edge_case in edge_cases {
@@ -134,33 +134,32 @@ impl TestGenerator {
                 tests.push(test);
             }
         }
-        
+
         Ok(tests)
     }
-    
+
     async fn generate_integration_tests(
         &self,
         requirements: &[TestRequirement],
         llm: Option<&dyn LLMProvider>,
     ) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        
+
         // Find requirements that involve multiple components
-        let integration_reqs: Vec<_> = requirements.iter()
-            .filter(|r| r.involves_multiple_components())
-            .collect();
-        
+        let integration_reqs: Vec<_> =
+            requirements.iter().filter(|r| r.involves_multiple_components()).collect();
+
         for req in integration_reqs {
             let test = self.test_builder.build_integration_test(req, llm).await?;
             tests.push(test);
         }
-        
+
         Ok(tests)
     }
-    
+
     fn detect_edge_cases(&self, req: &TestRequirement) -> Vec<TestInput> {
         let mut edge_cases = Vec::new();
-        
+
         for param in &req.parameters {
             match param.param_type.as_str() {
                 "string" => {
@@ -186,7 +185,7 @@ impl TestGenerator {
                 _ => {}
             }
         }
-        
+
         edge_cases
     }
 }
@@ -199,30 +198,30 @@ pub struct SpecAnalyzer {
 impl SpecAnalyzer {
     pub fn new() -> Self {
         let mut patterns = HashMap::new();
-        
+
         // Add common test patterns
         patterns.insert("given_when_then".to_string(), TestPattern::GivenWhenThen);
         patterns.insert("acceptance_criteria".to_string(), TestPattern::AcceptanceCriteria);
         patterns.insert("examples".to_string(), TestPattern::Examples);
-        
+
         Self { patterns }
     }
-    
+
     pub fn extract_requirements(&self, spec: &Specification) -> Result<Vec<TestRequirement>> {
         let mut requirements = Vec::new();
-        
+
         // Extract from requirements
         for req in &spec.requirements {
             let test_req = self.convert_requirement(req)?;
             requirements.push(test_req);
         }
-        
+
         // Extract from acceptance criteria if present
         // TODO: Add metadata field to Specification if needed
-        
+
         Ok(requirements)
     }
-    
+
     fn convert_requirement(&self, req: &Requirement) -> Result<TestRequirement> {
         Ok(TestRequirement {
             id: req.id.clone(),
@@ -233,10 +232,10 @@ impl SpecAnalyzer {
             components: self.identify_components(&req.description),
         })
     }
-    
+
     fn classify_requirement(&self, req: &Requirement) -> RequirementType {
         let desc_lower = req.description.to_lowercase();
-        
+
         if desc_lower.contains("performance") || desc_lower.contains("speed") {
             RequirementType::Performance
         } else if desc_lower.contains("security") || desc_lower.contains("auth") {
@@ -247,11 +246,11 @@ impl SpecAnalyzer {
             RequirementType::Functional
         }
     }
-    
+
     fn extract_parameters(&self, description: &str) -> Vec<Parameter> {
         // Simple parameter extraction - could be enhanced with NLP
         let mut params = Vec::new();
-        
+
         if description.contains("email") {
             params.push(Parameter {
                 name: "email".to_string(),
@@ -259,7 +258,7 @@ impl SpecAnalyzer {
                 constraints: vec!["contains @".to_string()],
             });
         }
-        
+
         if description.contains("password") {
             params.push(Parameter {
                 name: "password".to_string(),
@@ -267,14 +266,14 @@ impl SpecAnalyzer {
                 constraints: vec!["length >= 8".to_string()],
             });
         }
-        
+
         params
     }
-    
+
     fn identify_components(&self, description: &str) -> Vec<String> {
         let mut components = Vec::new();
         let desc_lower = description.to_lowercase();
-        
+
         if desc_lower.contains("database") || desc_lower.contains("storage") {
             components.push("database".to_string());
         }
@@ -284,19 +283,20 @@ impl SpecAnalyzer {
         if desc_lower.contains("auth") || desc_lower.contains("login") {
             components.push("authentication".to_string());
         }
-        
+
         components
     }
-    
+
     fn extract_from_criteria(&self, criteria: &str) -> Result<Vec<TestRequirement>> {
         let mut requirements = Vec::new();
-        
+
         // Parse Given-When-Then patterns
         let lines: Vec<&str> = criteria.lines().collect();
         for line in lines {
-            if line.trim().starts_with("Given") || 
-               line.trim().starts_with("When") || 
-               line.trim().starts_with("Then") {
+            if line.trim().starts_with("Given")
+                || line.trim().starts_with("When")
+                || line.trim().starts_with("Then")
+            {
                 // Extract as test requirement
                 let req = TestRequirement {
                     id: format!("criteria_{}", requirements.len()),
@@ -309,7 +309,7 @@ impl SpecAnalyzer {
                 requirements.push(req);
             }
         }
-        
+
         Ok(requirements)
     }
 }
@@ -322,27 +322,24 @@ pub struct TestBuilder {
 impl TestBuilder {
     pub fn new() -> Self {
         let mut templates = HashMap::new();
-        
+
         // Add test templates for different types
         templates.insert(TestType::Unit, "unit_test_template".to_string());
         templates.insert(TestType::Integration, "integration_test_template".to_string());
         templates.insert(TestType::Property, "property_test_template".to_string());
-        
+
         Self { templates }
     }
-    
+
     pub async fn build_unit_test(
-        &self, 
+        &self,
         req: &TestRequirement,
         _llm: Option<&dyn LLMProvider>,
     ) -> Result<TestCase> {
-        let mut test = TestCase::new(
-            format!("test_{}", req.id),
-            TestType::Unit,
-        );
-        
+        let mut test = TestCase::new(format!("test_{}", req.id), TestType::Unit);
+
         test.description = format!("Unit test for: {}", req.description);
-        
+
         // Add assertions based on requirement
         let assertion = Assertion {
             assertion_type: super::AssertionType::Equals,
@@ -351,50 +348,41 @@ impl TestBuilder {
             message: Some(format!("Requirement {} should be satisfied", req.id)),
         };
         test.add_assertion(assertion);
-        
+
         Ok(test)
     }
-    
+
     pub fn build_property_test(&self, property: &Property) -> Result<TestCase> {
-        let mut test = TestCase::new(
-            format!("prop_{}", property.name),
-            TestType::Property,
-        );
-        
+        let mut test = TestCase::new(format!("prop_{}", property.name), TestType::Property);
+
         test.description = format!("Property test: {}", property.invariant.description);
         test.properties.push(property.clone());
-        
+
         Ok(test)
     }
-    
+
     pub fn build_edge_case_test(
         &self,
         req: &TestRequirement,
         edge_case: &TestInput,
     ) -> Result<TestCase> {
-        let mut test = TestCase::new(
-            format!("test_edge_{}", req.id),
-            TestType::Unit,
-        );
-        
+        let mut test = TestCase::new(format!("test_edge_{}", req.id), TestType::Unit);
+
         test.description = format!("Edge case test for: {}", req.description);
         test.add_input(edge_case.clone());
-        
+
         Ok(test)
     }
-    
+
     pub async fn build_integration_test(
         &self,
         req: &TestRequirement,
         _llm: Option<&dyn LLMProvider>,
     ) -> Result<TestCase> {
-        let mut test = TestCase::new(
-            format!("test_integration_{}", req.id),
-            TestType::Integration,
-        );
-        
+        let mut test = TestCase::new(format!("test_integration_{}", req.id), TestType::Integration);
+
         test.description = format!("Integration test for: {}", req.description);
-        
+
         Ok(test)
     }
 }
@@ -406,10 +394,10 @@ impl PropertyGenerator {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub fn detect_properties(&self, req: &TestRequirement) -> Option<Vec<Property>> {
         let mut properties = Vec::new();
-        
+
         // Detect common properties
         if req.description.contains("hash") && req.description.contains("password") {
             properties.push(Property {
@@ -425,12 +413,8 @@ impl PropertyGenerator {
                 examples: Vec::new(),
             });
         }
-        
-        if !properties.is_empty() {
-            Some(properties)
-        } else {
-            None
-        }
+
+        if !properties.is_empty() { Some(properties) } else { None }
     }
 }
 
@@ -476,7 +460,7 @@ pub enum TestPattern {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::model::{Specification, Requirement, Priority};
+    use crate::parser::model::{Priority, Requirement, Specification};
 
     #[test]
     fn test_spec_analyzer_creation() {
@@ -505,7 +489,7 @@ mod tests {
     #[test]
     fn test_requirement_classification() {
         let analyzer = SpecAnalyzer::new();
-        
+
         let security_req = Requirement {
             id: "REQ-1".to_string(),
             description: "Secure authentication required".to_string(),
@@ -516,7 +500,7 @@ mod tests {
             related: Vec::new(),
             tags: Vec::new(),
         };
-        
+
         let req_type = analyzer.classify_requirement(&security_req);
         assert_eq!(req_type, RequirementType::Security);
     }
@@ -532,7 +516,7 @@ mod tests {
             expected_behavior: String::new(),
             components: Vec::new(),
         };
-        
+
         let properties = property_gen.detect_properties(&req);
         assert!(properties.is_some());
         assert_eq!(properties.unwrap().len(), 1);

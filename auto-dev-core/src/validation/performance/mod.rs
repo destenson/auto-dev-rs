@@ -11,18 +11,16 @@ pub struct PerformanceValidator {
 
 impl PerformanceValidator {
     pub fn new(project_path: impl Into<String>) -> Self {
-        Self {
-            project_path: project_path.into(),
-        }
+        Self { project_path: project_path.into() }
     }
-    
+
     /// Run cargo bench for performance benchmarks
     pub async fn run_benchmarks(&self) -> Result<ValidationResult> {
         let output = Command::new("cargo")
             .args(&["bench", "--quiet"])
             .current_dir(&self.project_path)
             .output()?;
-        
+
         if output.status.success() {
             Ok(ValidationResult::new())
         } else {
@@ -31,7 +29,7 @@ impl PerformanceValidator {
             Ok(ValidationResult::new())
         }
     }
-    
+
     // Could also integrate with:
     // - flamegraph for profiling
     // - valgrind/heaptrack for memory profiling

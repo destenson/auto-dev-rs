@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
-use anyhow::Result;
 
+use crate::context::analyzer::patterns::CodePattern;
 use crate::incremental::Implementation;
 use crate::parser::model::Specification;
-use crate::context::analyzer::patterns::CodePattern;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatternExtractor {
@@ -17,11 +17,7 @@ pub struct PatternExtractor {
 
 impl PatternExtractor {
     pub fn new() -> Self {
-        Self {
-            min_complexity: 3,
-            max_complexity: 100,
-            similarity_threshold: 0.8,
-        }
+        Self { min_complexity: 3, max_complexity: 100, similarity_threshold: 0.8 }
     }
 
     pub fn extract_patterns(
@@ -37,7 +33,7 @@ impl PatternExtractor {
         patterns.extend(self.extract_idioms_from_code(&code));
 
         patterns.retain(|p| p.quality_score() > 0.7);
-        
+
         for pattern in &mut patterns {
             pattern.context = PatternContext::from_event_context(context);
         }
@@ -46,11 +42,7 @@ impl PatternExtractor {
     }
 
     fn get_code_from_implementation(&self, implementation: &Implementation) -> String {
-        implementation.files
-            .iter()
-            .map(|f| f.content.clone())
-            .collect::<Vec<_>>()
-            .join("\n")
+        implementation.files.iter().map(|f| f.content.clone()).collect::<Vec<_>>().join("\n")
     }
 
     fn extract_structural_patterns(&self, implementation: &Implementation) -> Vec<Pattern> {
@@ -149,7 +141,8 @@ impl PatternExtractor {
     fn analyze_code_structure(&self, code: &str) -> Option<Vec<CodeStructure>> {
         let mut structures = Vec::new();
 
-        let function_regex = regex::Regex::new(r"(?m)^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)[^{]*\{").ok()?;
+        let function_regex =
+            regex::Regex::new(r"(?m)^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)[^{]*\{").ok()?;
         let struct_regex = regex::Regex::new(r"(?m)^(?:pub\s+)?struct\s+(\w+)").ok()?;
         let impl_regex = regex::Regex::new(r"(?m)^impl(?:\s+\w+\s+for)?\s+(\w+)").ok()?;
 
@@ -186,11 +179,7 @@ impl PatternExtractor {
             }
         }
 
-        if structures.is_empty() {
-            None
-        } else {
-            Some(structures)
-        }
+        if structures.is_empty() { None } else { Some(structures) }
     }
 
     fn analyze_behavior(&self, code: &str) -> Option<Vec<BehaviorPattern>> {
@@ -226,17 +215,13 @@ impl PatternExtractor {
             });
         }
 
-        if behaviors.is_empty() {
-            None
-        } else {
-            Some(behaviors)
-        }
+        if behaviors.is_empty() { None } else { Some(behaviors) }
     }
 
     fn is_valid_pattern(&self, structure: &CodeStructure) -> bool {
-        structure.complexity >= self.min_complexity && 
-        structure.complexity <= self.max_complexity &&
-        !structure.code.is_empty()
+        structure.complexity >= self.min_complexity
+            && structure.complexity <= self.max_complexity
+            && !structure.code.is_empty()
     }
 
     fn convert_to_pattern(&self, structure: CodeStructure, pattern_type: PatternType) -> Pattern {
@@ -320,22 +305,22 @@ impl PatternContext {
     }
 
     pub fn matches(&self, other: &PatternContext) -> bool {
-        self.language == other.language &&
-        self.project_type == other.project_type &&
-        (self.framework.is_none() || self.framework == other.framework)
+        self.language == other.language
+            && self.project_type == other.project_type
+            && (self.framework.is_none() || self.framework == other.framework)
     }
 }
 
 impl Pattern {
     pub fn quality_score(&self) -> f32 {
         let mut score = 0.0;
-        
+
         score += self.success_rate * 0.3;
         score += self.reusability_score * 0.3;
         score += (self.usage_count.min(100) as f32 / 100.0) * 0.2;
         score += self.test_coverage * 0.1;
         score += self.simplicity_score() * 0.1;
-        
+
         score
     }
 
@@ -407,21 +392,17 @@ fn extract_block(code: &str, start: usize) -> String {
         }
     }
 
-    if end > start {
-        code[start..end].to_string()
-    } else {
-        String::new()
-    }
+    if end > start { code[start..end].to_string() } else { String::new() }
 }
 
 fn extract_struct_block(code: &str, start: usize) -> String {
     let code_bytes = code.as_bytes();
     let mut end = start;
-    
+
     for i in start..code_bytes.len() {
         if code_bytes[i] == b'\n' {
-            if i + 1 < code_bytes.len() && 
-               (code_bytes[i + 1] != b' ' && code_bytes[i + 1] != b'\t') {
+            if i + 1 < code_bytes.len() && (code_bytes[i + 1] != b' ' && code_bytes[i + 1] != b'\t')
+            {
                 end = i;
                 break;
             }
@@ -516,7 +497,8 @@ mod tests {
                         _ => Ok(data.to_string())
                     }
                 }
-            "#.to_string(),
+            "#
+            .to_string(),
             ..Default::default()
         };
 

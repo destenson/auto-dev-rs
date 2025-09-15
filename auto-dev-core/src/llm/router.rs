@@ -9,27 +9,24 @@
 
 pub mod classifier;
 pub mod cost_tracker;
-pub mod performance;
 pub mod models;
-pub mod registry;
 pub mod optimizer;
+pub mod performance;
+pub mod registry;
 
-pub use classifier::{ComplexityClassifier, MLClassifier, TaskFeatures};
-pub use cost_tracker::{CostTracker, CostStrategy, BudgetAlert};
-pub use performance::{PerformanceMonitor, ModelMetrics, TierAdjustment};
-pub use registry::{ModelRegistry, ModelConfig, ProviderConfig};
-pub use optimizer::{CostOptimizer, RoutingStrategy};
 use super::{
-    provider::{*, self},
-    tiny::OllamaTinyModel,
+    ClassificationResult, QuestionType, TinyModel, TinyModelConfig,
     candle::SmartTinyModel,
-    TinyModelConfig,
-    ClassificationResult,
-    QuestionType,
-    TinyModel,
+    provider::{self, *},
+    tiny::OllamaTinyModel,
 };
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
+pub use classifier::{ComplexityClassifier, MLClassifier, TaskFeatures};
+pub use cost_tracker::{BudgetAlert, CostStrategy, CostTracker};
+pub use optimizer::{CostOptimizer, RoutingStrategy};
+pub use performance::{ModelMetrics, PerformanceMonitor, TierAdjustment};
+pub use registry::{ModelConfig, ModelRegistry, ProviderConfig};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -37,7 +34,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::RwLock;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 /// Intelligent router that selects the best model for each task
 pub struct LLMRouter {
@@ -59,21 +56,21 @@ impl LLMRouter {
             stats: Arc::new(RwLock::new(RouterStats::default())),
         }
     }
-    
+
     /// Register a provider
     pub fn register_provider(&mut self, provider: Arc<dyn LLMProvider>) {
         let name = provider.name().to_string();
         let tier = provider.tier();
-        
+
         self.providers.insert(name.clone(), provider);
         self.tiers.entry(tier).or_insert_with(Vec::new).push(name);
     }
-    
+
     /// Setup default providers based on configuration
     pub async fn setup_default_providers(&mut self) -> Result<()> {
         // Always register heuristic provider (No LLM)
         self.register_provider(Arc::new(HeuristicProvider::new()));
-        
+
         // Register Qwen tiny model if configured
         if let Some(qwen_config) = &self.config.qwen_config {
             if qwen_config.enabled {
@@ -95,44 +92,42 @@ impl LLMRouter {
                 }
             }
         }
-        
+
         // Register other providers based on config
         // TODO: Add Claude, OpenAI, etc.
-        
-        info!("Registered {} providers across {} tiers", 
-              self.providers.len(), self.tiers.len());
-        
+
+        info!("Registered {} providers across {} tiers", self.providers.len(), self.tiers.len());
+
         Ok(())
     }
-    
+
     /// Route a task to the appropriate model
     pub async fn route_task(&self, task: &Task) -> Result<TaskResult> {
         let start = Instant::now();
-        
+
         // Check cache first
         if let Some(cached) = self.check_cache(&task).await {
             debug!("Cache hit for task: {}", task.description);
             self.update_stats(true, Duration::from_millis(1)).await;
             return Ok(cached);
         }
-        
+
         // Assess complexity to determine tier
         let complexity = self.assess_task_complexity(&task).await?;
-        info!("Task complexity: {:?}, using tier: {:?}", 
-              complexity.reasoning, complexity.tier);
-        
+        info!("Task complexity: {:?}, using tier: {:?}", complexity.reasoning, complexity.tier);
+
         // Try providers in order of tier
         let result = self.execute_with_fallback(task, complexity.tier).await?;
-        
+
         // Cache the result
         self.cache_result(&task, &result).await;
-        
+
         // Update stats
         self.update_stats(false, start.elapsed()).await;
-        
+
         Ok(result)
     }
-    
+
     /// Execute task with fallback to higher tiers if needed
     async fn execute_with_fallback(
         &self,
@@ -146,9 +141,9 @@ impl LLMRouter {
             ModelTier::Medium,
             ModelTier::Large,
         ];
-        
+
         let start_index = tiers.iter().position(|&t| t == starting_tier).unwrap_or(0);
-        
+
         for tier in &tiers[start_index..] {
             if let Some(provider_names) = self.tiers.get(tier) {
                 for name in provider_names {
@@ -169,10 +164,10 @@ impl LLMRouter {
                 }
             }
         }
-        
+
         Err(anyhow::anyhow!("All providers failed for task: {}", task.description))
     }
-    
+
     /// Execute a specific task with a specific provider
     async fn execute_task_with_provider(
         &self,
@@ -185,7 +180,9 @@ impl LLMRouter {
                 Ok(TaskResult::Classification(result))
             }
             TaskType::Question(question) => {
-                let answer = provider.answer_question(question).await?
+                let answer = provider
+                    .answer_question(question)
+                    .await?
                     .ok_or_else(|| anyhow::anyhow!("No answer available"))?;
                 Ok(TaskResult::Answer(answer))
             }
@@ -199,7 +196,7 @@ impl LLMRouter {
             }
         }
     }
-    
+
     /// Assess task complexity using heuristics or tiny model
     async fn assess_task_complexity(&self, task: &Task) -> Result<TaskComplexity> {
         // Quick heuristics first
@@ -226,7 +223,7 @@ impl LLMRouter {
                 }
             }
         };
-        
+
         Ok(TaskComplexity {
             tier,
             reasoning: "Assessed based on task type and size".to_string(),
@@ -234,19 +231,19 @@ impl LLMRouter {
             confidence: 0.8,
         })
     }
-    
+
     /// Check cache for existing result
     async fn check_cache(&self, task: &Task) -> Option<TaskResult> {
         let cache = self.cache.read().await;
         cache.get(&task.cache_key())
     }
-    
+
     /// Cache a result
     async fn cache_result(&self, task: &Task, result: &TaskResult) {
         let mut cache = self.cache.write().await;
         cache.insert(task.cache_key(), result.clone());
     }
-    
+
     /// Update router statistics
     async fn update_stats(&self, cache_hit: bool, duration: Duration) {
         let mut stats = self.stats.write().await;
@@ -256,7 +253,7 @@ impl LLMRouter {
         }
         stats.total_duration += duration;
     }
-    
+
     /// Get current statistics
     pub async fn get_stats(&self) -> RouterStats {
         self.stats.read().await.clone()
@@ -277,7 +274,7 @@ impl Task {
     fn cache_key(&self) -> String {
         format!("{:?}", self.task_type).chars().take(100).collect()
     }
-    
+
     /// Estimate tokens needed for this task
     fn estimate_tokens(&self) -> usize {
         match &self.task_type {
@@ -294,15 +291,8 @@ impl Task {
 pub enum TaskType {
     Classification(String),
     Question(String),
-    CodeGeneration {
-        spec: Specification,
-        context: ProjectContext,
-        options: GenerationOptions,
-    },
-    CodeReview {
-        code: String,
-        requirements: Vec<Requirement>,
-    },
+    CodeGeneration { spec: Specification, context: ProjectContext, options: GenerationOptions },
+    CodeReview { code: String, requirements: Vec<Requirement> },
 }
 
 /// Task result
@@ -385,29 +375,23 @@ impl ResponseCache {
             ttl: Duration::from_secs(300), // 5 minutes
         }
     }
-    
+
     fn get(&self, key: &str) -> Option<TaskResult> {
         self.entries.get(key).and_then(|(result, timestamp)| {
-            if timestamp.elapsed() < self.ttl {
-                Some(result.clone())
-            } else {
-                None
-            }
+            if timestamp.elapsed() < self.ttl { Some(result.clone()) } else { None }
         })
     }
-    
+
     fn insert(&mut self, key: String, result: TaskResult) {
         // Simple LRU: if at capacity, remove oldest
         if self.entries.len() >= self.max_size {
-            if let Some(oldest_key) = self.entries
-                .iter()
-                .min_by_key(|(_, (_, ts))| *ts)
-                .map(|(k, _)| k.clone())
+            if let Some(oldest_key) =
+                self.entries.iter().min_by_key(|(_, (_, ts))| *ts).map(|(k, _)| k.clone())
             {
                 self.entries.remove(&oldest_key);
             }
         }
-        
+
         self.entries.insert(key, (result, Instant::now()));
     }
 }
@@ -419,9 +403,7 @@ struct HeuristicProvider {
 
 impl HeuristicProvider {
     fn new() -> Self {
-        Self {
-            classifier: crate::llm::classifier::HeuristicClassifier::new(),
-        }
+        Self { classifier: crate::llm::classifier::HeuristicClassifier::new() }
     }
 }
 
@@ -430,19 +412,19 @@ impl LLMProvider for HeuristicProvider {
     fn name(&self) -> &str {
         "heuristic"
     }
-    
+
     fn tier(&self) -> ModelTier {
         ModelTier::NoLLM
     }
-    
+
     async fn is_available(&self) -> bool {
         true // Always available
     }
-    
+
     fn cost_per_1k_tokens(&self) -> f32 {
         0.0 // Free!
     }
-    
+
     async fn generate_code(
         &self,
         _spec: &Specification,
@@ -451,7 +433,7 @@ impl LLMProvider for HeuristicProvider {
     ) -> Result<GeneratedCode> {
         Err(anyhow::anyhow!("Heuristics cannot generate code"))
     }
-    
+
     async fn explain_implementation(
         &self,
         _code: &str,
@@ -459,15 +441,11 @@ impl LLMProvider for HeuristicProvider {
     ) -> Result<Explanation> {
         Err(anyhow::anyhow!("Heuristics cannot explain code"))
     }
-    
-    async fn review_code(
-        &self,
-        code: &str,
-        requirements: &[Requirement],
-    ) -> Result<ReviewResult> {
+
+    async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
         // Simple heuristic review
         let mut issues = Vec::new();
-        
+
         if code.len() > 1000 {
             issues.push(Issue {
                 severity: IssueSeverity::Warning,
@@ -476,7 +454,7 @@ impl LLMProvider for HeuristicProvider {
                 suggestion: None,
             });
         }
-        
+
         Ok(ReviewResult {
             issues,
             suggestions: vec![],
@@ -484,7 +462,7 @@ impl LLMProvider for HeuristicProvider {
             confidence: 0.3,
         })
     }
-    
+
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
         // Only answer very simple questions
         if question.to_lowercase().contains("what is") {
@@ -492,11 +470,11 @@ impl LLMProvider for HeuristicProvider {
         }
         Ok(None)
     }
-    
+
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         Ok(self.classifier.classify_content(content))
     }
-    
+
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         let tier = if task.len() < 100 {
             ModelTier::Tiny
@@ -505,7 +483,7 @@ impl LLMProvider for HeuristicProvider {
         } else {
             ModelTier::Medium
         };
-        
+
         Ok(TaskComplexity {
             tier,
             reasoning: "Based on task length".to_string(),
@@ -527,15 +505,11 @@ enum QwenModelType {
 
 impl QwenProvider {
     fn new_ollama(model: OllamaTinyModel) -> Self {
-        Self {
-            model: QwenModelType::Ollama(model),
-        }
+        Self { model: QwenModelType::Ollama(model) }
     }
-    
+
     fn new_candle(model: SmartTinyModel) -> Self {
-        Self {
-            model: QwenModelType::Candle(model),
-        }
+        Self { model: QwenModelType::Candle(model) }
     }
 }
 
@@ -544,11 +518,11 @@ impl LLMProvider for QwenProvider {
     fn name(&self) -> &str {
         "qwen-0.5b"
     }
-    
+
     fn tier(&self) -> ModelTier {
         ModelTier::Tiny
     }
-    
+
     async fn is_available(&self) -> bool {
         // Check if model is loaded/reachable
         match &self.model {
@@ -559,11 +533,11 @@ impl LLMProvider for QwenProvider {
             QwenModelType::Candle(_) => true, // Always available if loaded
         }
     }
-    
+
     fn cost_per_1k_tokens(&self) -> f32 {
         0.0 // Local model, no cost
     }
-    
+
     async fn generate_code(
         &self,
         _spec: &Specification,
@@ -573,7 +547,7 @@ impl LLMProvider for QwenProvider {
         // Qwen 0.5B is not suitable for code generation
         Err(anyhow::anyhow!("Qwen 0.5B cannot reliably generate complex code"))
     }
-    
+
     async fn explain_implementation(
         &self,
         _code: &str,
@@ -581,26 +555,18 @@ impl LLMProvider for QwenProvider {
     ) -> Result<Explanation> {
         Err(anyhow::anyhow!("Qwen 0.5B cannot provide detailed explanations"))
     }
-    
-    async fn review_code(
-        &self,
-        code: &str,
-        requirements: &[Requirement],
-    ) -> Result<ReviewResult> {
+
+    async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
         // Qwen can do simple requirement checking
         let mut meets_requirements = true;
         let mut issues = Vec::new();
-        
+
         for req in requirements {
             let satisfied = match &self.model {
-                QwenModelType::Ollama(m) => {
-                    m.check_requirement(&req.description, code).await?
-                }
-                QwenModelType::Candle(m) => {
-                    m.check_requirement(&req.description, code).await?
-                }
+                QwenModelType::Ollama(m) => m.check_requirement(&req.description, code).await?,
+                QwenModelType::Candle(m) => m.check_requirement(&req.description, code).await?,
             };
-            
+
             if !satisfied {
                 meets_requirements = false;
                 issues.push(Issue {
@@ -611,29 +577,24 @@ impl LLMProvider for QwenProvider {
                 });
             }
         }
-        
-        Ok(ReviewResult {
-            issues,
-            suggestions: vec![],
-            meets_requirements,
-            confidence: 0.7,
-        })
+
+        Ok(ReviewResult { issues, suggestions: vec![], meets_requirements, confidence: 0.7 })
     }
-    
+
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
         match &self.model {
             QwenModelType::Ollama(m) => m.simple_answer(question).await,
             QwenModelType::Candle(m) => m.simple_answer(question).await,
         }
     }
-    
+
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         match &self.model {
             QwenModelType::Ollama(m) => m.classify_content(content).await,
             QwenModelType::Candle(m) => m.classify_content(content).await,
         }
     }
-    
+
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         match &self.model {
             QwenModelType::Ollama(m) => {
@@ -643,7 +604,7 @@ impl LLMProvider for QwenProvider {
                     QuestionType::Simple | QuestionType::Definition => ModelTier::Tiny,
                     _ => ModelTier::Small,
                 };
-                
+
                 Ok(TaskComplexity {
                     tier,
                     reasoning: format!("Question type: {:?}", q_type),
@@ -658,7 +619,7 @@ impl LLMProvider for QwenProvider {
                     QuestionType::Simple | QuestionType::Definition => ModelTier::Tiny,
                     _ => ModelTier::Small,
                 };
-                
+
                 Ok(TaskComplexity {
                     tier,
                     reasoning: format!("Question type: {:?}", q_type),

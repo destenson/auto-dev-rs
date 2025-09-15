@@ -1,8 +1,8 @@
 #![allow(unused)]
 //! Natural language requirement extraction
 
-use regex::Regex;
 use anyhow::Result;
+use regex::Regex;
 use std::collections::HashSet;
 
 use crate::parser::model::*;
@@ -29,10 +29,10 @@ impl RequirementExtractor {
     pub fn extract_from_text(&self, text: &str) -> Result<Vec<Requirement>> {
         let mut requirements = Vec::new();
         let mut seen_descriptions = HashSet::new();
-        
+
         // Split text into sentences
         let sentences = self.split_into_sentences(text);
-        
+
         for (idx, sentence) in sentences.iter().enumerate() {
             // Check if sentence contains requirement keywords
             if let Some(req) = self.extract_requirement_from_sentence(sentence, idx) {
@@ -43,7 +43,7 @@ impl RequirementExtractor {
                 }
             }
         }
-        
+
         // Extract implied requirements from patterns
         let implied_reqs = self.extract_implied_requirements(text)?;
         for req in implied_reqs {
@@ -52,42 +52,44 @@ impl RequirementExtractor {
                 requirements.push(req);
             }
         }
-        
+
         Ok(requirements)
     }
 
     /// Extract a requirement from a single sentence
-    fn extract_requirement_from_sentence(&self, sentence: &str, index: usize) -> Option<Requirement> {
+    fn extract_requirement_from_sentence(
+        &self,
+        sentence: &str,
+        index: usize,
+    ) -> Option<Requirement> {
         let sentence = sentence.trim();
-        
+
         // Check against requirement patterns
         for pattern in &self.requirement_patterns {
             if pattern.is_match(sentence) {
                 let priority = self.determine_priority(sentence);
                 let category = self.determine_category(sentence);
-                
-                let mut requirement = Requirement::new(
-                    format!("REQ-{:04}", index + 1),
-                    sentence.to_string(),
-                );
-                
+
+                let mut requirement =
+                    Requirement::new(format!("REQ-{:04}", index + 1), sentence.to_string());
+
                 requirement.priority = priority;
                 requirement.category = category;
-                
+
                 // Extract entities and actions
                 requirement.tags = self.extract_entities(sentence);
-                
+
                 return Some(requirement);
             }
         }
-        
+
         None
     }
 
     /// Extract implied requirements from common patterns
     fn extract_implied_requirements(&self, text: &str) -> Result<Vec<Requirement>> {
         let mut requirements = Vec::new();
-        
+
         // Check for authentication mentions
         if text.contains("authentication") || text.contains("login") || text.contains("auth") {
             requirements.push(Requirement {
@@ -105,7 +107,7 @@ impl RequirementExtractor {
                 tags: vec!["authentication".to_string(), "security".to_string()],
             });
         }
-        
+
         // Check for API mentions
         if text.contains("API") || text.contains("endpoint") || text.contains("REST") {
             requirements.push(Requirement {
@@ -123,7 +125,7 @@ impl RequirementExtractor {
                 tags: vec!["api".to_string(), "integration".to_string()],
             });
         }
-        
+
         // Check for data validation mentions
         if text.contains("validat") || text.contains("verify") || text.contains("check") {
             requirements.push(Requirement {
@@ -140,7 +142,7 @@ impl RequirementExtractor {
                 tags: vec!["validation".to_string(), "security".to_string()],
             });
         }
-        
+
         // Check for performance mentions
         if text.contains("performance") || text.contains("fast") || text.contains("responsive") {
             requirements.push(Requirement {
@@ -157,16 +159,19 @@ impl RequirementExtractor {
                 tags: vec!["performance".to_string()],
             });
         }
-        
+
         Ok(requirements)
     }
 
     /// Determine priority from text
     fn determine_priority(&self, text: &str) -> Priority {
         let text_lower = text.to_lowercase();
-        
-        if text_lower.contains("must") || text_lower.contains("shall") || 
-           text_lower.contains("critical") || text_lower.contains("required") {
+
+        if text_lower.contains("must")
+            || text_lower.contains("shall")
+            || text_lower.contains("critical")
+            || text_lower.contains("required")
+        {
             Priority::Critical
         } else if text_lower.contains("should") || text_lower.contains("important") {
             Priority::High
@@ -182,24 +187,38 @@ impl RequirementExtractor {
     /// Determine requirement category from text
     fn determine_category(&self, text: &str) -> RequirementType {
         let text_lower = text.to_lowercase();
-        
-        if text_lower.contains("api") || text_lower.contains("endpoint") || 
-           text_lower.contains("interface") {
+
+        if text_lower.contains("api")
+            || text_lower.contains("endpoint")
+            || text_lower.contains("interface")
+        {
             RequirementType::Api
-        } else if text_lower.contains("data") || text_lower.contains("model") || 
-                  text_lower.contains("schema") {
+        } else if text_lower.contains("data")
+            || text_lower.contains("model")
+            || text_lower.contains("schema")
+        {
             RequirementType::DataModel
-        } else if text_lower.contains("secure") || text_lower.contains("auth") || 
-                  text_lower.contains("encrypt") || text_lower.contains("password") {
+        } else if text_lower.contains("secure")
+            || text_lower.contains("auth")
+            || text_lower.contains("encrypt")
+            || text_lower.contains("password")
+        {
             RequirementType::Security
-        } else if text_lower.contains("perform") || text_lower.contains("fast") || 
-                  text_lower.contains("speed") || text_lower.contains("response") {
+        } else if text_lower.contains("perform")
+            || text_lower.contains("fast")
+            || text_lower.contains("speed")
+            || text_lower.contains("response")
+        {
             RequirementType::Performance
-        } else if text_lower.contains("behav") || text_lower.contains("when") || 
-                  text_lower.contains("scenario") {
+        } else if text_lower.contains("behav")
+            || text_lower.contains("when")
+            || text_lower.contains("scenario")
+        {
             RequirementType::Behavior
-        } else if text_lower.contains("user") && text_lower.contains("interface") || 
-                  text_lower.contains("ui") || text_lower.contains("ux") {
+        } else if text_lower.contains("user") && text_lower.contains("interface")
+            || text_lower.contains("ui")
+            || text_lower.contains("ux")
+        {
             RequirementType::Usability
         } else {
             RequirementType::Functional
@@ -209,7 +228,7 @@ impl RequirementExtractor {
     /// Extract entities from text
     fn extract_entities(&self, text: &str) -> Vec<String> {
         let mut entities = Vec::new();
-        
+
         for pattern in &self.entity_patterns {
             for cap in pattern.captures_iter(text) {
                 if let Some(entity) = cap.get(1) {
@@ -217,7 +236,7 @@ impl RequirementExtractor {
                 }
             }
         }
-        
+
         // Also extract common nouns as potential entities
         let words: Vec<&str> = text.split_whitespace().collect();
         for word in words {
@@ -228,19 +247,43 @@ impl RequirementExtractor {
                 }
             }
         }
-        
+
         entities
     }
 
     /// Check if a word is likely an entity
     fn is_likely_entity(word: &str) -> bool {
         // Common entities in software specifications
-        matches!(word, 
-            "user" | "users" | "system" | "database" | "api" | "server" | 
-            "client" | "admin" | "administrator" | "account" | "profile" |
-            "data" | "file" | "document" | "report" | "dashboard" | "page" |
-            "form" | "button" | "field" | "table" | "list" | "menu" |
-            "service" | "component" | "module" | "feature" | "function"
+        matches!(
+            word,
+            "user"
+                | "users"
+                | "system"
+                | "database"
+                | "api"
+                | "server"
+                | "client"
+                | "admin"
+                | "administrator"
+                | "account"
+                | "profile"
+                | "data"
+                | "file"
+                | "document"
+                | "report"
+                | "dashboard"
+                | "page"
+                | "form"
+                | "button"
+                | "field"
+                | "table"
+                | "list"
+                | "menu"
+                | "service"
+                | "component"
+                | "module"
+                | "feature"
+                | "function"
         )
     }
 
@@ -248,10 +291,10 @@ impl RequirementExtractor {
     fn split_into_sentences(&self, text: &str) -> Vec<String> {
         let mut sentences = Vec::new();
         let mut current = String::new();
-        
+
         for line in text.lines() {
             let line = line.trim();
-            
+
             // Skip empty lines
             if line.is_empty() {
                 if !current.is_empty() {
@@ -260,21 +303,25 @@ impl RequirementExtractor {
                 }
                 continue;
             }
-            
+
             // Check if line starts with a list marker
             if line.starts_with('-') || line.starts_with('*') || line.starts_with("•") {
                 if !current.is_empty() {
                     sentences.push(current.clone());
                     current.clear();
                 }
-                sentences.push(line.trim_start_matches(|c| c == '-' || c == '*' || c == '•').trim().to_string());
+                sentences.push(
+                    line.trim_start_matches(|c| c == '-' || c == '*' || c == '•')
+                        .trim()
+                        .to_string(),
+                );
             } else {
                 // Add to current sentence
                 if !current.is_empty() {
                     current.push(' ');
                 }
                 current.push_str(line);
-                
+
                 // Check for sentence end
                 if line.ends_with('.') || line.ends_with('!') || line.ends_with('?') {
                     sentences.push(current.clone());
@@ -282,12 +329,12 @@ impl RequirementExtractor {
                 }
             }
         }
-        
+
         // Add any remaining content
         if !current.is_empty() {
             sentences.push(current);
         }
-        
+
         sentences
     }
 
@@ -343,34 +390,29 @@ mod tests {
     #[test]
     fn test_extract_simple_requirements() {
         let extractor = RequirementExtractor::new();
-        
+
         let text = "The system must support user authentication. \
                     Users should be able to reset their passwords. \
                     The API could provide rate limiting.";
-        
+
         let requirements = extractor.extract_from_text(text).unwrap();
         assert!(!requirements.is_empty());
-        
+
         // Check priorities
-        let must_req = requirements.iter()
-            .find(|r| r.description.contains("must"));
+        let must_req = requirements.iter().find(|r| r.description.contains("must"));
         assert!(must_req.is_some());
         assert_eq!(must_req.unwrap().priority, Priority::Critical);
-        
+
         // Find any requirement with High priority
-        let high_priority_req = requirements.iter()
-            .find(|r| r.priority == Priority::High);
+        let high_priority_req = requirements.iter().find(|r| r.priority == Priority::High);
         assert!(high_priority_req.is_some());
     }
 
     #[test]
     fn test_determine_category() {
         let extractor = RequirementExtractor::new();
-        
-        assert_eq!(
-            extractor.determine_category("The API must return JSON"),
-            RequirementType::Api
-        );
+
+        assert_eq!(extractor.determine_category("The API must return JSON"), RequirementType::Api);
         assert_eq!(
             extractor.determine_category("User authentication is required"),
             RequirementType::Security
@@ -388,10 +430,10 @@ mod tests {
     #[test]
     fn test_extract_entities() {
         let extractor = RequirementExtractor::new();
-        
+
         let text = "The user must be able to access the API through the system";
         let entities = extractor.extract_entities(text);
-        
+
         assert!(entities.contains(&"user".to_string()));
         assert!(entities.contains(&"api".to_string()));
         assert!(entities.contains(&"system".to_string()));
@@ -400,10 +442,11 @@ mod tests {
     #[test]
     fn test_split_sentences() {
         let extractor = RequirementExtractor::new();
-        
-        let text = "First sentence. Second sentence!\n- List item one\n- List item two\nThird sentence?";
+
+        let text =
+            "First sentence. Second sentence!\n- List item one\n- List item two\nThird sentence?";
         let sentences = extractor.split_into_sentences(text);
-        
+
         // The function concatenates sentences on the same line, so we get 4 sentences
         assert_eq!(sentences.len(), 4);
         assert_eq!(sentences[0], "First sentence. Second sentence!");
@@ -415,17 +458,15 @@ mod tests {
     #[test]
     fn test_implied_requirements() {
         let extractor = RequirementExtractor::new();
-        
+
         let text = "The system provides authentication and a REST API for integration";
         let requirements = extractor.extract_from_text(text).unwrap();
-        
+
         // Should find implied auth and API requirements
-        let auth_req = requirements.iter()
-            .find(|r| r.category == RequirementType::Security);
+        let auth_req = requirements.iter().find(|r| r.category == RequirementType::Security);
         assert!(auth_req.is_some());
-        
-        let api_req = requirements.iter()
-            .find(|r| r.category == RequirementType::Api);
+
+        let api_req = requirements.iter().find(|r| r.category == RequirementType::Api);
         assert!(api_req.is_some());
     }
 }

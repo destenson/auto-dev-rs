@@ -1,14 +1,14 @@
-use std::collections::HashMap;
-use std::time::Duration;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Duration;
 use uuid::Uuid;
-use anyhow::Result;
 
+use crate::incremental::Implementation;
+use crate::learning::knowledge_base::KnowledgeBase;
 use crate::learning::learner::LearningEvent;
 use crate::learning::pattern_extractor::Pattern;
-use crate::learning::knowledge_base::KnowledgeBase;
-use crate::incremental::Implementation;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SuccessTracker {
@@ -41,17 +41,14 @@ impl SuccessTracker {
 
         self.successes.push(record.clone());
         self.metrics.add_metrics(&metrics);
-        
+
         let pattern_key = format!("{}_{}", event.context.project_type, event.context.language);
-        self.success_patterns
-            .entry(pattern_key)
-            .or_insert_with(Vec::new)
-            .push(SuccessPattern {
-                record_id: record.id,
-                pattern_type: identify_pattern_type(&event),
-                confidence: metrics.calculate_confidence(),
-                features: extract_success_features(&event),
-            });
+        self.success_patterns.entry(pattern_key).or_insert_with(Vec::new).push(SuccessPattern {
+            record_id: record.id,
+            pattern_type: identify_pattern_type(&event),
+            confidence: metrics.calculate_confidence(),
+            features: extract_success_features(&event),
+        });
 
         if let Some(implementation) = &event.implementation {
             self.optimize_for_similar(implementation, &metrics);
@@ -68,7 +65,7 @@ impl SuccessTracker {
         };
 
         self.reinforcement_history.push(reinforcement);
-        
+
         if let Some(similar) = self.find_similar_success(&event) {
             self.strengthen_pattern(similar.id);
         }
@@ -80,16 +77,14 @@ impl SuccessTracker {
 
     pub fn find_successful_approach(&self, context: &str) -> Option<SuccessfulApproach> {
         let patterns = self.success_patterns.get(context)?;
-        
+
         patterns
             .iter()
             .filter(|p| p.confidence > 0.7)
             .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
             .map(|pattern| {
-                let record = self.successes.iter()
-                    .find(|r| r.id == pattern.record_id)
-                    .unwrap();
-                
+                let record = self.successes.iter().find(|r| r.id == pattern.record_id).unwrap();
+
                 SuccessfulApproach {
                     approach_id: pattern.record_id,
                     confidence: pattern.confidence,
@@ -101,7 +96,7 @@ impl SuccessTracker {
 
     pub fn get_optimization_hints(&self, context: &str) -> Vec<OptimizationHint> {
         let mut hints = Vec::new();
-        
+
         if let Some(patterns) = self.success_patterns.get(context) {
             for pattern in patterns.iter().filter(|p| p.confidence > 0.8) {
                 if let Some(record) = self.successes.iter().find(|r| r.id == pattern.record_id) {
@@ -127,18 +122,21 @@ impl SuccessTracker {
 
     fn find_similar_success(&self, event: &LearningEvent) -> Option<&SuccessRecord> {
         let spec_hash = hash_specification(&event.specification);
-        
-        self.successes.iter()
-            .find(|record| {
-                record.specification_hash == spec_hash ||
-                self.is_contextually_similar(&record.context, &event.context)
-            })
+
+        self.successes.iter().find(|record| {
+            record.specification_hash == spec_hash
+                || self.is_contextually_similar(&record.context, &event.context)
+        })
     }
 
-    fn is_contextually_similar(&self, context1: &crate::learning::learner::EventContext, context2: &crate::learning::learner::EventContext) -> bool {
-        context1.language == context2.language &&
-        context1.project_type == context2.project_type &&
-        context1.framework == context2.framework
+    fn is_contextually_similar(
+        &self,
+        context1: &crate::learning::learner::EventContext,
+        context2: &crate::learning::learner::EventContext,
+    ) -> bool {
+        context1.language == context2.language
+            && context1.project_type == context2.project_type
+            && context1.framework == context2.framework
     }
 
     fn strengthen_pattern(&mut self, record_id: Uuid) {
@@ -161,7 +159,7 @@ impl SuccessTracker {
 
     fn get_top_patterns(&self, count: usize) -> Vec<(String, f32)> {
         let mut pattern_scores: HashMap<String, (f32, u32)> = HashMap::new();
-        
+
         for (_context, patterns) in &self.success_patterns {
             for pattern in patterns {
                 let entry = pattern_scores.entry(pattern.pattern_type.clone()).or_insert((0.0, 0));
@@ -172,9 +170,7 @@ impl SuccessTracker {
 
         let mut scores: Vec<_> = pattern_scores
             .into_iter()
-            .map(|(pattern, (total_confidence, count))| {
-                (pattern, total_confidence / count as f32)
-            })
+            .map(|(pattern, (total_confidence, count))| (pattern, total_confidence / count as f32))
             .collect();
 
         scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -189,15 +185,14 @@ impl SuccessTracker {
 
         let recent = &self.successes[self.successes.len() - 5..];
         let older = &self.successes[self.successes.len() - 10..self.successes.len() - 5];
-        
-        let recent_avg: f32 = recent.iter()
-            .map(|r| r.metrics.calculate_overall_score())
-            .sum::<f32>() / recent.len() as f32;
-            
-        let older_avg: f32 = older.iter()
-            .map(|r| r.metrics.calculate_overall_score())
-            .sum::<f32>() / older.len() as f32;
-        
+
+        let recent_avg: f32 =
+            recent.iter().map(|r| r.metrics.calculate_overall_score()).sum::<f32>()
+                / recent.len() as f32;
+
+        let older_avg: f32 = older.iter().map(|r| r.metrics.calculate_overall_score()).sum::<f32>()
+            / older.len() as f32;
+
         recent_avg - older_avg
     }
 }
@@ -227,7 +222,7 @@ pub struct SuccessMetrics {
 impl SuccessMetrics {
     pub fn calculate_confidence(&self) -> f32 {
         let mut score = 0.0;
-        
+
         if self.compilation_success {
             score += 0.3;
         }
@@ -240,21 +235,21 @@ impl SuccessMetrics {
         if self.security_passed {
             score += 0.1;
         }
-        
+
         score += self.specification_coverage * 0.1;
-        
+
         score
     }
 
     pub fn calculate_overall_score(&self) -> f32 {
         let mut score = self.calculate_confidence();
-        
+
         let time_penalty = (self.implementation_time.as_secs() as f32 / 3600.0).min(1.0) * 0.1;
         score -= time_penalty;
-        
+
         let llm_penalty = (self.llm_calls_used as f32 / 100.0).min(1.0) * 0.1;
         score -= llm_penalty;
-        
+
         score.max(0.0)
     }
 }
@@ -354,10 +349,10 @@ impl SuccessMetricsAggregator {
         if self.total_attempts == 0 {
             return 0.0;
         }
-        
+
         let compilation_rate = self.successful_compilations as f32 / self.total_attempts as f32;
         let test_rate = self.successful_tests as f32 / self.total_attempts as f32;
-        
+
         (compilation_rate * 0.6 + test_rate * 0.4)
     }
 
@@ -377,7 +372,7 @@ impl SuccessMetricsAggregator {
 fn hash_specification(spec: &crate::parser::model::Specification) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     format!("{:?}", spec).hash(&mut hasher);
     hasher.finish()
@@ -386,53 +381,54 @@ fn hash_specification(spec: &crate::parser::model::Specification) -> u64 {
 fn hash_implementation(impl_: &Implementation) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
-    let code = impl_.files.iter()
-        .map(|f| f.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let code = impl_.files.iter().map(|f| f.content.as_str()).collect::<Vec<_>>().join("\n");
     code.hash(&mut hasher);
     hasher.finish()
 }
 
 fn identify_pattern_type(event: &LearningEvent) -> String {
     match event.event_type {
-        crate::learning::learner::LearningEventType::ImplementationSuccess => "implementation".to_string(),
+        crate::learning::learner::LearningEventType::ImplementationSuccess => {
+            "implementation".to_string()
+        }
         crate::learning::learner::LearningEventType::TestPassed => "testing".to_string(),
-        crate::learning::learner::LearningEventType::PerformanceImproved => "performance".to_string(),
+        crate::learning::learner::LearningEventType::PerformanceImproved => {
+            "performance".to_string()
+        }
         _ => "general".to_string(),
     }
 }
 
 fn extract_success_features(event: &LearningEvent) -> Vec<String> {
     let mut features = Vec::new();
-    
+
     features.push(event.context.language.clone());
     if let Some(framework) = &event.context.framework {
         features.push(framework.clone());
     }
     features.push(event.context.project_type.clone());
-    
+
     if event.metrics.test_coverage > 0.8 {
         features.push("high_coverage".to_string());
     }
     if event.metrics.llm_calls < 5 {
         features.push("low_llm_usage".to_string());
     }
-    
+
     features
 }
 
 fn calculate_reinforcement_strength(event: &LearningEvent) -> f32 {
     let mut strength = 0.5;
-    
+
     if event.outcome.success {
         strength += 0.2;
     }
-    
+
     strength += event.outcome.score * 0.3;
-    
+
     strength.min(1.0)
 }
 
@@ -453,13 +449,16 @@ fn determine_optimization_strategy(metrics: &SuccessMetrics) -> String {
 fn calculate_expected_improvement(metrics: &SuccessMetrics) -> f32 {
     let current_score = metrics.calculate_overall_score();
     let potential_score = 1.0;
-    
+
     potential_score - current_score
 }
 
-fn generate_hints_from_success(metrics: &SuccessMetrics, _features: &[String]) -> Vec<OptimizationHint> {
+fn generate_hints_from_success(
+    metrics: &SuccessMetrics,
+    _features: &[String],
+) -> Vec<OptimizationHint> {
     let mut hints = Vec::new();
-    
+
     if metrics.llm_calls_used < 5 {
         hints.push(OptimizationHint {
             hint_type: "llm_optimization".to_string(),
@@ -468,7 +467,7 @@ fn generate_hints_from_success(metrics: &SuccessMetrics, _features: &[String]) -
             implementation_suggestion: "Consider caching or pattern reuse".to_string(),
         });
     }
-    
+
     if metrics.implementation_time < Duration::from_secs(60) {
         hints.push(OptimizationHint {
             hint_type: "speed_optimization".to_string(),
@@ -477,7 +476,7 @@ fn generate_hints_from_success(metrics: &SuccessMetrics, _features: &[String]) -
             implementation_suggestion: "Reuse this approach for similar tasks".to_string(),
         });
     }
-    
+
     hints
 }
 
@@ -488,7 +487,7 @@ mod tests {
     #[test]
     fn test_success_tracking() {
         let mut tracker = SuccessTracker::new();
-        
+
         let metrics = SuccessMetrics {
             compilation_success: true,
             tests_passed: true,
@@ -498,7 +497,7 @@ mod tests {
             implementation_time: Duration::from_secs(30),
             llm_calls_used: 3,
         };
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -527,9 +526,9 @@ mod tests {
                 environment: serde_json::json!({}),
             },
         };
-        
+
         tracker.track_success(event, metrics);
-        
+
         assert_eq!(tracker.successes.len(), 1);
         assert!(tracker.get_success_rate() > 0.0);
     }
@@ -545,10 +544,10 @@ mod tests {
             implementation_time: Duration::from_secs(120),
             llm_calls_used: 10,
         };
-        
+
         let confidence = metrics.calculate_confidence();
         assert!(confidence > 0.0 && confidence <= 1.0);
-        
+
         let overall = metrics.calculate_overall_score();
         assert!(overall > 0.0 && overall <= 1.0);
     }

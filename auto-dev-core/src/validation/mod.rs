@@ -1,21 +1,21 @@
 //! Validation module for ensuring code quality and correctness
 //! Leverages existing tools like cargo check, clippy, rustfmt, etc.
 
-pub mod verifier;
-pub mod validator;
+pub mod contracts;
+pub mod performance;
 pub mod quality;
 pub mod security;
-pub mod performance;
-pub mod contracts;
 pub mod tools;
+pub mod validator;
+pub mod verifier;
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use anyhow::Result;
 
+pub use tools::{ToolCategory, ToolRegistry, ValidationTool};
+pub use validator::{GeneratedCode, SpecValidator, ValidationPipeline};
 pub use verifier::CodeVerifier;
-pub use validator::{SpecValidator, ValidationPipeline, GeneratedCode};
-pub use tools::{ToolRegistry, ValidationTool, ToolCategory};
 
 /// Result of validation checks
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,7 +124,7 @@ impl ValidationResult {
             suggestions: Vec::new(),
         }
     }
-    
+
     pub fn failed(error: ValidationError) -> Self {
         Self {
             passed: false,
@@ -134,7 +134,7 @@ impl ValidationResult {
             suggestions: Vec::new(),
         }
     }
-    
+
     pub fn warning(warning: ValidationWarning) -> Self {
         Self {
             passed: true,
@@ -144,33 +144,35 @@ impl ValidationResult {
             suggestions: Vec::new(),
         }
     }
-    
+
     pub fn aggregate(results: Vec<ValidationResult>) -> Self {
         let mut aggregated = Self::new();
-        
+
         for result in results {
             aggregated.passed = aggregated.passed && result.passed;
             aggregated.errors.extend(result.errors);
             aggregated.warnings.extend(result.warnings);
             aggregated.suggestions.extend(result.suggestions);
-            
+
             // Merge metrics (take the worst values)
             if let Some(v) = result.metrics.cyclomatic_complexity {
                 aggregated.metrics.cyclomatic_complexity = Some(
-                    aggregated.metrics.cyclomatic_complexity
+                    aggregated
+                        .metrics
+                        .cyclomatic_complexity
                         .map(|existing| existing.max(v))
-                        .unwrap_or(v)
+                        .unwrap_or(v),
                 );
             }
         }
-        
+
         aggregated
     }
-    
+
     pub fn has_critical_errors(&self) -> bool {
         self.errors.iter().any(|e| e.severity == Severity::Critical)
     }
-    
+
     pub fn summary(&self) -> String {
         format!(
             "Validation {}: {} errors, {} warnings",
@@ -232,17 +234,17 @@ impl Default for ValidationConfig {
                 },
                 StageConfig {
                     stage: ValidationStage::Linting,
-                    enabled: false,  // Disabled by default - expensive to fix
+                    enabled: false, // Disabled by default - expensive to fix
                     timeout: Duration::from_secs(10),
                 },
                 StageConfig {
                     stage: ValidationStage::Security,
-                    enabled: false,  // Run on demand
+                    enabled: false, // Run on demand
                     timeout: Duration::from_secs(20),
                 },
                 StageConfig {
                     stage: ValidationStage::Performance,
-                    enabled: false,  // Run on demand
+                    enabled: false, // Run on demand
                     timeout: Duration::from_secs(30),
                 },
             ],
@@ -285,7 +287,7 @@ mod tests {
             message: "Compilation failed".to_string(),
             fix_suggestion: None,
         };
-        
+
         let result = ValidationResult::failed(error);
         assert!(!result.passed);
         assert_eq!(result.errors.len(), 1);
@@ -301,7 +303,7 @@ mod tests {
             message: "Quality check failed".to_string(),
             fix_suggestion: None,
         });
-        
+
         let aggregated = ValidationResult::aggregate(vec![result1, result2]);
         assert!(!aggregated.passed);
         assert_eq!(aggregated.errors.len(), 1);
@@ -317,7 +319,7 @@ mod tests {
             message: "Critical security issue".to_string(),
             fix_suggestion: None,
         });
-        
+
         assert!(result.has_critical_errors());
     }
 }

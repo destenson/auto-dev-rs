@@ -1,14 +1,14 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use uuid::Uuid;
-use anyhow::Result;
 
-use crate::learning::pattern_extractor::{Pattern, PatternContext};
-use crate::learning::failure_analyzer::AntiPattern;
-use crate::parser::model::Specification;
 use crate::incremental::Implementation;
+use crate::learning::failure_analyzer::AntiPattern;
+use crate::learning::pattern_extractor::{Pattern, PatternContext};
+use crate::parser::model::Specification;
 
 pub type PatternId = Uuid;
 
@@ -37,31 +37,31 @@ impl KnowledgeBase {
 
     pub fn add_pattern(&mut self, mut pattern: Pattern) -> Result<PatternId> {
         let pattern_id = pattern.id;
-        
+
         if pattern.embeddings.is_none() {
             pattern.embeddings = Some(self.generate_embeddings(&pattern.implementation)?);
         }
-        
+
         // TODO: Implement embedding index when needed
-        
+
         self.patterns.insert(pattern_id, pattern.clone());
         self.usage_stats.total_patterns += 1;
         self.metadata.last_updated = Utc::now();
-        
+
         tracing::debug!("Added pattern {} to knowledge base", pattern.name);
-        
+
         Ok(pattern_id)
     }
 
     pub fn add_anti_pattern(&mut self, anti_pattern: AntiPattern) -> Result<PatternId> {
         let anti_pattern_id = anti_pattern.id;
-        
+
         self.anti_patterns.insert(anti_pattern_id, anti_pattern);
         self.usage_stats.total_anti_patterns += 1;
         self.metadata.last_updated = Utc::now();
-        
+
         tracing::debug!("Added anti-pattern to knowledge base");
-        
+
         Ok(anti_pattern_id)
     }
 
@@ -73,30 +73,24 @@ impl KnowledgeBase {
 
         // TODO: Implement semantic search when embedding index is available
         // For now, return all patterns that match the context
-        self.patterns
-            .values()
-            .take(limit)
-            .cloned()
-            .collect()
+        self.patterns.values().take(limit).cloned().collect()
     }
 
     pub fn find_matching_pattern(&self, implementation: &Implementation) -> Option<PatternId> {
         let impl_hash = hash_implementation(implementation);
-        
+
         self.patterns
             .iter()
-            .find(|(_, pattern)| {
-                hash_code(&pattern.implementation) == impl_hash
-            })
+            .find(|(_, pattern)| hash_code(&pattern.implementation) == impl_hash)
             .map(|(id, _)| *id)
     }
 
     pub fn apply_pattern(&self, pattern: &Pattern, spec: &Specification) -> Option<Implementation> {
-        use crate::incremental::{FileChange, ChangeType};
+        use crate::incremental::{ChangeType, FileChange};
         use std::path::PathBuf;
-        
+
         let adapted_code = self.adapt_pattern_to_spec(&pattern.implementation, spec);
-        
+
         let implementation = Implementation {
             files: vec![FileChange {
                 path: PathBuf::from("generated.rs"),
@@ -108,9 +102,9 @@ impl KnowledgeBase {
             approach: "Pattern-based generation".to_string(),
             language: pattern.context.language.clone(),
         };
-        
+
         self.track_pattern_usage(pattern.id);
-        
+
         Some(implementation)
     }
 
@@ -118,9 +112,9 @@ impl KnowledgeBase {
         if let Some(pattern) = self.patterns.get_mut(&pattern_id) {
             pattern.usage_count += 1;
             pattern.success_rate = (pattern.success_rate * 0.95 + 1.0 * 0.05).min(1.0);
-            
+
             self.usage_stats.pattern_hits += 1;
-            
+
             Ok(())
         } else {
             Err(anyhow::anyhow!("Pattern not found"))
@@ -139,20 +133,16 @@ impl KnowledgeBase {
         self.patterns
             .values()
             .filter(|p| {
-                p.name.contains(query) || 
-                p.description.contains(query) ||
-                p.tags.iter().any(|t| t.contains(query))
+                p.name.contains(query)
+                    || p.description.contains(query)
+                    || p.tags.iter().any(|t| t.contains(query))
             })
             .cloned()
             .collect()
     }
 
     pub fn get_patterns_by_context(&self, context: &PatternContext) -> Vec<Pattern> {
-        self.patterns
-            .values()
-            .filter(|p| p.context.matches(context))
-            .cloned()
-            .collect()
+        self.patterns.values().filter(|p| p.context.matches(context)).cloned().collect()
     }
 
     pub fn get_top_patterns(&self, limit: usize) -> Vec<Pattern> {
@@ -195,35 +185,35 @@ impl KnowledgeBase {
 
     pub fn import(&mut self, export: KnowledgeExport) -> Result<()> {
         self.validate_version(&export.version)?;
-        
+
         let pattern_count = export.patterns.len();
         let anti_pattern_count = export.anti_patterns.len();
-        
+
         for pattern in export.patterns {
             self.merge_pattern(pattern)?;
         }
-        
+
         for anti_pattern in export.anti_patterns {
             self.merge_anti_pattern(anti_pattern)?;
         }
-        
+
         self.usage_stats.merge(&export.statistics);
         self.metadata.last_import = Some(Utc::now());
-        
+
         self.rebuild_index()?;
-        
+
         tracing::info!(
             "Imported {} patterns and {} anti-patterns",
             pattern_count,
             anti_pattern_count
         );
-        
+
         Ok(())
     }
 
     fn validate_version(&self, version: &str) -> Result<()> {
         let current_version = env!("CARGO_PKG_VERSION");
-        
+
         if !version_compatible(current_version, version) {
             return Err(anyhow::anyhow!(
                 "Incompatible knowledge base version: {} (current: {})",
@@ -231,7 +221,7 @@ impl KnowledgeBase {
                 current_version
             ));
         }
-        
+
         Ok(())
     }
 
@@ -239,7 +229,7 @@ impl KnowledgeBase {
         if let Some(existing) = self.patterns.get_mut(&pattern.id) {
             existing.usage_count += pattern.usage_count;
             existing.success_rate = (existing.success_rate + pattern.success_rate) / 2.0;
-            
+
             if pattern.learned_at > existing.learned_at {
                 existing.implementation = pattern.implementation;
                 existing.embeddings = pattern.embeddings;
@@ -247,7 +237,7 @@ impl KnowledgeBase {
         } else {
             self.patterns.insert(pattern.id, pattern);
         }
-        
+
         Ok(())
     }
 
@@ -257,15 +247,15 @@ impl KnowledgeBase {
         } else {
             self.anti_patterns.insert(anti_pattern.id, anti_pattern);
         }
-        
+
         Ok(())
     }
 
     fn rebuild_index(&mut self) -> Result<()> {
         self.embedding_index = None;
-        
+
         // TODO: Rebuild embedding index when needed
-        
+
         Ok(())
     }
 
@@ -289,26 +279,26 @@ impl KnowledgeBase {
     pub async fn persist(&self) -> Result<()> {
         let export = self.export()?;
         let export_path = self.storage_path.join("knowledge_base.json");
-        
+
         std::fs::create_dir_all(&self.storage_path)?;
         let json = serde_json::to_string_pretty(&export)?;
         tokio::fs::write(export_path, json).await?;
-        
+
         Ok(())
     }
 
     pub async fn load(&mut self) -> Result<()> {
         let import_path = self.storage_path.join("knowledge_base.json");
-        
+
         if !import_path.exists() {
             return Ok(());
         }
-        
+
         let json = tokio::fs::read_to_string(import_path).await?;
         let export: KnowledgeExport = serde_json::from_str(&json)?;
-        
+
         self.import(export)?;
-        
+
         Ok(())
     }
 }
@@ -366,17 +356,15 @@ impl Default for KnowledgeMetadata {
 }
 
 fn hash_implementation(implementation: &Implementation) -> u64 {
-    let code = implementation.files.iter()
-        .map(|f| f.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let code =
+        implementation.files.iter().map(|f| f.content.as_str()).collect::<Vec<_>>().join("\n");
     hash_code(&code)
 }
 
 fn hash_code(code: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     code.hash(&mut hasher);
     hasher.finish()
@@ -385,11 +373,11 @@ fn hash_code(code: &str) -> u64 {
 fn version_compatible(current: &str, other: &str) -> bool {
     let current_parts: Vec<_> = current.split('.').collect();
     let other_parts: Vec<_> = other.split('.').collect();
-    
+
     if current_parts.is_empty() || other_parts.is_empty() {
         return false;
     }
-    
+
     current_parts[0] == other_parts[0]
 }
 
@@ -407,7 +395,7 @@ mod tests {
     #[test]
     fn test_add_pattern() {
         let mut kb = KnowledgeBase::new(PathBuf::from("/tmp/test"));
-        
+
         let pattern = Pattern {
             id: Uuid::new_v4(),
             name: "test_pattern".to_string(),
@@ -424,7 +412,7 @@ mod tests {
             reusability_score: 0.8,
             test_coverage: 0.7,
         };
-        
+
         let result = kb.add_pattern(pattern);
         assert!(result.is_ok());
         assert_eq!(kb.pattern_count(), 1);
@@ -433,7 +421,7 @@ mod tests {
     #[test]
     fn test_search_patterns() {
         let mut kb = KnowledgeBase::new(PathBuf::from("/tmp/test"));
-        
+
         let pattern = Pattern {
             id: Uuid::new_v4(),
             name: "error_handler".to_string(),
@@ -450,9 +438,9 @@ mod tests {
             reusability_score: 0.9,
             test_coverage: 0.8,
         };
-        
+
         kb.add_pattern(pattern).unwrap();
-        
+
         let results = kb.search_patterns("error");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "error_handler");
@@ -461,7 +449,7 @@ mod tests {
     #[test]
     fn test_export_import() {
         let mut kb1 = KnowledgeBase::new(PathBuf::from("/tmp/test1"));
-        
+
         let pattern = Pattern {
             id: Uuid::new_v4(),
             name: "test_pattern".to_string(),
@@ -478,14 +466,14 @@ mod tests {
             reusability_score: 0.5,
             test_coverage: 0.5,
         };
-        
+
         kb1.add_pattern(pattern).unwrap();
-        
+
         let export = kb1.export().unwrap();
-        
+
         let mut kb2 = KnowledgeBase::new(PathBuf::from("/tmp/test2"));
         kb2.import(export).unwrap();
-        
+
         assert_eq!(kb2.pattern_count(), 1);
     }
 }

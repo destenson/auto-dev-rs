@@ -11,19 +11,19 @@
 //! - Context window management and prompt optimization
 //! - Response caching and pattern learning
 
-pub mod tiny;
-pub mod classifier;
 pub mod candle;
-pub mod provider;
-pub mod router;
-pub mod openai;
+pub mod classifier;
 pub mod claude;
-pub mod openai_compat;
 pub mod cli_tools;
-pub mod context_manager;
-pub mod prompts;
 pub mod config;
+pub mod context_manager;
+pub mod openai;
+pub mod openai_compat;
+pub mod prompts;
+pub mod provider;
 pub mod roles;
+pub mod router;
+pub mod tiny;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 /// Simple question types that can be handled by tiny models
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QuestionType {
-    Definition,      // "What is X?"
+    Definition,     // "What is X?"
     YesNo,          // "Is this X?"
     Classification, // "What type is this?"
     Simple,         // Other simple questions
@@ -54,16 +54,16 @@ pub struct ClassificationResult {
 pub trait TinyModel: Send + Sync {
     /// Check if content is code
     async fn is_code(&self, content: &str) -> Result<bool>;
-    
+
     /// Classify content type
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult>;
-    
+
     /// Determine question complexity
     async fn classify_question(&self, question: &str) -> Result<QuestionType>;
-    
+
     /// Answer simple definition questions
     async fn simple_answer(&self, question: &str) -> Result<Option<String>>;
-    
+
     /// Check if a requirement is satisfied by code
     async fn check_requirement(&self, requirement: &str, code: &str) -> Result<bool>;
 }
@@ -73,16 +73,16 @@ pub trait TinyModel: Send + Sync {
 pub struct TinyModelConfig {
     /// Model to use (e.g., "qwen2.5-coder:0.5b")
     pub model: String,
-    
+
     /// Host for local model server (e.g., Ollama)
     pub host: String,
-    
+
     /// Maximum tokens for response
     pub max_tokens: usize,
-    
+
     /// Temperature for generation (0.0-1.0)
     pub temperature: f32,
-    
+
     /// Timeout in seconds
     pub timeout_secs: u64,
 }

@@ -10,11 +10,9 @@ pub struct ContractVerifier {
 
 impl ContractVerifier {
     pub fn new(project_path: impl Into<String>) -> Self {
-        Self {
-            project_path: project_path.into(),
-        }
+        Self { project_path: project_path.into() }
     }
-    
+
     /// Verify contracts are satisfied
     /// Would integrate with:
     /// - contracts crate for design-by-contract

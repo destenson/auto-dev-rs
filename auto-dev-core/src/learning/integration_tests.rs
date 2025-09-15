@@ -1,21 +1,21 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::dev_loop::{Event, EventType, Orchestrator, LoopConfig};
-    use crate::parser::model::Specification;
+    use crate::dev_loop::{Event, EventType, LoopConfig, Orchestrator};
     use crate::incremental::Implementation;
+    use crate::parser::model::Specification;
+    use chrono::Utc;
     use std::path::PathBuf;
     use tokio::sync::mpsc;
     use uuid::Uuid;
-    use chrono::Utc;
 
     #[tokio::test]
     async fn test_learning_system_integration() {
         let config = LearningConfig::default();
         let mut learning_system = LearningSystem::new(config);
-        
+
         assert!(learning_system.initialize().await.is_ok());
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -46,7 +46,7 @@ mod tests {
         };
 
         assert!(learning_system.process_event(event).await.is_ok());
-        
+
         let metrics = learning_system.get_metrics();
         assert!(metrics.total_learning_events > 0);
     }
@@ -56,14 +56,11 @@ mod tests {
         let config = LoopConfig::default();
         let (_tx, rx) = mpsc::channel(1);
         let orchestrator = Orchestrator::new(config, rx);
-        
-        let event = Event::new(
-            EventType::SpecificationChanged,
-            PathBuf::from("test.md"),
-        );
-        
+
+        let event = Event::new(EventType::SpecificationChanged, PathBuf::from("test.md"));
+
         assert!(orchestrator.queue_event(event).await.is_ok());
-        
+
         let metrics = orchestrator.get_metrics().await;
         assert_eq!(metrics.events_processed, 0);
     }
@@ -73,12 +70,12 @@ mod tests {
         let config = LearningConfig::default();
         let mut learning_system = LearningSystem::new(config);
         learning_system.initialize().await.unwrap();
-        
+
         let specification = Specification::default();
-        
+
         let patterns_before = learning_system.find_similar_patterns(&specification);
         assert_eq!(patterns_before.len(), 0);
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -109,7 +106,7 @@ mod tests {
         };
 
         learning_system.process_event(event).await.unwrap();
-        
+
         let patterns_after = learning_system.find_similar_patterns(&specification);
         assert!(patterns_after.len() > 0 || learning_system.knowledge_base.pattern_count() > 0);
     }
@@ -119,7 +116,7 @@ mod tests {
         let config = LearningConfig::default();
         let mut learning_system = LearningSystem::new(config);
         learning_system.initialize().await.unwrap();
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -152,7 +149,7 @@ mod tests {
         };
 
         learning_system.process_event(event).await.unwrap();
-        
+
         let metrics = learning_system.get_metrics();
         assert!(metrics.anti_patterns_identified >= 0);
         assert_eq!(metrics.total_learning_events, 1);
@@ -163,9 +160,9 @@ mod tests {
         let config = LearningConfig::default();
         let mut learning_system = LearningSystem::new(config);
         learning_system.initialize().await.unwrap();
-        
+
         let initial_accuracy = learning_system.decision_improver.get_accuracy();
-        
+
         let success_event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -196,10 +193,10 @@ mod tests {
         };
 
         learning_system.process_event(success_event).await.unwrap();
-        
+
         let decision_type = decision_improver::DecisionType::Implementation;
         let confidence = learning_system.decision_improver.get_decision_confidence(&decision_type);
-        
+
         assert!(confidence >= 0.0 && confidence <= 1.0);
     }
 
@@ -207,15 +204,12 @@ mod tests {
     async fn test_knowledge_persistence() {
         let temp_dir = tempfile::tempdir().unwrap();
         let storage_path = temp_dir.path().to_path_buf();
-        
-        let config = LearningConfig {
-            export_path: storage_path.clone(),
-            ..Default::default()
-        };
-        
+
+        let config = LearningConfig { export_path: storage_path.clone(), ..Default::default() };
+
         let mut learning_system = LearningSystem::new(config.clone());
         learning_system.initialize().await.unwrap();
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -247,11 +241,11 @@ mod tests {
 
         learning_system.process_event(event).await.unwrap();
         learning_system.export_knowledge().await.unwrap();
-        
+
         let mut new_learning_system = LearningSystem::new(config);
         new_learning_system.initialize().await.unwrap();
         new_learning_system.import_knowledge().await.unwrap();
-        
+
         assert!(new_learning_system.knowledge_base.pattern_count() > 0);
     }
 }

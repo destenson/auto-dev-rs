@@ -1,9 +1,9 @@
 //! Code generation coordinator
 
-use super::{PipelineStage, PipelineContext};
+use super::{PipelineContext, PipelineStage};
 use crate::{
-    synthesis::{Result, SynthesisError},
     llm::provider::LLMProvider,
+    synthesis::{Result, SynthesisError},
 };
 use async_trait::async_trait;
 use std::path::PathBuf;
@@ -16,11 +16,9 @@ pub struct CodeGenerator {
 impl CodeGenerator {
     /// Create a new code generator
     pub fn new() -> Self {
-        Self {
-            cache: GenerationCache::new(),
-        }
+        Self { cache: GenerationCache::new() }
     }
-    
+
     /// Generate code for a task
     async fn generate_for_task(
         &self,
@@ -32,10 +30,10 @@ impl CodeGenerator {
             tracing::debug!("Using cached generation for task: {}", task.id);
             return Ok(cached);
         }
-        
+
         // Build generation prompt
         let prompt = self.build_prompt(task);
-        
+
         // Generate code via LLM
         // For now, create placeholder code since generate method doesn't exist
         // In real implementation, this would call the appropriate LLM method
@@ -46,13 +44,13 @@ impl CodeGenerator {
             imports: Vec::new(),
             exports: Vec::new(),
         };
-        
+
         // Cache the result
         self.cache.store(task.id.clone(), generated.clone());
-        
+
         Ok(generated)
     }
-    
+
     /// Build generation prompt for task
     fn build_prompt(&self, task: &crate::synthesis::state::ImplementationTask) -> String {
         format!(
@@ -71,15 +69,12 @@ impl CodeGenerator {
             task.target_file.display()
         )
     }
-    
+
     /// Detect programming language from file extension
     fn detect_language(&self, path: &PathBuf) -> String {
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("txt")
-            .to_string()
+        path.extension().and_then(|ext| ext.to_str()).unwrap_or("txt").to_string()
     }
-    
+
     /// Process all pending tasks
     async fn process_tasks(
         &self,
@@ -89,20 +84,20 @@ impl CodeGenerator {
         let mut generated = Vec::new();
         let mut completed = Vec::new();
         let mut warnings = Vec::new();
-        
+
         // Process tasks based on configuration
         let batch_size = if context.config.incremental {
-            1  // Process one at a time for incremental
+            1 // Process one at a time for incremental
         } else {
             context.config.parallel_tasks
         };
-        
+
         // Clone pending tasks to avoid borrow issues
         let pending_tasks = context.pending_tasks.clone();
-        
+
         for chunk in pending_tasks.chunks(batch_size) {
             let mut chunk_results = Vec::new();
-            
+
             for task in chunk {
                 match self.generate_for_task(task, provider).await {
                     Ok(code) => {
@@ -112,28 +107,24 @@ impl CodeGenerator {
                         completed.push(completed_task);
                     }
                     Err(e) => {
-                        warnings.push(format!(
-                            "Failed to generate code for task {}: {}",
-                            task.id, e
-                        ));
+                        warnings
+                            .push(format!("Failed to generate code for task {}: {}", task.id, e));
                     }
                 }
             }
-            
+
             generated.extend(chunk_results);
         }
-        
+
         // Add warnings after processing
         for warning in warnings {
             context.add_warning(warning);
         }
-        
+
         // Move completed tasks
         context.completed_tasks.extend(completed);
-        context.pending_tasks.retain(|t| {
-            !context.completed_tasks.iter().any(|ct| ct.id == t.id)
-        });
-        
+        context.pending_tasks.retain(|t| !context.completed_tasks.iter().any(|ct| ct.id == t.id));
+
         Ok(generated)
     }
 }
@@ -143,41 +134,43 @@ impl PipelineStage for CodeGenerator {
     fn name(&self) -> &'static str {
         "CodeGenerator"
     }
-    
+
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
         tracing::info!("Generating code for {} tasks", context.pending_tasks.len());
-        
+
         context.metadata.current_stage = self.name().to_string();
-        
+
         if context.pending_tasks.is_empty() {
             context.add_warning("No tasks to generate code for".to_string());
             return Ok(context);
         }
-        
+
         // Get LLM provider
         // In a real implementation, this would be injected or configured
         let provider = self.get_provider(&context)?;
-        
+
         // Generate code for all tasks
         let generated = self.process_tasks(&mut context, provider.as_ref()).await?;
-        
+
         // Store generated code in context
         // In a real implementation, this would be more sophisticated
         for generated_code in generated {
-            let path = context.pending_tasks.iter()
+            let path = context
+                .pending_tasks
+                .iter()
                 .find(|t| t.id == generated_code.task_id)
                 .map(|t| t.target_file.clone())
                 .unwrap_or_else(|| PathBuf::from("generated.rs"));
-            
+
             context.add_generated_file(path);
         }
-        
+
         tracing::debug!(
             "Generated code for {} tasks, {} completed",
             context.completed_tasks.len(),
             context.completed_tasks.len()
         );
-        
+
         Ok(context)
     }
 }
@@ -212,15 +205,13 @@ use std::collections::HashMap;
 
 impl GenerationCache {
     fn new() -> Self {
-        Self {
-            cache: std::sync::RwLock::new(HashMap::new()),
-        }
+        Self { cache: std::sync::RwLock::new(HashMap::new()) }
     }
-    
+
     fn get(&self, key: &str) -> Option<GeneratedCode> {
         self.cache.read().ok()?.get(key).cloned()
     }
-    
+
     fn store(&self, key: String, value: GeneratedCode) {
         if let Ok(mut cache) = self.cache.write() {
             cache.insert(key, value);
@@ -231,29 +222,20 @@ impl GenerationCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_language_detection() {
         let generator = CodeGenerator::new();
-        
-        assert_eq!(
-            generator.detect_language(&PathBuf::from("test.rs")),
-            "rs"
-        );
-        assert_eq!(
-            generator.detect_language(&PathBuf::from("test.py")),
-            "py"
-        );
-        assert_eq!(
-            generator.detect_language(&PathBuf::from("test.js")),
-            "js"
-        );
+
+        assert_eq!(generator.detect_language(&PathBuf::from("test.rs")), "rs");
+        assert_eq!(generator.detect_language(&PathBuf::from("test.py")), "py");
+        assert_eq!(generator.detect_language(&PathBuf::from("test.js")), "js");
     }
-    
+
     #[test]
     fn test_cache() {
         let cache = GenerationCache::new();
-        
+
         let code = GeneratedCode {
             task_id: "test".to_string(),
             code: "fn test() {}".to_string(),
@@ -261,9 +243,9 @@ mod tests {
             imports: Vec::new(),
             exports: Vec::new(),
         };
-        
+
         cache.store("test".to_string(), code.clone());
-        
+
         let retrieved = cache.get("test");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().task_id, "test");

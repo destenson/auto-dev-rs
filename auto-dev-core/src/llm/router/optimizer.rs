@@ -2,7 +2,7 @@
 
 use crate::llm::provider::ModelTier;
 use crate::llm::router::{
-    cost_tracker::{CostStrategy, CostStats},
+    cost_tracker::{CostStats, CostStrategy},
     performance::{ModelMetrics, PerformanceReport},
     registry::ModelConfig,
 };
@@ -30,15 +30,16 @@ impl CostOptimizer {
         performance_data: Option<&HashMap<String, ModelMetrics>>,
         task_requirements: &TaskRequirements,
     ) -> Option<ModelConfig> {
-        let mut candidates: Vec<_> = models.iter()
+        let mut candidates: Vec<_> = models
+            .iter()
             .filter(|m| m.available)
             .filter(|m| self.meets_requirements(m, task_requirements))
             .collect();
-        
+
         if candidates.is_empty() {
             return None;
         }
-        
+
         // Sort based on strategy
         match strategy {
             CostStrategy::QualityFirst => {
@@ -78,7 +79,7 @@ impl CostOptimizer {
                 candidates.sort_by_key(|m| m.average_latency_ms);
             }
         }
-        
+
         candidates.first().map(|m| (*m).clone())
     }
 
@@ -90,7 +91,7 @@ impl CostOptimizer {
     ) -> RoutingStrategy {
         let budget_usage = cost_stats.spent_today / cost_stats.daily_budget;
         let success_rate = performance_report.overall_success_rate;
-        
+
         let mut strategy = RoutingStrategy {
             primary_tier: ModelTier::Small,
             fallback_tier: ModelTier::Medium,
@@ -101,7 +102,7 @@ impl CostOptimizer {
             enable_batching: false,
             parallel_attempts: 1,
         };
-        
+
         // Adjust based on budget usage
         if budget_usage > 0.9 {
             strategy.primary_tier = ModelTier::Tiny;
@@ -114,7 +115,7 @@ impl CostOptimizer {
             strategy.fallback_tier = ModelTier::Large;
             strategy.cost_strategy = CostStrategy::QualityFirst;
         }
-        
+
         // Adjust based on success rate
         if success_rate < 0.8 {
             // Low success rate, try higher tier models
@@ -122,7 +123,7 @@ impl CostOptimizer {
             strategy.fallback_tier = self.next_tier(strategy.fallback_tier);
             strategy.parallel_attempts = 2; // Try multiple models
         }
-        
+
         // Check peak hours
         if let Some((hour, _cost)) = cost_stats.peak_usage_hour() {
             let current_hour = chrono::Local::now().hour() as usize;
@@ -132,10 +133,12 @@ impl CostOptimizer {
                 strategy.max_latency_ms = 10000; // Allow higher latency for batching
             }
         }
-        
-        info!("Routing strategy: primary={:?}, fallback={:?}, cost={:?}",
-              strategy.primary_tier, strategy.fallback_tier, strategy.cost_strategy);
-        
+
+        info!(
+            "Routing strategy: primary={:?}, fallback={:?}, cost={:?}",
+            strategy.primary_tier, strategy.fallback_tier, strategy.cost_strategy
+        );
+
         strategy
     }
 
@@ -152,27 +155,29 @@ impl CostOptimizer {
             estimated_time_ms: 0,
             models_used: Vec::new(),
         };
-        
+
         // Group tasks by complexity
         let mut tier_tasks: HashMap<ModelTier, Vec<usize>> = HashMap::new();
         for (idx, task) in tasks.iter().enumerate() {
             let tier = self.estimate_tier_for_task(task);
             tier_tasks.entry(tier).or_insert_with(Vec::new).push(idx);
         }
-        
+
         // Assign models to task groups
         for (tier, task_indices) in tier_tasks {
-            if let Some(model) = self.find_best_model_for_tier(tier, available_models, budget_remaining) {
+            if let Some(model) =
+                self.find_best_model_for_tier(tier, available_models, budget_remaining)
+            {
                 for idx in task_indices {
                     let task = &tasks[idx];
                     let cost = model.estimate_cost(task.estimated_tokens);
-                    
+
                     if optimization.total_cost + cost <= budget_remaining {
                         optimization.task_assignments.insert(idx, model.id.clone());
                         optimization.total_cost += cost;
-                        optimization.estimated_time_ms = optimization.estimated_time_ms
-                            .max(model.average_latency_ms);
-                        
+                        optimization.estimated_time_ms =
+                            optimization.estimated_time_ms.max(model.average_latency_ms);
+
                         if !optimization.models_used.contains(&model.id) {
                             optimization.models_used.push(model.id.clone());
                         }
@@ -180,12 +185,14 @@ impl CostOptimizer {
                 }
             }
         }
-        
-        debug!("Batch optimization: {} tasks assigned, cost=${:.4}, time={}ms",
-               optimization.task_assignments.len(),
-               optimization.total_cost,
-               optimization.estimated_time_ms);
-        
+
+        debug!(
+            "Batch optimization: {} tasks assigned, cost=${:.4}, time={}ms",
+            optimization.task_assignments.len(),
+            optimization.total_cost,
+            optimization.estimated_time_ms
+        );
+
         optimization
     }
 
@@ -194,21 +201,21 @@ impl CostOptimizer {
         if model.context_window < requirements.min_context_window {
             return false;
         }
-        
+
         // Check latency
         if let Some(max_latency) = requirements.max_latency_ms {
             if model.average_latency_ms > max_latency {
                 return false;
             }
         }
-        
+
         // Check cost
         if let Some(max_cost) = requirements.max_cost_per_1k {
             if model.cost_per_1k_tokens > max_cost {
                 return false;
             }
         }
-        
+
         true
     }
 
@@ -219,9 +226,9 @@ impl CostOptimizer {
     ) -> f32 {
         if let Some(data) = performance_data {
             if let Some(metrics) = data.get(model_id) {
-                return metrics.success_rate() * 0.5 + 
-                       (1.0 - metrics.normalized_latency()) * 0.3 +
-                       metrics.average_quality() * 0.2;
+                return metrics.success_rate() * 0.5
+                    + (1.0 - metrics.normalized_latency()) * 0.3
+                    + metrics.average_quality() * 0.2;
             }
         }
         0.5 // Default middle score
@@ -245,7 +252,8 @@ impl CostOptimizer {
         models: &[ModelConfig],
         budget: f64,
     ) -> Option<ModelConfig> {
-        models.iter()
+        models
+            .iter()
             .filter(|m| m.tier == tier && m.available)
             .filter(|m| m.estimate_cost(1000) <= budget)
             .min_by_key(|m| (m.cost_per_1k_tokens * 1000.0) as i64)
@@ -355,7 +363,7 @@ mod tests {
     #[test]
     fn test_optimal_model_selection() {
         let optimizer = CostOptimizer::new(OptimizerConfig::default());
-        
+
         let models = vec![
             ModelConfig {
                 id: "cheap".to_string(),
@@ -386,7 +394,7 @@ mod tests {
                 requires_auth: true,
             },
         ];
-        
+
         let requirements = TaskRequirements {
             estimated_tokens: 1000,
             min_context_window: 2048,
@@ -395,7 +403,7 @@ mod tests {
             required_capabilities: vec![],
             priority: TaskPriority::Normal,
         };
-        
+
         // With cost optimization, should select cheap model
         let selected = optimizer.select_optimal_model(
             &models,
@@ -403,7 +411,7 @@ mod tests {
             None,
             &requirements,
         );
-        
+
         assert_eq!(selected.unwrap().id, "cheap");
     }
 }

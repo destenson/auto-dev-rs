@@ -3,20 +3,20 @@
 //! This crate contains the core business logic for the auto-dev tool,
 //! including project management, code generation, and plugin systems.
 
-pub mod monitor;
-pub mod parser;
+pub mod context;
+pub mod dev_loop;
+pub mod incremental;
+pub mod learning;
 pub mod llm;
 pub mod mcp;
+pub mod modules;
+pub mod monitor;
+pub mod parser;
+pub mod self_target;
+pub mod self_upgrade;
 pub mod synthesis;
-pub mod context;
-pub mod incremental;
 pub mod test_gen;
 pub mod validation;
-pub mod dev_loop;
-pub mod self_target;
-pub mod learning;
-pub mod self_upgrade;
-pub mod modules;
 
 use serde::{Deserialize, Serialize};
 
@@ -38,10 +38,10 @@ impl Core {
 pub struct Config {
     /// Project name
     pub project_name: Option<String>,
-    
+
     /// Verbosity level
     pub verbosity: String,
-    
+
     /// Plugin configuration
     pub plugins: PluginConfig,
 }
@@ -51,7 +51,7 @@ pub struct Config {
 pub struct PluginConfig {
     /// Enabled plugins
     pub enabled: Vec<String>,
-    
+
     /// Plugin directory path
     pub path: Option<String>,
 }
@@ -61,10 +61,7 @@ impl Default for Config {
         Self {
             project_name: None,
             verbosity: "info".to_string(),
-            plugins: PluginConfig {
-                enabled: Vec::new(),
-                path: None,
-            },
+            plugins: PluginConfig { enabled: Vec::new(), path: None },
         }
     }
 }

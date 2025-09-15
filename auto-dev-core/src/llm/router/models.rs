@@ -1,6 +1,6 @@
 //! Model-specific implementations and configurations
 
-use crate::llm::provider::{ModelTier, LLMProvider};
+use crate::llm::provider::{LLMProvider, ModelTier};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -45,124 +45,120 @@ pub enum TaskWeakness {
 /// Model profiles for common models
 pub fn get_model_profiles() -> HashMap<String, ModelCapabilities> {
     let mut profiles = HashMap::new();
-    
+
     // Qwen 0.5B profile
-    profiles.insert("qwen-0.5b".to_string(), ModelCapabilities {
-        model_id: "qwen-0.5b".to_string(),
-        tier: ModelTier::Tiny,
-        strengths: vec![
-            TaskStrength::FastInference,
-            TaskStrength::LowCost,
-        ],
-        weaknesses: vec![
-            TaskWeakness::SmallContext,
-            TaskWeakness::LimitedReasoning,
-        ],
-        optimal_use_cases: vec![
-            "Simple classification".to_string(),
-            "Pattern matching".to_string(),
-            "Basic requirement checking".to_string(),
-        ],
-        avoid_use_cases: vec![
-            "Complex code generation".to_string(),
-            "Architectural design".to_string(),
-        ],
-    });
-    
+    profiles.insert(
+        "qwen-0.5b".to_string(),
+        ModelCapabilities {
+            model_id: "qwen-0.5b".to_string(),
+            tier: ModelTier::Tiny,
+            strengths: vec![TaskStrength::FastInference, TaskStrength::LowCost],
+            weaknesses: vec![TaskWeakness::SmallContext, TaskWeakness::LimitedReasoning],
+            optimal_use_cases: vec![
+                "Simple classification".to_string(),
+                "Pattern matching".to_string(),
+                "Basic requirement checking".to_string(),
+            ],
+            avoid_use_cases: vec![
+                "Complex code generation".to_string(),
+                "Architectural design".to_string(),
+            ],
+        },
+    );
+
     // Code Llama 7B profile
-    profiles.insert("codellama-7b".to_string(), ModelCapabilities {
-        model_id: "codellama-7b".to_string(),
-        tier: ModelTier::Small,
-        strengths: vec![
-            TaskStrength::CodeGeneration,
-            TaskStrength::LowCost,
-            TaskStrength::FastInference,
-        ],
-        weaknesses: vec![
-            TaskWeakness::SmallContext,
-        ],
-        optimal_use_cases: vec![
-            "Function implementation".to_string(),
-            "Unit test generation".to_string(),
-            "Code completion".to_string(),
-        ],
-        avoid_use_cases: vec![
-            "Large system design".to_string(),
-            "Complex documentation".to_string(),
-        ],
-    });
-    
+    profiles.insert(
+        "codellama-7b".to_string(),
+        ModelCapabilities {
+            model_id: "codellama-7b".to_string(),
+            tier: ModelTier::Small,
+            strengths: vec![
+                TaskStrength::CodeGeneration,
+                TaskStrength::LowCost,
+                TaskStrength::FastInference,
+            ],
+            weaknesses: vec![TaskWeakness::SmallContext],
+            optimal_use_cases: vec![
+                "Function implementation".to_string(),
+                "Unit test generation".to_string(),
+                "Code completion".to_string(),
+            ],
+            avoid_use_cases: vec![
+                "Large system design".to_string(),
+                "Complex documentation".to_string(),
+            ],
+        },
+    );
+
     // Mixtral 8x7B profile
-    profiles.insert("mixtral-8x7b".to_string(), ModelCapabilities {
-        model_id: "mixtral-8x7b".to_string(),
-        tier: ModelTier::Medium,
-        strengths: vec![
-            TaskStrength::CodeGeneration,
-            TaskStrength::LargeContext,
-            TaskStrength::Reasoning,
-        ],
-        weaknesses: vec![
-            TaskWeakness::SlowInference,
-        ],
-        optimal_use_cases: vec![
-            "Module implementation".to_string(),
-            "Integration code".to_string(),
-            "API design".to_string(),
-        ],
-        avoid_use_cases: vec![
-            "Simple tasks that don't need complexity".to_string(),
-        ],
-    });
-    
+    profiles.insert(
+        "mixtral-8x7b".to_string(),
+        ModelCapabilities {
+            model_id: "mixtral-8x7b".to_string(),
+            tier: ModelTier::Medium,
+            strengths: vec![
+                TaskStrength::CodeGeneration,
+                TaskStrength::LargeContext,
+                TaskStrength::Reasoning,
+            ],
+            weaknesses: vec![TaskWeakness::SlowInference],
+            optimal_use_cases: vec![
+                "Module implementation".to_string(),
+                "Integration code".to_string(),
+                "API design".to_string(),
+            ],
+            avoid_use_cases: vec!["Simple tasks that don't need complexity".to_string()],
+        },
+    );
+
     // Claude 3 Opus profile
-    profiles.insert("claude-3-opus".to_string(), ModelCapabilities {
-        model_id: "claude-3-opus".to_string(),
-        tier: ModelTier::Large,
-        strengths: vec![
-            TaskStrength::LargeContext,
-            TaskStrength::Reasoning,
-            TaskStrength::CodeGeneration,
-            TaskStrength::CreativeWriting,
-        ],
-        weaknesses: vec![
-            TaskWeakness::HighCost,
-            TaskWeakness::SlowInference,
-        ],
-        optimal_use_cases: vec![
-            "System architecture".to_string(),
-            "Complex refactoring".to_string(),
-            "Documentation generation".to_string(),
-            "Code review".to_string(),
-        ],
-        avoid_use_cases: vec![
-            "Simple formatting".to_string(),
-            "Basic classification".to_string(),
-        ],
-    });
-    
+    profiles.insert(
+        "claude-3-opus".to_string(),
+        ModelCapabilities {
+            model_id: "claude-3-opus".to_string(),
+            tier: ModelTier::Large,
+            strengths: vec![
+                TaskStrength::LargeContext,
+                TaskStrength::Reasoning,
+                TaskStrength::CodeGeneration,
+                TaskStrength::CreativeWriting,
+            ],
+            weaknesses: vec![TaskWeakness::HighCost, TaskWeakness::SlowInference],
+            optimal_use_cases: vec![
+                "System architecture".to_string(),
+                "Complex refactoring".to_string(),
+                "Documentation generation".to_string(),
+                "Code review".to_string(),
+            ],
+            avoid_use_cases: vec![
+                "Simple formatting".to_string(),
+                "Basic classification".to_string(),
+            ],
+        },
+    );
+
     // GPT-4 Turbo profile
-    profiles.insert("gpt-4-turbo".to_string(), ModelCapabilities {
-        model_id: "gpt-4-turbo".to_string(),
-        tier: ModelTier::Large,
-        strengths: vec![
-            TaskStrength::LargeContext,
-            TaskStrength::Reasoning,
-            TaskStrength::FunctionCalling,
-            TaskStrength::StructuredOutput,
-        ],
-        weaknesses: vec![
-            TaskWeakness::HighCost,
-        ],
-        optimal_use_cases: vec![
-            "Complex problem solving".to_string(),
-            "API integration".to_string(),
-            "System design".to_string(),
-        ],
-        avoid_use_cases: vec![
-            "High-volume simple tasks".to_string(),
-        ],
-    });
-    
+    profiles.insert(
+        "gpt-4-turbo".to_string(),
+        ModelCapabilities {
+            model_id: "gpt-4-turbo".to_string(),
+            tier: ModelTier::Large,
+            strengths: vec![
+                TaskStrength::LargeContext,
+                TaskStrength::Reasoning,
+                TaskStrength::FunctionCalling,
+                TaskStrength::StructuredOutput,
+            ],
+            weaknesses: vec![TaskWeakness::HighCost],
+            optimal_use_cases: vec![
+                "Complex problem solving".to_string(),
+                "API integration".to_string(),
+                "System design".to_string(),
+            ],
+            avoid_use_cases: vec!["High-volume simple tasks".to_string()],
+        },
+    );
+
     profiles
 }
 
@@ -174,28 +170,34 @@ pub struct PromptTemplates {
 impl PromptTemplates {
     pub fn new() -> Self {
         let mut templates = HashMap::new();
-        
+
         // Qwen templates
         let mut qwen_templates = HashMap::new();
         qwen_templates.insert("classification".to_string(), 
             "Classify the following text into one of these categories: {categories}\n\nText: {text}\n\nCategory:".to_string());
-        qwen_templates.insert("simple_question".to_string(),
-            "Answer briefly: {question}".to_string());
+        qwen_templates
+            .insert("simple_question".to_string(), "Answer briefly: {question}".to_string());
         templates.insert("qwen-0.5b".to_string(), qwen_templates);
-        
+
         // Code Llama templates
         let mut codellama_templates = HashMap::new();
-        codellama_templates.insert("code_generation".to_string(),
-            "[INST] Write code for: {specification}\n\nLanguage: {language} [/INST]".to_string());
-        codellama_templates.insert("test_generation".to_string(),
-            "[INST] Write unit tests for:\n\n{code}\n\nUse {framework} framework [/INST]".to_string());
+        codellama_templates.insert(
+            "code_generation".to_string(),
+            "[INST] Write code for: {specification}\n\nLanguage: {language} [/INST]".to_string(),
+        );
+        codellama_templates.insert(
+            "test_generation".to_string(),
+            "[INST] Write unit tests for:\n\n{code}\n\nUse {framework} framework [/INST]"
+                .to_string(),
+        );
         templates.insert("codellama-7b".to_string(), codellama_templates);
-        
+
         Self { templates }
     }
-    
+
     pub fn get_template(&self, model_id: &str, task_type: &str) -> Option<String> {
-        self.templates.get(model_id)
+        self.templates
+            .get(model_id)
             .and_then(|model_templates| model_templates.get(task_type))
             .cloned()
     }
@@ -290,53 +292,56 @@ pub struct ModelPool {
 
 impl ModelPool {
     pub fn new(models: Vec<String>) -> Self {
-        let health_statuses = models.iter()
-            .map(|id| (id.clone(), ModelHealth {
-                model_id: id.clone(),
-                status: HealthStatus::Unknown,
-                last_check: chrono::Utc::now(),
-                response_time_ms: None,
-                error_message: None,
-                consecutive_failures: 0,
-            }))
+        let health_statuses = models
+            .iter()
+            .map(|id| {
+                (
+                    id.clone(),
+                    ModelHealth {
+                        model_id: id.clone(),
+                        status: HealthStatus::Unknown,
+                        last_check: chrono::Utc::now(),
+                        response_time_ms: None,
+                        error_message: None,
+                        consecutive_failures: 0,
+                    },
+                )
+            })
             .collect();
-        
-        Self {
-            models,
-            current_index: 0,
-            health_statuses,
-        }
+
+        Self { models, current_index: 0, health_statuses }
     }
-    
+
     /// Get next healthy model using round-robin
     pub fn get_next_healthy(&mut self) -> Option<String> {
         let start_index = self.current_index;
-        
+
         loop {
             let model_id = &self.models[self.current_index];
             self.current_index = (self.current_index + 1) % self.models.len();
-            
+
             if let Some(health) = self.health_statuses.get(model_id) {
-                if health.status == HealthStatus::Healthy || health.status == HealthStatus::Unknown {
+                if health.status == HealthStatus::Healthy || health.status == HealthStatus::Unknown
+                {
                     return Some(model_id.clone());
                 }
             }
-            
+
             // We've checked all models
             if self.current_index == start_index {
                 break;
             }
         }
-        
+
         None
     }
-    
+
     /// Update model health status
     pub fn update_health(&mut self, model_id: &str, success: bool, response_time_ms: Option<u64>) {
         if let Some(health) = self.health_statuses.get_mut(model_id) {
             health.last_check = chrono::Utc::now();
             health.response_time_ms = response_time_ms;
-            
+
             if success {
                 health.status = HealthStatus::Healthy;
                 health.consecutive_failures = 0;

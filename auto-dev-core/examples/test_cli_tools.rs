@@ -4,7 +4,7 @@ use auto_dev_core::llm::provider::LLMProvider;
 #[tokio::main]
 async fn main() {
     println!("Testing CLI Tool Integration\n");
-    
+
     // Test Claude CLI
     println!("Checking Claude CLI...");
     let claude = ClaudeCLIProvider::new().await;
@@ -16,7 +16,7 @@ async fn main() {
         println!("Claude CLI not found");
         println!("  Install with: pip install claude-cli");
     }
-    
+
     // Test Fabric
     println!("\nChecking Fabric CLI...");
     let fabric = FabricProvider::new().await;

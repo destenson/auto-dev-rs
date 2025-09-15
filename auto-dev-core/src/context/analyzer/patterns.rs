@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use tokio::fs;
 
 use crate::context::manager::CodeExample;
@@ -18,10 +18,10 @@ pub struct CodePattern {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PatternType {
-    Architectural,   // MVC, Hexagonal, etc.
-    Design,         // Factory, Observer, etc.
-    Idiom,          // Language-specific idioms
-    Convention,     // Naming, structure, etc.
+    Architectural, // MVC, Hexagonal, etc.
+    Design,        // Factory, Observer, etc.
+    Idiom,         // Language-specific idioms
+    Convention,    // Naming, structure, etc.
 }
 
 #[derive(Debug)]
@@ -69,10 +69,7 @@ struct AntiPattern {
 
 impl PatternDetector {
     pub fn new(project_root: PathBuf) -> Self {
-        Self {
-            project_root,
-            pattern_library: Self::initialize_pattern_library(),
-        }
+        Self { project_root, pattern_library: Self::initialize_pattern_library() }
     }
 
     fn initialize_pattern_library() -> PatternLibrary {
@@ -86,11 +83,7 @@ impl PatternDetector {
         // Architectural patterns
         library.architectural_patterns.push(ArchPattern {
             name: "MVC".to_string(),
-            indicators: vec![
-                "models".to_string(),
-                "views".to_string(),
-                "controllers".to_string(),
-            ],
+            indicators: vec!["models".to_string(), "views".to_string(), "controllers".to_string()],
             description: "Model-View-Controller pattern".to_string(),
         });
 
@@ -204,9 +197,10 @@ impl PatternDetector {
 
             if path.is_file() && is_source_file(path) {
                 let file_patterns = self.analyze_file(&path.to_path_buf()).await?;
-                
+
                 for pattern in file_patterns {
-                    let entry = pattern_counts.entry(pattern.name.clone())
+                    let entry = pattern_counts
+                        .entry(pattern.name.clone())
                         .or_insert_with(|| (Vec::new(), Vec::new()));
                     entry.0.push(path.to_path_buf());
                     entry.1.extend(pattern.examples);
@@ -216,13 +210,13 @@ impl PatternDetector {
 
         // Convert to CodePattern with frequency calculation
         let total_files = pattern_counts.values().map(|(locs, _)| locs.len()).sum::<usize>() as f32;
-        
+
         for (name, (locations, examples)) in pattern_counts {
             let frequency = locations.len() as f32 / total_files.max(1.0);
-            
+
             // Find pattern type
             let pattern_type = self.determine_pattern_type(&name);
-            
+
             patterns.push(CodePattern {
                 name: name.clone(),
                 description: self.get_pattern_description(&name),
@@ -244,8 +238,12 @@ impl PatternDetector {
 
             // Check architectural patterns
             for arch_pattern in &self.pattern_library.architectural_patterns {
-                if path.to_string_lossy().contains(&arch_pattern.name.to_lowercase()) ||
-                   arch_pattern.indicators.iter().any(|ind| path.to_string_lossy().contains(ind)) {
+                if path.to_string_lossy().contains(&arch_pattern.name.to_lowercase())
+                    || arch_pattern
+                        .indicators
+                        .iter()
+                        .any(|ind| path.to_string_lossy().contains(ind))
+                {
                     patterns.push(CodePattern {
                         name: arch_pattern.name.clone(),
                         description: arch_pattern.description.clone(),
@@ -326,10 +324,13 @@ impl PatternDetector {
     }
 
     fn get_pattern_description(&self, name: &str) -> String {
-        if let Some(pattern) = self.pattern_library.architectural_patterns.iter().find(|p| p.name == name) {
+        if let Some(pattern) =
+            self.pattern_library.architectural_patterns.iter().find(|p| p.name == name)
+        {
             return pattern.description.clone();
         }
-        if let Some(pattern) = self.pattern_library.design_patterns.iter().find(|p| p.name == name) {
+        if let Some(pattern) = self.pattern_library.design_patterns.iter().find(|p| p.name == name)
+        {
             return pattern.description.clone();
         }
         for idioms in self.pattern_library.idioms.values() {
@@ -337,7 +338,12 @@ impl PatternDetector {
                 return idiom.description.clone();
             }
         }
-        if let Some(pattern) = self.pattern_library.anti_patterns.iter().find(|p| format!("Anti-pattern: {}", p.name) == name) {
+        if let Some(pattern) = self
+            .pattern_library
+            .anti_patterns
+            .iter()
+            .find(|p| format!("Anti-pattern: {}", p.name) == name)
+        {
             return pattern.description.clone();
         }
         "Unknown pattern".to_string()
@@ -345,27 +351,36 @@ impl PatternDetector {
 }
 
 fn detect_language_from_path(path: &PathBuf) -> Option<String> {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .and_then(|ext| match ext {
-            "rs" => Some("Rust".to_string()),
-            "py" => Some("Python".to_string()),
-            "js" | "mjs" => Some("JavaScript".to_string()),
-            "ts" => Some("TypeScript".to_string()),
-            "go" => Some("Go".to_string()),
-            "java" => Some("Java".to_string()),
-            "cpp" | "cc" | "cxx" => Some("C++".to_string()),
-            "c" => Some("C".to_string()),
-            "cs" => Some("C#".to_string()),
-            _ => None,
-        })
+    path.extension().and_then(|ext| ext.to_str()).and_then(|ext| match ext {
+        "rs" => Some("Rust".to_string()),
+        "py" => Some("Python".to_string()),
+        "js" | "mjs" => Some("JavaScript".to_string()),
+        "ts" => Some("TypeScript".to_string()),
+        "go" => Some("Go".to_string()),
+        "java" => Some("Java".to_string()),
+        "cpp" | "cc" | "cxx" => Some("C++".to_string()),
+        "c" => Some("C".to_string()),
+        "cs" => Some("C#".to_string()),
+        _ => None,
+    })
 }
 
 fn is_source_file(path: &std::path::Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         matches!(
             ext,
-            "rs" | "py" | "js" | "ts" | "go" | "java" | "cpp" | "c" | "cs" | "rb" | "php" | "swift" | "kt"
+            "rs" | "py"
+                | "js"
+                | "ts"
+                | "go"
+                | "java"
+                | "cpp"
+                | "c"
+                | "cs"
+                | "rb"
+                | "php"
+                | "swift"
+                | "kt"
         )
     } else {
         false
@@ -375,13 +390,13 @@ fn is_source_file(path: &std::path::Path) -> bool {
 fn is_ignored(path: &std::path::Path) -> bool {
     path.components().any(|component| {
         let name = component.as_os_str().to_string_lossy();
-        name.starts_with('.') && name != "." && name != ".." ||
-        name == "node_modules" ||
-        name == "target" ||
-        name == "dist" ||
-        name == "__pycache__" ||
-        name == ".git" ||
-        name == "vendor"
+        name.starts_with('.') && name != "." && name != ".."
+            || name == "node_modules"
+            || name == "target"
+            || name == "dist"
+            || name == "__pycache__"
+            || name == ".git"
+            || name == "vendor"
     })
 }
 
@@ -389,13 +404,13 @@ fn extract_pattern_example(content: &str, regex: &Regex, path: &PathBuf) -> Code
     if let Some(mat) = regex.find(content) {
         let start_byte = mat.start();
         let end_byte = mat.end();
-        
+
         // Find line numbers
         let lines: Vec<&str> = content.lines().collect();
         let mut current_byte = 0;
         let mut start_line = 1;
         let mut end_line = 1;
-        
+
         for (i, line) in lines.iter().enumerate() {
             let line_len = line.len() + 1; // +1 for newline
             if current_byte <= start_byte && start_byte < current_byte + line_len {
@@ -407,12 +422,12 @@ fn extract_pattern_example(content: &str, regex: &Regex, path: &PathBuf) -> Code
             }
             current_byte += line_len;
         }
-        
+
         // Extract a bit more context
         let context_start = start_line.saturating_sub(2);
         let context_end = (end_line + 2).min(lines.len());
         let code_snippet = lines[context_start..context_end].join("\n");
-        
+
         create_example(path, start_line, end_line, &code_snippet)
     } else {
         create_example(path, 0, 0, "")

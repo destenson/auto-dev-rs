@@ -1,15 +1,14 @@
-pub mod structure;
-pub mod patterns;
 pub mod conventions;
 pub mod dependencies;
+pub mod patterns;
+pub mod structure;
 
 use std::path::PathBuf;
 
-pub use structure::ProjectStructure;
-pub use patterns::{CodePattern, PatternType, PatternDetector};
 pub use conventions::{CodingConventions, NamingConventions, NamingStyle};
 pub use dependencies::DependencyGraph;
-
+pub use patterns::{CodePattern, PatternDetector, PatternType};
+pub use structure::ProjectStructure;
 
 #[derive(Debug)]
 pub struct ProjectAnalyzer {

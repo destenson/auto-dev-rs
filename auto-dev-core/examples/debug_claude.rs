@@ -4,14 +4,10 @@ use tokio::process::Command;
 #[tokio::main]
 async fn main() {
     println!("Debugging Claude CLI detection...\n");
-    
+
     // Test 1: Basic command
     println!("Test 1: claude --version");
-    match Command::new("claude")
-        .arg("--version")
-        .output()
-        .await
-    {
+    match Command::new("claude").arg("--version").output().await {
         Ok(output) => {
             println!("  Exit status: {}", output.status);
             println!("  Stdout: {}", String::from_utf8_lossy(&output.stdout));
@@ -19,7 +15,7 @@ async fn main() {
         }
         Err(e) => println!("  Error: {}", e),
     }
-    
+
     // Test 2: Without argument
     println!("\nTest 2: claude (no args, with timeout)");
     match tokio::time::timeout(
@@ -28,8 +24,10 @@ async fn main() {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-    ).await {
+            .output(),
+    )
+    .await
+    {
         Ok(Ok(output)) => {
             println!("  Exit status: {}", output.status);
             println!("  Stdout length: {} bytes", output.stdout.len());
@@ -38,14 +36,10 @@ async fn main() {
         Ok(Err(e)) => println!("  Command error: {}", e),
         Err(_) => println!("  Timed out (probably waiting for input)"),
     }
-    
+
     // Test 3: Help
     println!("\nTest 3: claude --help");
-    match Command::new("claude")
-        .arg("--help")
-        .output()
-        .await
-    {
+    match Command::new("claude").arg("--help").output().await {
         Ok(output) => {
             println!("  Exit status: {}", output.status);
             println!("  Has output: {}", !output.stdout.is_empty() || !output.stderr.is_empty());

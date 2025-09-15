@@ -1,24 +1,20 @@
 //! Demo of using tiny models for simple classification tasks
 
-use auto_dev_core::llm::{
-    candle::SmartTinyModel,
-    classifier::HeuristicClassifier,
-    TinyModel,
-};
+use auto_dev_core::llm::{TinyModel, candle::SmartTinyModel, classifier::HeuristicClassifier};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("🤖 Tiny Model Demo\n");
-    
+
     // Create a smart model that uses heuristics (no model file needed)
     let model = SmartTinyModel::new(None);
-    
+
     if model.is_using_heuristics() {
         println!("Using heuristic classifier (no model loaded)\n");
     } else {
         println!("Using loaded model\n");
     }
-    
+
     // Test code detection
     println!("=== Code Detection ===");
     let samples = [
@@ -27,12 +23,12 @@ async fn main() -> anyhow::Result<()> {
         ("This is a README file with documentation.", "Documentation"),
         ("SELECT * FROM users WHERE id = 1", "SQL query"),
     ];
-    
+
     for (content, description) in samples {
         let is_code = model.is_code(content).await?;
         println!("  {} -> is_code: {}", description, is_code);
     }
-    
+
     // Test content classification
     println!("\n=== Content Classification ===");
     let rust_test = r#"
@@ -41,13 +37,13 @@ fn test_addition() {
     assert_eq!(2 + 2, 4);
 }
 "#;
-    
+
     let classification = model.classify_content(rust_test).await?;
     println!("  Test code classification:");
     println!("    is_code: {}", classification.is_code);
     println!("    is_test: {}", classification.is_test);
     println!("    language: {:?}", classification.language);
-    
+
     // Test question classification
     println!("\n=== Question Classification ===");
     let questions = [
@@ -56,12 +52,12 @@ fn test_addition() {
         "What type of file is this?",
         "How do I implement a REST API?",
     ];
-    
+
     for question in questions {
         let q_type = model.classify_question(question).await?;
         println!("  \"{}\" -> {:?}", question, q_type);
     }
-    
+
     // Test simple Q&A
     println!("\n=== Simple Q&A ===");
     let qa_questions = [
@@ -70,7 +66,7 @@ fn test_addition() {
         "What is an API?",
         "How do I build a compiler?", // Complex - won't answer
     ];
-    
+
     for question in qa_questions {
         match model.simple_answer(question).await? {
             Some(answer) => {
@@ -83,7 +79,7 @@ fn test_addition() {
             }
         }
     }
-    
+
     // Test requirement checking
     println!("\n=== Requirement Checking ===");
     let requirement = "Function must validate email addresses";
@@ -91,7 +87,7 @@ fn test_addition() {
         ("fn validate_email(email: &str) -> bool { email.contains('@') }", true),
         ("fn process_data(data: &[u8]) { /* ... */ }", false),
     ];
-    
+
     for (code, expected) in code_samples {
         let satisfied = model.check_requirement(requirement, code).await?;
         println!("  Requirement: \"{}\"", requirement);
@@ -99,16 +95,16 @@ fn test_addition() {
         println!("  Satisfied: {} (expected: {})", satisfied, expected);
         println!();
     }
-    
+
     // Show heuristic classifier directly
     println!("=== Direct Heuristic Classifier ===");
     let classifier = HeuristicClassifier::new();
-    
+
     let test_content = "import React from 'react';\nconst App = () => <div>Hello</div>;";
     let result = classifier.classify_content(test_content);
     println!("  Content: React component");
     println!("  Detected language: {:?}", result.language);
     println!("  Is code: {}", result.is_code);
-    
+
     Ok(())
 }

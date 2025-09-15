@@ -1,30 +1,30 @@
 //! Semantic model for specifications and requirements
 
-use std::path::PathBuf;
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::path::PathBuf;
 
 /// Unified specification representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Specification {
     /// Source file path
     pub source: PathBuf,
-    
+
     /// Extracted requirements
     pub requirements: Vec<Requirement>,
-    
+
     /// API definitions
     pub apis: Vec<ApiDefinition>,
-    
+
     /// Data models/schemas
     pub data_models: Vec<DataModel>,
-    
+
     /// Behavioral specifications
     pub behaviors: Vec<BehaviorSpec>,
-    
+
     /// Code examples
     pub examples: Vec<Example>,
-    
+
     /// Constraints and rules
     pub constraints: Vec<Constraint>,
 }
@@ -55,12 +55,12 @@ impl Specification {
 
     /// Check if the specification is empty
     pub fn is_empty(&self) -> bool {
-        self.requirements.is_empty() &&
-        self.apis.is_empty() &&
-        self.data_models.is_empty() &&
-        self.behaviors.is_empty() &&
-        self.examples.is_empty() &&
-        self.constraints.is_empty()
+        self.requirements.is_empty()
+            && self.apis.is_empty()
+            && self.data_models.is_empty()
+            && self.behaviors.is_empty()
+            && self.examples.is_empty()
+            && self.constraints.is_empty()
     }
 }
 
@@ -75,25 +75,25 @@ impl Default for Specification {
 pub struct Requirement {
     /// Unique identifier
     pub id: String,
-    
+
     /// Requirement description
     pub description: String,
-    
+
     /// Type of requirement
     pub category: RequirementType,
-    
+
     /// Priority level
     pub priority: Priority,
-    
+
     /// Acceptance criteria
     pub acceptance_criteria: Vec<String>,
-    
+
     /// Source location in document
     pub source_location: SourceLocation,
-    
+
     /// Related requirements
     pub related: Vec<String>,
-    
+
     /// Tags for categorization
     pub tags: Vec<String>,
 }
@@ -169,28 +169,28 @@ impl From<&str> for Priority {
 pub struct ApiDefinition {
     /// Endpoint path
     pub endpoint: String,
-    
+
     /// HTTP method
     pub method: HttpMethod,
-    
+
     /// Request schema
     pub request_schema: Option<DataModel>,
-    
+
     /// Response schema
     pub response_schema: Option<DataModel>,
-    
+
     /// Query parameters
     pub query_params: Vec<Parameter>,
-    
+
     /// Path parameters
     pub path_params: Vec<Parameter>,
-    
+
     /// Headers
     pub headers: Vec<Parameter>,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Example requests/responses
     pub examples: Vec<Example>,
 }
@@ -251,13 +251,13 @@ pub struct Parameter {
 pub struct DataModel {
     /// Model name
     pub name: String,
-    
+
     /// Fields/properties
     pub fields: Vec<Field>,
-    
+
     /// Description
     pub description: String,
-    
+
     /// JSON Schema if available
     pub json_schema: Option<serde_json::Value>,
 }
@@ -278,19 +278,19 @@ pub struct Field {
 pub struct BehaviorSpec {
     /// Feature name
     pub feature: String,
-    
+
     /// Scenario name
     pub scenario: String,
-    
+
     /// Given conditions
     pub given: Vec<String>,
-    
+
     /// When actions
     pub when: Vec<String>,
-    
+
     /// Then assertions
     pub then: Vec<String>,
-    
+
     /// Tags
     pub tags: Vec<String>,
 }
@@ -300,16 +300,16 @@ pub struct BehaviorSpec {
 pub struct Example {
     /// Example title
     pub title: String,
-    
+
     /// Programming language
     pub language: String,
-    
+
     /// Code content
     pub code: String,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Expected output
     pub expected_output: Option<String>,
 }
@@ -319,13 +319,13 @@ pub struct Example {
 pub struct Constraint {
     /// Constraint ID
     pub id: String,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Type of constraint
     pub constraint_type: ConstraintType,
-    
+
     /// Validation rule
     pub rule: String,
 }
@@ -345,13 +345,13 @@ pub enum ConstraintType {
 pub struct SourceLocation {
     /// File path
     pub file: Option<PathBuf>,
-    
+
     /// Line number
     pub line: Option<usize>,
-    
+
     /// Column number
     pub column: Option<usize>,
-    
+
     /// Section/heading
     pub section: Option<String>,
 }
@@ -359,12 +359,7 @@ pub struct SourceLocation {
 impl SourceLocation {
     /// Create a new source location
     pub fn new(file: PathBuf, line: usize) -> Self {
-        Self {
-            file: Some(file),
-            line: Some(line),
-            column: None,
-            section: None,
-        }
+        Self { file: Some(file), line: Some(line), column: None, section: None }
     }
 
     /// Create location with section
@@ -387,10 +382,8 @@ mod tests {
 
     #[test]
     fn test_requirement_creation() {
-        let req = Requirement::new(
-            "REQ-001".to_string(),
-            "System must support user login".to_string()
-        );
+        let req =
+            Requirement::new("REQ-001".to_string(), "System must support user login".to_string());
         assert_eq!(req.id, "REQ-001");
         assert_eq!(req.category, RequirementType::Functional);
         assert_eq!(req.priority, Priority::Medium);
@@ -414,16 +407,14 @@ mod tests {
     #[test]
     fn test_specification_merge() {
         let mut spec1 = Specification::new(PathBuf::from("spec1.md"));
-        spec1.requirements.push(Requirement::new(
-            "REQ-001".to_string(),
-            "First requirement".to_string()
-        ));
+        spec1
+            .requirements
+            .push(Requirement::new("REQ-001".to_string(), "First requirement".to_string()));
 
         let mut spec2 = Specification::new(PathBuf::from("spec2.md"));
-        spec2.requirements.push(Requirement::new(
-            "REQ-002".to_string(),
-            "Second requirement".to_string()
-        ));
+        spec2
+            .requirements
+            .push(Requirement::new("REQ-002".to_string(), "Second requirement".to_string()));
 
         spec1.merge(spec2);
         assert_eq!(spec1.requirements.len(), 2);

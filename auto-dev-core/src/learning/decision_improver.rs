@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
-use anyhow::Result;
 
-use crate::learning::learner::LearningEvent;
 use crate::learning::failure_analyzer::FailureCause;
+use crate::learning::learner::LearningEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecisionImprover {
@@ -20,12 +20,12 @@ impl DecisionImprover {
     pub fn new() -> Self {
         let mut decision_weights = HashMap::new();
         let mut confidence_scores = HashMap::new();
-        
+
         for decision_type in DecisionType::all() {
             decision_weights.insert(decision_type.clone(), 0.5);
             confidence_scores.insert(decision_type.clone(), 0.5);
         }
-        
+
         Self {
             decision_weights,
             confidence_scores,
@@ -37,52 +37,46 @@ impl DecisionImprover {
 
     pub fn improve_from_success(&mut self, event: &LearningEvent) {
         let decision = self.extract_decision_from_event(event);
-        
+
         self.update_weights(&decision, &Outcome::Success);
         self.update_confidence(&decision, &Outcome::Success);
         self.track_performance(&decision, true);
-        
+
         self.decision_history.add_event(event.clone());
-        
-        tracing::debug!(
-            "Improved decision weights for {:?} after success",
-            decision.decision_type
-        );
+
+        tracing::debug!("Improved decision weights for {:?} after success", decision.decision_type);
     }
 
     pub fn improve_from_failure(&mut self, event: &LearningEvent, cause: &FailureCause) {
         let decision = self.extract_decision_from_event(event);
-        
+
         self.update_weights(&decision, &Outcome::Failure);
         self.update_confidence(&decision, &Outcome::Failure);
         self.track_performance(&decision, false);
-        
+
         self.learn_from_failure_cause(&decision.decision_type, cause);
-        
+
         self.decision_history.add_event(event.clone());
-        
-        tracing::debug!(
-            "Adjusted decision weights for {:?} after failure",
-            decision.decision_type
-        );
+
+        tracing::debug!("Adjusted decision weights for {:?} after failure", decision.decision_type);
     }
 
     pub fn select_decision(&self, options: Vec<Decision>) -> Decision {
         if options.is_empty() {
             return Decision::default();
         }
-        
+
         if options.len() == 1 {
             return options.into_iter().next().unwrap();
         }
-        
+
         options
             .into_iter()
             .max_by_key(|d| {
                 let weight = self.decision_weights.get(&d.decision_type).unwrap_or(&0.5);
                 let confidence = self.confidence_scores.get(&d.decision_type).unwrap_or(&0.5);
                 let score = weight * confidence;
-                
+
                 (score * 10000.0) as u32
             })
             .unwrap_or_default()
@@ -96,14 +90,12 @@ impl DecisionImprover {
         if self.decision_history.events.is_empty() {
             return 0.5;
         }
-        
-        let successful = self.decision_history.events
-            .iter()
-            .filter(|e| e.outcome.success)
-            .count() as f32;
-        
+
+        let successful =
+            self.decision_history.events.iter().filter(|e| e.outcome.success).count() as f32;
+
         let total = self.decision_history.events.len() as f32;
-        
+
         successful / total
     }
 
@@ -111,26 +103,27 @@ impl DecisionImprover {
         *self.confidence_scores.get(decision_type).unwrap_or(&0.5)
     }
 
-    pub fn get_decision_performance(&self, decision_type: &DecisionType) -> Option<&DecisionPerformance> {
+    pub fn get_decision_performance(
+        &self,
+        decision_type: &DecisionType,
+    ) -> Option<&DecisionPerformance> {
         self.performance_tracking.get(decision_type)
     }
 
     fn extract_decision_from_event(&self, event: &LearningEvent) -> Decision {
         let decision_type = match event.event_type {
-            crate::learning::learner::LearningEventType::ImplementationSuccess |
-            crate::learning::learner::LearningEventType::ImplementationFailure => {
+            crate::learning::learner::LearningEventType::ImplementationSuccess
+            | crate::learning::learner::LearningEventType::ImplementationFailure => {
                 DecisionType::Implementation
             }
-            crate::learning::learner::LearningEventType::TestPassed |
-            crate::learning::learner::LearningEventType::TestFailed => {
-                DecisionType::Testing
-            }
+            crate::learning::learner::LearningEventType::TestPassed
+            | crate::learning::learner::LearningEventType::TestFailed => DecisionType::Testing,
             crate::learning::learner::LearningEventType::ValidationCompleted => {
                 DecisionType::Validation
             }
             _ => DecisionType::General,
         };
-        
+
         Decision {
             id: Uuid::new_v4(),
             decision_type,
@@ -143,68 +136,69 @@ impl DecisionImprover {
     }
 
     fn update_weights(&mut self, decision: &Decision, outcome: &Outcome) {
-        let current_weight = self.decision_weights.get(&decision.decision_type).copied().unwrap_or(0.5);
-        
+        let current_weight =
+            self.decision_weights.get(&decision.decision_type).copied().unwrap_or(0.5);
+
         let new_weight = match outcome {
             Outcome::Success => (current_weight * 1.1).min(1.0),
             Outcome::Failure => (current_weight * 0.9).max(0.1),
         };
-        
+
         self.decision_weights.insert(decision.decision_type.clone(), new_weight);
-        
+
         if new_weight < 0.2 {
             self.deprecate_decision_type(&decision.decision_type);
         }
     }
 
     fn update_confidence(&mut self, decision: &Decision, outcome: &Outcome) {
-        let current_confidence = self.confidence_scores.get(&decision.decision_type).copied().unwrap_or(0.5);
-        
+        let current_confidence =
+            self.confidence_scores.get(&decision.decision_type).copied().unwrap_or(0.5);
+
         let adjustment = match outcome {
             Outcome::Success => 0.05,
             Outcome::Failure => -0.05,
         };
-        
+
         let new_confidence = (current_confidence + adjustment).clamp(0.1, 1.0);
-        
+
         self.confidence_scores.insert(decision.decision_type.clone(), new_confidence);
     }
 
     fn track_performance(&mut self, decision: &Decision, success: bool) {
-        let performance = self.performance_tracking
+        let performance = self
+            .performance_tracking
             .entry(decision.decision_type.clone())
             .or_insert_with(DecisionPerformance::new);
-        
+
         performance.total_decisions += 1;
         if success {
             performance.successful_decisions += 1;
         } else {
             performance.failed_decisions += 1;
         }
-        
+
         performance.update_success_rate();
         performance.last_decision = Utc::now();
     }
 
     fn learn_from_failure_cause(&mut self, decision_type: &DecisionType, cause: &FailureCause) {
-        let performance = self.performance_tracking
+        let performance = self
+            .performance_tracking
             .entry(decision_type.clone())
             .or_insert_with(DecisionPerformance::new);
-        
+
         let cause_category = cause.category();
         *performance.failure_causes.entry(cause_category).or_insert(0) += 1;
-        
+
         if performance.failure_causes.len() > 3 {
             self.strategy_selector.add_avoidance_rule(decision_type.clone(), cause.clone());
         }
     }
 
     fn deprecate_decision_type(&mut self, decision_type: &DecisionType) {
-        tracing::warn!(
-            "Deprecating decision type {:?} due to poor performance",
-            decision_type
-        );
-        
+        tracing::warn!("Deprecating decision type {:?} due to poor performance", decision_type);
+
         if let Some(performance) = self.performance_tracking.get_mut(decision_type) {
             performance.deprecated = true;
             performance.deprecated_at = Some(Utc::now());
@@ -315,16 +309,12 @@ pub struct DecisionHistory {
 
 impl DecisionHistory {
     pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            decisions: Vec::new(),
-            outcomes: Vec::new(),
-        }
+        Self { events: Vec::new(), decisions: Vec::new(), outcomes: Vec::new() }
     }
 
     pub fn add_event(&mut self, event: LearningEvent) {
         self.events.push(event);
-        
+
         if self.events.len() > 1000 {
             self.events.remove(0);
         }
@@ -333,7 +323,7 @@ impl DecisionHistory {
     pub fn add_decision(&mut self, decision: Decision, outcome: DecisionOutcome) {
         self.decisions.push(decision);
         self.outcomes.push(outcome);
-        
+
         if self.decisions.len() > 1000 {
             self.decisions.remove(0);
             self.outcomes.remove(0);
@@ -413,13 +403,11 @@ impl StrategySelector {
         performance: &HashMap<DecisionType, DecisionPerformance>,
     ) -> DecisionStrategy {
         let avg_success_rate = if !performance.is_empty() {
-            performance.values()
-                .map(|p| p.success_rate)
-                .sum::<f32>() / performance.len() as f32
+            performance.values().map(|p| p.success_rate).sum::<f32>() / performance.len() as f32
         } else {
             0.5
         };
-        
+
         if context.previous_attempts > 3 {
             DecisionStrategy::Conservative
         } else if avg_success_rate > 0.8 {
@@ -434,10 +422,7 @@ impl StrategySelector {
     }
 
     fn add_avoidance_rule(&mut self, decision_type: DecisionType, cause: FailureCause) {
-        self.avoidance_rules
-            .entry(decision_type)
-            .or_insert_with(Vec::new)
-            .push(cause);
+        self.avoidance_rules.entry(decision_type).or_insert_with(Vec::new).push(cause);
     }
 }
 
@@ -470,7 +455,7 @@ mod tests {
     #[test]
     fn test_decision_improver_creation() {
         let improver = DecisionImprover::new();
-        
+
         assert_eq!(improver.get_accuracy(), 0.5);
         assert_eq!(improver.get_decision_confidence(&DecisionType::Implementation), 0.5);
     }
@@ -478,7 +463,7 @@ mod tests {
     #[test]
     fn test_decision_selection() {
         let improver = DecisionImprover::new();
-        
+
         let decisions = vec![
             Decision {
                 id: Uuid::new_v4(),
@@ -499,7 +484,7 @@ mod tests {
                 timestamp: Utc::now(),
             },
         ];
-        
+
         let selected = improver.select_decision(decisions);
         assert_eq!(selected.decision_type, DecisionType::Implementation);
     }
@@ -507,7 +492,7 @@ mod tests {
     #[test]
     fn test_improve_from_success() {
         let mut improver = DecisionImprover::new();
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -529,11 +514,11 @@ mod tests {
                 environment: serde_json::json!({}),
             },
         };
-        
+
         let initial_weight = *improver.decision_weights.get(&DecisionType::Implementation).unwrap();
         improver.improve_from_success(&event);
         let new_weight = *improver.decision_weights.get(&DecisionType::Implementation).unwrap();
-        
+
         assert!(new_weight > initial_weight);
     }
 }

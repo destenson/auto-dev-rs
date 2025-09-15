@@ -1,10 +1,10 @@
 //! Code analyzer for understanding existing code
 
-use super::{PipelineStage, PipelineContext};
+use super::{PipelineContext, PipelineStage};
 use crate::synthesis::{Result, SynthesisError};
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 /// Analyzes existing code to understand current implementation
@@ -16,43 +16,40 @@ impl CodeAnalyzer {
     /// Create a new code analyzer
     pub fn new() -> Self {
         let mut parsers: HashMap<String, Box<dyn LanguageParser>> = HashMap::new();
-        
+
         // Register language parsers
         parsers.insert("rs".to_string(), Box::new(RustParser));
         parsers.insert("py".to_string(), Box::new(PythonParser));
         parsers.insert("js".to_string(), Box::new(JavaScriptParser));
         parsers.insert("ts".to_string(), Box::new(TypeScriptParser));
-        
+
         Self { parsers }
     }
-    
+
     /// Analyze a file to extract structure
     async fn analyze_file(&self, path: &Path) -> Result<FileAnalysis> {
-        let extension = path.extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("");
-        
+        let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+
         let content = fs::read_to_string(path).await?;
-        
-        let parser = self.parsers.get(extension)
-            .ok_or_else(|| SynthesisError::AnalysisError(
-                format!("No parser for extension: {}", extension)
-            ))?;
-        
+
+        let parser = self.parsers.get(extension).ok_or_else(|| {
+            SynthesisError::AnalysisError(format!("No parser for extension: {}", extension))
+        })?;
+
         Ok(parser.parse(&content))
     }
-    
+
     /// Find implementation targets
     fn find_targets(&self, spec: &crate::parser::model::Specification) -> Vec<PathBuf> {
         let mut targets = Vec::new();
-        
+
         // Based on spec, determine likely implementation files
         // This is a simplified version - real implementation would be more sophisticated
-        
+
         // Look for main source files
         targets.push(PathBuf::from("src/lib.rs"));
         targets.push(PathBuf::from("src/main.rs"));
-        
+
         // Look for module files based on spec
         for req in &spec.requirements {
             if req.description.to_lowercase().contains("api") {
@@ -62,7 +59,7 @@ impl CodeAnalyzer {
                 targets.push(PathBuf::from("src/models.rs"));
             }
         }
-        
+
         targets
     }
 }
@@ -72,16 +69,18 @@ impl PipelineStage for CodeAnalyzer {
     fn name(&self) -> &'static str {
         "CodeAnalyzer"
     }
-    
+
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!("Analyzing existing code for specification: {}", 
-                      context.spec.source.display());
-        
+        tracing::info!(
+            "Analyzing existing code for specification: {}",
+            context.spec.source.display()
+        );
+
         context.metadata.current_stage = self.name().to_string();
-        
+
         // Find target files to analyze
         let targets = self.find_targets(&context.spec);
-        
+
         // Analyze each target file that exists
         let mut analyses = Vec::new();
         for target in targets {
@@ -90,15 +89,15 @@ impl PipelineStage for CodeAnalyzer {
                     Ok(analysis) => analyses.push(analysis),
                     Err(e) => {
                         context.add_warning(format!(
-                            "Failed to analyze {}: {}", 
-                            target.display(), 
+                            "Failed to analyze {}: {}",
+                            target.display(),
                             e
                         ));
                     }
                 }
             }
         }
-        
+
         // Store analysis results in context for later stages
         // In a real implementation, this would be stored in a more structured way
         if analyses.is_empty() {
@@ -106,7 +105,7 @@ impl PipelineStage for CodeAnalyzer {
         } else {
             tracing::debug!("Analyzed {} files", analyses.len());
         }
-        
+
         Ok(context)
     }
 }
@@ -153,10 +152,10 @@ impl LanguageParser for RustParser {
             imports: Vec::new(),
             exports: Vec::new(),
         };
-        
+
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();
-            
+
             // Parse functions
             if trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ") {
                 if let Some(name) = extract_function_name(trimmed) {
@@ -169,7 +168,7 @@ impl LanguageParser for RustParser {
                     });
                 }
             }
-            
+
             // Parse structs
             if trimmed.starts_with("struct ") || trimmed.starts_with("pub struct ") {
                 if let Some(name) = extract_struct_name(trimmed) {
@@ -180,13 +179,13 @@ impl LanguageParser for RustParser {
                     });
                 }
             }
-            
+
             // Parse imports
             if trimmed.starts_with("use ") {
                 analysis.imports.push(trimmed.to_string());
             }
         }
-        
+
         analysis
     }
 }
@@ -202,10 +201,10 @@ impl LanguageParser for PythonParser {
             imports: Vec::new(),
             exports: Vec::new(),
         };
-        
+
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();
-            
+
             if trimmed.starts_with("def ") {
                 if let Some(name) = extract_python_function_name(trimmed) {
                     analysis.functions.push(FunctionInfo {
@@ -217,7 +216,7 @@ impl LanguageParser for PythonParser {
                     });
                 }
             }
-            
+
             if trimmed.starts_with("class ") {
                 if let Some(name) = extract_python_class_name(trimmed) {
                     analysis.structs.push(StructInfo {
@@ -227,12 +226,12 @@ impl LanguageParser for PythonParser {
                     });
                 }
             }
-            
+
             if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
                 analysis.imports.push(trimmed.to_string());
             }
         }
-        
+
         analysis
     }
 }
@@ -268,7 +267,8 @@ impl LanguageParser for TypeScriptParser {
 // Helper functions for parsing
 fn extract_function_name(line: &str) -> Option<String> {
     let parts: Vec<&str> = line.split_whitespace().collect();
-    parts.iter()
+    parts
+        .iter()
         .position(|&p| p == "fn")
         .and_then(|i| parts.get(i + 1))
         .and_then(|&name| name.split('(').next())
@@ -277,16 +277,15 @@ fn extract_function_name(line: &str) -> Option<String> {
 
 fn extract_struct_name(line: &str) -> Option<String> {
     let parts: Vec<&str> = line.split_whitespace().collect();
-    parts.iter()
+    parts
+        .iter()
         .position(|&p| p == "struct")
         .and_then(|i| parts.get(i + 1))
         .map(|&s| s.trim_end_matches('{').to_string())
 }
 
 fn extract_python_function_name(line: &str) -> Option<String> {
-    line.strip_prefix("def ")
-        .and_then(|s| s.split('(').next())
-        .map(|s| s.trim().to_string())
+    line.strip_prefix("def ").and_then(|s| s.split('(').next()).map(|s| s.trim().to_string())
 }
 
 fn extract_python_class_name(line: &str) -> Option<String> {

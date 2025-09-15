@@ -1,19 +1,19 @@
-use std::path::PathBuf;
-use std::time::Duration;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::Duration;
 use uuid::Uuid;
-use anyhow::Result;
 
 use crate::incremental::Implementation;
 use crate::parser::model::Specification;
 use crate::validation::ValidationResult;
 
-use super::pattern_extractor::{PatternExtractor, Pattern};
-use super::success_tracker::{SuccessTracker, SuccessMetrics};
+use super::decision_improver::{DecisionHistory, DecisionImprover};
 use super::failure_analyzer::{FailureAnalyzer, FailureCause};
 use super::knowledge_base::{KnowledgeBase, KnowledgeExport};
-use super::decision_improver::{DecisionImprover, DecisionHistory};
+use super::pattern_extractor::{Pattern, PatternExtractor};
+use super::success_tracker::{SuccessMetrics, SuccessTracker};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LearningSystem {
@@ -136,7 +136,7 @@ pub struct EventContext {
 impl LearningSystem {
     pub fn new(config: LearningConfig) -> Self {
         let export_path = config.export_path.clone();
-        
+
         Self {
             knowledge_base: KnowledgeBase::new(export_path.clone()),
             pattern_extractor: PatternExtractor::new(),
@@ -153,12 +153,12 @@ impl LearningSystem {
         if self.config.import_on_startup {
             self.import_knowledge().await?;
         }
-        
+
         tracing::info!(
             "Learning system initialized with {} patterns",
             self.knowledge_base.pattern_count()
         );
-        
+
         Ok(())
     }
 
@@ -168,7 +168,7 @@ impl LearningSystem {
         }
 
         tracing::debug!("Processing learning event: {:?}", event.event_type);
-        
+
         match event.event_type {
             LearningEventType::ImplementationSuccess => {
                 self.handle_success(event).await?;
@@ -194,7 +194,7 @@ impl LearningSystem {
         }
 
         self.update_metrics();
-        
+
         if self.should_export() {
             self.export_knowledge().await?;
         }
@@ -207,10 +207,7 @@ impl LearningSystem {
         self.success_tracker.track_success(event.clone(), success_metrics);
 
         if let Some(implementation) = &event.implementation {
-            let patterns = self.pattern_extractor.extract_patterns(
-                implementation,
-                &event.context,
-            );
+            let patterns = self.pattern_extractor.extract_patterns(implementation, &event.context);
 
             for pattern in patterns {
                 if pattern.quality_score() > self.config.min_pattern_quality {
@@ -221,13 +218,13 @@ impl LearningSystem {
         }
 
         self.decision_improver.improve_from_success(&event);
-        
+
         Ok(())
     }
 
     async fn handle_failure(&mut self, event: LearningEvent) -> Result<()> {
         let cause = self.failure_analyzer.analyze_failure(&event);
-        
+
         if let Some(anti_pattern) = self.failure_analyzer.extract_anti_pattern(&event, &cause) {
             self.knowledge_base.add_anti_pattern(anti_pattern)?;
             self.metrics.anti_patterns_identified += 1;
@@ -256,10 +253,7 @@ impl LearningSystem {
 
     async fn add_pattern(&mut self, event: LearningEvent) -> Result<()> {
         if let Some(implementation) = &event.implementation {
-            let patterns = self.pattern_extractor.extract_patterns(
-                implementation,
-                &event.context,
-            );
+            let patterns = self.pattern_extractor.extract_patterns(implementation, &event.context);
 
             for pattern in patterns {
                 if pattern.quality_score() > self.config.min_pattern_quality {
@@ -301,12 +295,13 @@ impl LearningSystem {
 
     pub fn suggest_implementation(&self, spec: &Specification) -> Option<Implementation> {
         let patterns = self.find_similar_patterns(spec);
-        
+
         if patterns.is_empty() {
             return None;
         }
 
-        let best_pattern = patterns.into_iter()
+        let best_pattern = patterns
+            .into_iter()
             .max_by(|a, b| a.success_rate.partial_cmp(&b.success_rate).unwrap())?;
 
         self.knowledge_base.apply_pattern(&best_pattern, spec)
@@ -321,7 +316,7 @@ impl LearningSystem {
         if self.metrics.success_rate_trend.len() > 100 {
             self.metrics.success_rate_trend.remove(0);
         }
-        
+
         let current_success_rate = self.success_tracker.get_success_rate();
         self.metrics.success_rate_trend.push(current_success_rate);
     }
@@ -330,12 +325,8 @@ impl LearningSystem {
         let pattern_usage = self.knowledge_base.get_usage_stats();
         let total_implementations = pattern_usage.total_uses as f32;
         let pattern_based = pattern_usage.pattern_hits as f32;
-        
-        if total_implementations > 0.0 {
-            pattern_based / total_implementations
-        } else {
-            0.0
-        }
+
+        if total_implementations > 0.0 { pattern_based / total_implementations } else { 0.0 }
     }
 
     fn should_export(&self) -> bool {
@@ -345,18 +336,18 @@ impl LearningSystem {
     pub async fn export_knowledge(&self) -> Result<()> {
         let export = self.knowledge_base.export()?;
         let export_path = self.config.export_path.join("knowledge_export.json");
-        
+
         std::fs::create_dir_all(&self.config.export_path)?;
         let json = serde_json::to_string_pretty(&export)?;
         tokio::fs::write(export_path, json).await?;
-        
+
         tracing::info!("Exported knowledge base with {} patterns", export.patterns.len());
         Ok(())
     }
 
     pub async fn import_knowledge(&mut self) -> Result<()> {
         let import_path = self.config.export_path.join("knowledge_export.json");
-        
+
         if !import_path.exists() {
             tracing::debug!("No knowledge export found at {:?}", import_path);
             return Ok(());
@@ -364,10 +355,13 @@ impl LearningSystem {
 
         let json = tokio::fs::read_to_string(import_path).await?;
         let export: KnowledgeExport = serde_json::from_str(&json)?;
-        
+
         self.knowledge_base.import(export)?;
-        
-        tracing::info!("Imported knowledge base with {} patterns", self.knowledge_base.pattern_count());
+
+        tracing::info!(
+            "Imported knowledge base with {} patterns",
+            self.knowledge_base.pattern_count()
+        );
         Ok(())
     }
 
@@ -390,11 +384,12 @@ impl LearningSystem {
         }
 
         let recent = &self.metrics.success_rate_trend[self.metrics.success_rate_trend.len() - 10..];
-        let older = &self.metrics.success_rate_trend[..10.min(self.metrics.success_rate_trend.len())];
-        
+        let older =
+            &self.metrics.success_rate_trend[..10.min(self.metrics.success_rate_trend.len())];
+
         let recent_avg: f32 = recent.iter().sum::<f32>() / recent.len() as f32;
         let older_avg: f32 = older.iter().sum::<f32>() / older.len() as f32;
-        
+
         recent_avg - older_avg
     }
 }
@@ -429,7 +424,7 @@ mod tests {
     async fn test_learning_system_initialization() {
         let config = LearningConfig::default();
         let mut system = LearningSystem::new(config);
-        
+
         assert!(system.initialize().await.is_ok());
         assert_eq!(system.metrics.patterns_learned, 0);
     }
@@ -438,7 +433,7 @@ mod tests {
     async fn test_process_success_event() {
         let config = LearningConfig::default();
         let mut system = LearningSystem::new(config);
-        
+
         let event = LearningEvent {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),

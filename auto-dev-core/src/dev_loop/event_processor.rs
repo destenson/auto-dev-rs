@@ -28,7 +28,7 @@ impl EventProcessor {
     /// Process a raw event
     pub async fn process(&self, mut event: Event) -> Result<Option<Event>> {
         trace!("Processing event: {:?}", event.id);
-        
+
         // Apply filters
         for filter in &self.event_filters {
             if !filter.should_process(&event).await? {
@@ -36,17 +36,21 @@ impl EventProcessor {
                 return Ok(None);
             }
         }
-        
+
         // Apply transformations
         for transformer in &self.event_transformers {
             event = transformer.transform(event).await?;
         }
-        
+
         Ok(Some(event))
     }
 
     /// Handle filesystem event
-    pub async fn handle_fs_event(&self, path: &Path, change_type: ChangeType) -> Result<Option<Event>> {
+    pub async fn handle_fs_event(
+        &self,
+        path: &Path,
+        change_type: ChangeType,
+    ) -> Result<Option<Event>> {
         let event_type = match change_type {
             ChangeType::Created | ChangeType::Modified => {
                 if path.extension().map_or(false, |ext| ext == "md") {
@@ -56,12 +60,12 @@ impl EventProcessor {
                 } else {
                     EventType::CodeModified
                 }
-            },
+            }
             ChangeType::Deleted => {
                 return Ok(None); // Ignore deletions for now
-            },
+            }
         };
-        
+
         let event = Event::new(event_type, path.to_path_buf());
         self.process(event).await
     }
@@ -94,9 +98,7 @@ struct DeduplicationFilter {
 
 impl DeduplicationFilter {
     fn new() -> Self {
-        Self {
-            recent_events: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self { recent_events: Arc::new(Mutex::new(HashMap::new())) }
     }
 }
 
@@ -104,16 +106,16 @@ impl DeduplicationFilter {
 impl EventFilter for DeduplicationFilter {
     async fn should_process(&self, event: &Event) -> Result<bool> {
         let mut recent = self.recent_events.lock().await;
-        
+
         let key = format!("{:?}:{}", event.event_type, event.source.display());
-        
+
         if let Some(last_seen) = recent.get(&key) {
             let elapsed = event.timestamp - *last_seen;
             if elapsed.num_milliseconds() < 500 {
                 return Ok(false); // Debounce
             }
         }
-        
+
         recent.insert(key, event.timestamp);
         Ok(true)
     }
@@ -126,9 +128,7 @@ struct RateLimitFilter {
 
 impl RateLimitFilter {
     fn new() -> Self {
-        Self {
-            rate_limits: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self { rate_limits: Arc::new(Mutex::new(HashMap::new())) }
     }
 }
 
@@ -136,11 +136,11 @@ impl RateLimitFilter {
 impl EventFilter for RateLimitFilter {
     async fn should_process(&self, event: &Event) -> Result<bool> {
         let mut limits = self.rate_limits.lock().await;
-        
+
         let limit = limits
             .entry(event.event_type.clone())
             .or_insert_with(|| RateLimit::new(10, Duration::from_secs(60)));
-        
+
         Ok(limit.check())
     }
 }
@@ -154,20 +154,16 @@ struct RateLimit {
 
 impl RateLimit {
     fn new(max_events: usize, window: Duration) -> Self {
-        Self {
-            max_events,
-            window,
-            events: Vec::new(),
-        }
+        Self { max_events, window, events: Vec::new() }
     }
-    
+
     fn check(&mut self) -> bool {
         let now = Utc::now();
         let cutoff = now - chrono::Duration::from_std(self.window).unwrap();
-        
+
         // Remove old events
         self.events.retain(|&e| e > cutoff);
-        
+
         if self.events.len() < self.max_events {
             self.events.push(now);
             true
@@ -200,7 +196,7 @@ impl EventTransformer for PriorityAssigner {
             EventType::HealthCheck => Priority::Background,
             EventType::UserCommand(_) => Priority::High,
         };
-        
+
         Ok(event)
     }
 }
@@ -226,7 +222,7 @@ impl EventTransformer for MetadataEnricher {
                 );
             }
         }
-        
+
         // Add file extension
         if let Some(ext) = event.source.extension() {
             event.metadata.insert(
@@ -234,14 +230,14 @@ impl EventTransformer for MetadataEnricher {
                 serde_json::Value::String(ext.to_string_lossy().to_string()),
             );
         }
-        
+
         Ok(event)
     }
 }
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
 
 #[cfg(test)]
 mod tests {
@@ -250,15 +246,12 @@ mod tests {
     #[tokio::test]
     async fn test_event_processor() {
         let processor = EventProcessor::new();
-        
-        let event = Event::new(
-            EventType::SpecificationChanged,
-            PathBuf::from("test.md"),
-        );
-        
+
+        let event = Event::new(EventType::SpecificationChanged, PathBuf::from("test.md"));
+
         let processed = processor.process(event).await.unwrap();
         assert!(processed.is_some());
-        
+
         if let Some(event) = processed {
             // Priority should be assigned
             assert_eq!(event.priority, Priority::High);
@@ -268,18 +261,15 @@ mod tests {
     #[tokio::test]
     async fn test_deduplication() {
         let filter = DeduplicationFilter::new();
-        
-        let event = Event::new(
-            EventType::CodeModified,
-            PathBuf::from("test.rs"),
-        );
-        
+
+        let event = Event::new(EventType::CodeModified, PathBuf::from("test.rs"));
+
         // First event should pass
         assert!(filter.should_process(&event).await.unwrap());
-        
+
         // Immediate duplicate should be filtered
         assert!(!filter.should_process(&event).await.unwrap());
-        
+
         // After delay, should pass again
         tokio::time::sleep(Duration::from_millis(600)).await;
         assert!(filter.should_process(&event).await.unwrap());

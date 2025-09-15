@@ -1,7 +1,7 @@
 //! Tiny model implementation using Ollama or similar local servers
 
 use super::{ClassificationResult, QuestionType, TinyModel, TinyModelConfig};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -14,10 +14,9 @@ pub struct OllamaTinyModel {
 impl OllamaTinyModel {
     /// Create a new Ollama tiny model instance
     pub fn new(config: TinyModelConfig) -> Result<Self> {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
-            .build()?;
-        
+        let client =
+            reqwest::Client::builder().timeout(Duration::from_secs(config.timeout_secs)).build()?;
+
         Ok(Self { config, client })
     }
 
@@ -33,7 +32,8 @@ impl OllamaTinyModel {
             },
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/api/generate", self.config.host))
             .json(&request)
             .send()
@@ -41,14 +41,11 @@ impl OllamaTinyModel {
             .context("Failed to send request to Ollama")?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Ollama request failed: {}",
-                response.status()
-            ));
+            return Err(anyhow::anyhow!("Ollama request failed: {}", response.status()));
         }
 
-        let result: OllamaResponse = response.json().await
-            .context("Failed to parse Ollama response")?;
+        let result: OllamaResponse =
+            response.json().await.context("Failed to parse Ollama response")?;
 
         Ok(result.response)
     }
@@ -59,21 +56,18 @@ impl TinyModel for OllamaTinyModel {
     async fn is_code(&self, content: &str) -> Result<bool> {
         // Take first 500 chars to keep prompt small
         let sample = &content[..content.len().min(500)];
-        
-        let prompt = format!(
-            "Is this code? Answer only 'yes' or 'no'.\n\n{}",
-            sample
-        );
+
+        let prompt = format!("Is this code? Answer only 'yes' or 'no'.\n\n{}", sample);
 
         let response = self.prompt(&prompt).await?;
         let answer = response.trim().to_lowercase();
-        
+
         Ok(answer.contains("yes"))
     }
 
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         let sample = &content[..content.len().min(500)];
-        
+
         let prompt = format!(
             "Classify this content. Answer in JSON format:\n\
             {{\"is_code\": bool, \"is_doc\": bool, \"is_test\": bool, \"is_config\": bool, \"language\": \"name or null\"}}\n\n\
@@ -82,7 +76,7 @@ impl TinyModel for OllamaTinyModel {
         );
 
         let response = self.prompt(&prompt).await?;
-        
+
         // Try to parse JSON response
         if let Ok(parsed) = serde_json::from_str::<SimpleClassification>(&response) {
             return Ok(ClassificationResult {
@@ -129,15 +123,12 @@ impl TinyModel for OllamaTinyModel {
     async fn simple_answer(&self, question: &str) -> Result<Option<String>> {
         // Only answer if it's a simple question
         let q_type = self.classify_question(question).await?;
-        
+
         if q_type == QuestionType::Complex {
             return Ok(None);
         }
 
-        let prompt = format!(
-            "Answer this simple question in one sentence:\n{}",
-            question
-        );
+        let prompt = format!("Answer this simple question in one sentence:\n{}", question);
 
         let response = self.prompt(&prompt).await?;
         Ok(Some(response.trim().to_string()))
@@ -145,7 +136,7 @@ impl TinyModel for OllamaTinyModel {
 
     async fn check_requirement(&self, requirement: &str, code: &str) -> Result<bool> {
         let code_sample = &code[..code.len().min(500)];
-        
+
         let prompt = format!(
             "Does this code satisfy the requirement? Answer 'yes' or 'no'.\n\n\
             Requirement: {}\n\n\

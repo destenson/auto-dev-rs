@@ -4,11 +4,11 @@
 //! Many providers offer OpenAI-compatible APIs with different base URLs
 
 use super::{
-    provider::*,
-    openai::{extract_code_files, ChatMessage, ChatCompletionRequest, ChatCompletionResponse},
     ClassificationResult,
+    openai::{ChatCompletionRequest, ChatCompletionResponse, ChatMessage, extract_code_files},
+    provider::*,
 };
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -23,20 +23,14 @@ pub struct OpenAICompatProvider {
 
 impl OpenAICompatProvider {
     pub fn new(config: OpenAICompatConfig) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
-            .build()?;
-        
+        let client = Client::builder().timeout(Duration::from_secs(config.timeout_secs)).build()?;
+
         // Determine tier based on provider and model
         let model_tier = Self::determine_tier(&config.provider, &config.model);
-        
-        Ok(Self {
-            client,
-            config,
-            model_tier,
-        })
+
+        Ok(Self { client, config, model_tier })
     }
-    
+
     /// Create a Groq provider
     pub fn groq(model: String, api_key_env: String) -> Result<Self> {
         let config = OpenAICompatConfig {
@@ -52,7 +46,7 @@ impl OpenAICompatProvider {
         };
         Self::new(config)
     }
-    
+
     /// Create a Lambda Labs provider
     pub fn lambda_labs(model: String, api_key_env: String) -> Result<Self> {
         let config = OpenAICompatConfig {
@@ -68,7 +62,7 @@ impl OpenAICompatProvider {
         };
         Self::new(config)
     }
-    
+
     /// Create a Together AI provider
     pub fn together(model: String, api_key_env: String) -> Result<Self> {
         let config = OpenAICompatConfig {
@@ -84,7 +78,7 @@ impl OpenAICompatProvider {
         };
         Self::new(config)
     }
-    
+
     /// Create a Perplexity provider
     pub fn perplexity(model: String, api_key_env: String) -> Result<Self> {
         let config = OpenAICompatConfig {
@@ -100,15 +94,15 @@ impl OpenAICompatProvider {
         };
         Self::new(config)
     }
-    
+
     /// Create a custom OpenAI-compatible provider
     pub fn custom(config: OpenAICompatConfig) -> Result<Self> {
         Self::new(config)
     }
-    
+
     fn determine_tier(provider: &str, model: &str) -> ModelTier {
         let model_lower = model.to_lowercase();
-        
+
         // Groq models
         if provider == "groq" {
             if model_lower.contains("mixtral-8x7b") || model_lower.contains("gemma-7b") {
@@ -119,14 +113,14 @@ impl OpenAICompatProvider {
                 return ModelTier::Small;
             }
         }
-        
+
         // Lambda Labs models
         if provider == "lambda" {
             if model_lower.contains("hermes-3-llama-3.1-405b") {
                 return ModelTier::Large;
             }
         }
-        
+
         // Together AI models
         if provider == "together" {
             if model_lower.contains("qwen") && model_lower.contains("0.5b") {
@@ -139,58 +133,75 @@ impl OpenAICompatProvider {
                 return ModelTier::Large;
             }
         }
-        
+
         // Generic size detection
-        if model_lower.contains("0.5b") || model_lower.contains("1b") || model_lower.contains("tiny") {
+        if model_lower.contains("0.5b")
+            || model_lower.contains("1b")
+            || model_lower.contains("tiny")
+        {
             ModelTier::Tiny
-        } else if model_lower.contains("7b") || model_lower.contains("8b") || model_lower.contains("small") {
+        } else if model_lower.contains("7b")
+            || model_lower.contains("8b")
+            || model_lower.contains("small")
+        {
             ModelTier::Small
-        } else if model_lower.contains("70b") || model_lower.contains("34b") || model_lower.contains("medium") {
+        } else if model_lower.contains("70b")
+            || model_lower.contains("34b")
+            || model_lower.contains("medium")
+        {
             ModelTier::Medium
-        } else if model_lower.contains("405b") || model_lower.contains("175b") || model_lower.contains("large") {
+        } else if model_lower.contains("405b")
+            || model_lower.contains("175b")
+            || model_lower.contains("large")
+        {
             ModelTier::Large
         } else {
             ModelTier::Medium // Default
         }
     }
-    
+
     async fn chat_completion(&self, messages: Vec<ChatMessage>) -> Result<String> {
         let api_key = std::env::var(&self.config.api_key_env)
             .context(format!("{} API key not found", self.config.provider))?;
-        
+
         let request = ChatCompletionRequest {
             model: self.config.model.clone(),
             messages,
             temperature: self.config.temperature,
             max_tokens: self.config.max_tokens,
         };
-        
-        let mut req = self.client
-            .post(format!("{}/chat/completions", self.config.base_url));
-        
+
+        let mut req = self.client.post(format!("{}/chat/completions", self.config.base_url));
+
         // Add authentication header
         if self.config.auth_prefix.is_empty() {
             req = req.header(&self.config.auth_header, api_key);
         } else {
-            req = req.header(&self.config.auth_header, 
-                           format!("{} {}", self.config.auth_prefix, api_key));
+            req = req.header(
+                &self.config.auth_header,
+                format!("{} {}", self.config.auth_prefix, api_key),
+            );
         }
-        
+
         let response = req
             .json(&request)
             .send()
             .await
             .context(format!("Failed to send request to {}", self.config.provider))?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().await?;
             return Err(anyhow::anyhow!("{} API error: {}", self.config.provider, error_text));
         }
-        
-        let result: ChatCompletionResponse = response.json().await
+
+        let result: ChatCompletionResponse = response
+            .json()
+            .await
             .context(format!("Failed to parse {} response", self.config.provider))?;
-        
-        result.choices.first()
+
+        result
+            .choices
+            .first()
             .and_then(|c| Some(c.message.content.clone()))
             .ok_or_else(|| anyhow::anyhow!("No response from {}", self.config.provider))
     }
@@ -201,15 +212,15 @@ impl LLMProvider for OpenAICompatProvider {
     fn name(&self) -> &str {
         &self.config.provider
     }
-    
+
     fn tier(&self) -> ModelTier {
         self.model_tier
     }
-    
+
     async fn is_available(&self) -> bool {
         std::env::var(&self.config.api_key_env).is_ok()
     }
-    
+
     fn cost_per_1k_tokens(&self) -> f32 {
         // Rough estimates for different providers
         match self.config.provider.as_str() {
@@ -220,7 +231,7 @@ impl LLMProvider for OpenAICompatProvider {
             _ => 0.002,
         }
     }
-    
+
     async fn generate_code(
         &self,
         spec: &Specification,
@@ -232,7 +243,7 @@ impl LLMProvider for OpenAICompatProvider {
              that follows best practices and existing project patterns.",
             context.language
         );
-        
+
         let user_prompt = format!(
             "Project context:\n\
              - Language: {}\n\
@@ -247,23 +258,17 @@ impl LLMProvider for OpenAICompatProvider {
             spec.content,
             spec.requirements.join("\n")
         );
-        
+
         let messages = vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: system_prompt,
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: user_prompt,
-            },
+            ChatMessage { role: "system".to_string(), content: system_prompt },
+            ChatMessage { role: "user".to_string(), content: user_prompt },
         ];
-        
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Parse code blocks from response
         let files = extract_code_files(&response);
-        
+
         Ok(GeneratedCode {
             files,
             explanation: format!("Generated by {} ({})", self.config.provider, self.config.model),
@@ -273,7 +278,7 @@ impl LLMProvider for OpenAICompatProvider {
             cached: false,
         })
     }
-    
+
     async fn explain_implementation(
         &self,
         code: &str,
@@ -285,16 +290,11 @@ impl LLMProvider for OpenAICompatProvider {
              Specification:\n{}",
             code, spec.content
         );
-        
-        let messages = vec![
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            },
-        ];
-        
+
+        let messages = vec![ChatMessage { role: "user".to_string(), content: prompt }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         Ok(Explanation {
             summary: response.clone(),
             details: vec![],
@@ -302,37 +302,29 @@ impl LLMProvider for OpenAICompatProvider {
             trade_offs: vec![],
         })
     }
-    
-    async fn review_code(
-        &self,
-        code: &str,
-        requirements: &[Requirement],
-    ) -> Result<ReviewResult> {
-        let req_list = requirements.iter()
+
+    async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
+        let req_list = requirements
+            .iter()
             .map(|r| format!("- {}: {}", r.id, r.description))
             .collect::<Vec<_>>()
             .join("\n");
-        
+
         let prompt = format!(
             "Review this code against the requirements:\n\n\
              Code:\n{}\n\n\
              Requirements:\n{}",
             code, req_list
         );
-        
-        let messages = vec![
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            },
-        ];
-        
+
+        let messages = vec![ChatMessage { role: "user".to_string(), content: prompt }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Simple parsing
-        let meets_requirements = !response.to_lowercase().contains("not met") && 
-                                !response.to_lowercase().contains("missing");
-        
+        let meets_requirements = !response.to_lowercase().contains("not met")
+            && !response.to_lowercase().contains("missing");
+
         Ok(ReviewResult {
             issues: vec![],
             suggestions: vec![response],
@@ -340,19 +332,15 @@ impl LLMProvider for OpenAICompatProvider {
             confidence: 0.75,
         })
     }
-    
+
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
-        let messages = vec![
-            ChatMessage {
-                role: "user".to_string(),
-                content: question.to_string(),
-            },
-        ];
-        
+        let messages =
+            vec![ChatMessage { role: "user".to_string(), content: question.to_string() }];
+
         let response = self.chat_completion(messages).await?;
         Ok(Some(response))
     }
-    
+
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         let prompt = format!(
             "Classify this content. Return JSON: \
@@ -361,16 +349,11 @@ impl LLMProvider for OpenAICompatProvider {
              Content:\n{}",
             &content[..content.len().min(500)]
         );
-        
-        let messages = vec![
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            },
-        ];
-        
+
+        let messages = vec![ChatMessage { role: "user".to_string(), content: prompt }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Try to parse JSON
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
             return Ok(ClassificationResult {
@@ -382,7 +365,7 @@ impl LLMProvider for OpenAICompatProvider {
                 confidence: 0.8,
             });
         }
-        
+
         // Fallback
         Ok(ClassificationResult {
             is_code: false,
@@ -393,7 +376,7 @@ impl LLMProvider for OpenAICompatProvider {
             confidence: 0.1,
         })
     }
-    
+
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         let prompt = format!(
             "Assess the complexity of this task. Answer with: \
@@ -401,17 +384,12 @@ impl LLMProvider for OpenAICompatProvider {
              Task: {}",
             task
         );
-        
-        let messages = vec![
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            },
-        ];
-        
+
+        let messages = vec![ChatMessage { role: "user".to_string(), content: prompt }];
+
         let response = self.chat_completion(messages).await?;
         let lower = response.to_lowercase();
-        
+
         let tier = if lower.contains("simple") {
             ModelTier::Tiny
         } else if lower.contains("moderate") {
@@ -421,7 +399,7 @@ impl LLMProvider for OpenAICompatProvider {
         } else {
             ModelTier::Medium
         };
-        
+
         Ok(TaskComplexity {
             tier,
             reasoning: response,
@@ -460,7 +438,7 @@ impl OpenAICompatConfig {
             auth_prefix: "Bearer".to_string(),
         }
     }
-    
+
     /// Create config for Lambda Labs
     pub fn lambda(model: &str) -> Self {
         Self {

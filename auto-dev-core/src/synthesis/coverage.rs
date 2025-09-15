@@ -1,8 +1,8 @@
 //! Specification coverage tracking
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
 
 /// Coverage report for specifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,20 +29,20 @@ impl CoverageReport {
             uncovered_items: Vec::new(),
         }
     }
-    
+
     /// Update coverage for a specification
     pub fn update_specification(&mut self, path: PathBuf, coverage: SpecificationCoverage) {
         self.specifications.insert(path, coverage);
         self.recalculate();
     }
-    
+
     /// Recalculate overall coverage metrics
     fn recalculate(&mut self) {
         if self.specifications.is_empty() {
             self.overall_coverage = 0.0;
             return;
         }
-        
+
         let mut total_reqs = 0;
         let mut covered_reqs = 0;
         let mut total_apis = 0;
@@ -51,9 +51,9 @@ impl CoverageReport {
         let mut covered_models = 0;
         let mut total_behaviors = 0;
         let mut covered_behaviors = 0;
-        
+
         self.uncovered_items.clear();
-        
+
         for (path, spec_coverage) in &self.specifications {
             total_reqs += spec_coverage.total_requirements;
             covered_reqs += spec_coverage.implemented_requirements;
@@ -63,7 +63,7 @@ impl CoverageReport {
             covered_models += spec_coverage.implemented_models;
             total_behaviors += spec_coverage.total_behaviors;
             covered_behaviors += spec_coverage.implemented_behaviors;
-            
+
             // Track uncovered items
             for req_id in &spec_coverage.uncovered_requirements {
                 self.uncovered_items.push(UncoveredItem {
@@ -72,7 +72,7 @@ impl CoverageReport {
                     item_id: req_id.clone(),
                 });
             }
-            
+
             for api_id in &spec_coverage.uncovered_apis {
                 self.uncovered_items.push(UncoveredItem {
                     spec_path: path.clone(),
@@ -81,41 +81,43 @@ impl CoverageReport {
                 });
             }
         }
-        
+
         // Calculate coverage percentages
-        self.requirements_coverage = if total_reqs > 0 {
-            (covered_reqs as f32 / total_reqs as f32) * 100.0
-        } else { 100.0 };
-        
-        self.api_coverage = if total_apis > 0 {
-            (covered_apis as f32 / total_apis as f32) * 100.0
-        } else { 100.0 };
-        
+        self.requirements_coverage =
+            if total_reqs > 0 { (covered_reqs as f32 / total_reqs as f32) * 100.0 } else { 100.0 };
+
+        self.api_coverage =
+            if total_apis > 0 { (covered_apis as f32 / total_apis as f32) * 100.0 } else { 100.0 };
+
         self.model_coverage = if total_models > 0 {
             (covered_models as f32 / total_models as f32) * 100.0
-        } else { 100.0 };
-        
+        } else {
+            100.0
+        };
+
         self.behavior_coverage = if total_behaviors > 0 {
             (covered_behaviors as f32 / total_behaviors as f32) * 100.0
-        } else { 100.0 };
-        
+        } else {
+            100.0
+        };
+
         // Overall coverage is weighted average
         let weights = [0.4, 0.3, 0.2, 0.1]; // requirements, apis, models, behaviors
-        self.overall_coverage = 
-            self.requirements_coverage * weights[0] +
-            self.api_coverage * weights[1] +
-            self.model_coverage * weights[2] +
-            self.behavior_coverage * weights[3];
+        self.overall_coverage = self.requirements_coverage * weights[0]
+            + self.api_coverage * weights[1]
+            + self.model_coverage * weights[2]
+            + self.behavior_coverage * weights[3];
     }
-    
+
     /// Check if coverage meets minimum threshold
     pub fn meets_threshold(&self, threshold: f32) -> bool {
         self.overall_coverage >= threshold
     }
-    
+
     /// Get priority uncovered items
     pub fn get_priority_items(&self, limit: usize) -> Vec<&UncoveredItem> {
-        self.uncovered_items.iter()
+        self.uncovered_items
+            .iter()
             .filter(|item| matches!(item.item_type, ItemType::Requirement))
             .take(limit)
             .collect()
@@ -157,39 +159,37 @@ impl SpecificationCoverage {
             uncovered_behaviors: HashSet::new(),
         }
     }
-    
+
     /// Calculate coverage percentage
     pub fn coverage_percentage(&self) -> f32 {
-        let total = self.total_requirements + self.total_apis + 
-                   self.total_models + self.total_behaviors;
-        let implemented = self.implemented_requirements + self.implemented_apis +
-                         self.implemented_models + self.implemented_behaviors;
-        
-        if total == 0 {
-            100.0
-        } else {
-            (implemented as f32 / total as f32) * 100.0
-        }
+        let total =
+            self.total_requirements + self.total_apis + self.total_models + self.total_behaviors;
+        let implemented = self.implemented_requirements
+            + self.implemented_apis
+            + self.implemented_models
+            + self.implemented_behaviors;
+
+        if total == 0 { 100.0 } else { (implemented as f32 / total as f32) * 100.0 }
     }
-    
+
     /// Mark a requirement as implemented
     pub fn mark_requirement_implemented(&mut self, req_id: &str) {
         self.uncovered_requirements.remove(req_id);
         self.implemented_requirements += 1;
     }
-    
+
     /// Mark an API as implemented
     pub fn mark_api_implemented(&mut self, api_id: &str) {
         self.uncovered_apis.remove(api_id);
         self.implemented_apis += 1;
     }
-    
+
     /// Mark a model as implemented
     pub fn mark_model_implemented(&mut self, model_id: &str) {
         self.uncovered_models.remove(model_id);
         self.implemented_models += 1;
     }
-    
+
     /// Mark a behavior as implemented
     pub fn mark_behavior_implemented(&mut self, behavior_id: &str) {
         self.uncovered_behaviors.remove(behavior_id);
@@ -232,7 +232,7 @@ pub enum ItemType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_coverage_calculation() {
         let mut coverage = SpecificationCoverage::new();
@@ -240,21 +240,21 @@ mod tests {
         coverage.implemented_requirements = 7;
         coverage.total_apis = 5;
         coverage.implemented_apis = 5;
-        
+
         let percentage = coverage.coverage_percentage();
         assert!((percentage - 80.0).abs() < 0.1);
     }
-    
+
     #[test]
     fn test_coverage_report() {
         let mut report = CoverageReport::new();
-        
+
         let mut spec_coverage = SpecificationCoverage::new();
         spec_coverage.total_requirements = 10;
         spec_coverage.implemented_requirements = 8;
-        
+
         report.update_specification(PathBuf::from("test.md"), spec_coverage);
-        
+
         assert!(report.requirements_coverage > 0.0);
         assert_eq!(report.uncovered_items.len(), 0);
     }

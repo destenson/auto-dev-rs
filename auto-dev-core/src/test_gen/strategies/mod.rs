@@ -1,14 +1,14 @@
 //! Test generation strategies for different types of tests
 
-pub mod unit;
+pub mod edge_case;
 pub mod integration;
 pub mod property;
-pub mod edge_case;
+pub mod unit;
 
-pub use unit::UnitTestStrategy;
+pub use edge_case::EdgeCaseStrategy;
 pub use integration::IntegrationTestStrategy;
 pub use property::PropertyTestStrategy;
-pub use edge_case::EdgeCaseStrategy;
+pub use unit::UnitTestStrategy;
 
 use crate::test_gen::{TestCase, TestType};
 use anyhow::Result;
@@ -17,10 +17,10 @@ use anyhow::Result;
 pub trait TestStrategy {
     /// Generate tests using this strategy
     fn generate(&self, context: &TestContext) -> Result<Vec<TestCase>>;
-    
+
     /// Get the test type this strategy generates
     fn test_type(&self) -> TestType;
-    
+
     /// Check if this strategy applies to the given context
     fn applies_to(&self, context: &TestContext) -> bool;
 }
@@ -63,12 +63,12 @@ impl TestContext {
             examples: Vec::new(),
         }
     }
-    
+
     pub fn with_parameter(mut self, param: ParameterInfo) -> Self {
         self.parameters.push(param);
         self
     }
-    
+
     pub fn with_return_type(mut self, return_type: impl Into<String>) -> Self {
         self.return_type = return_type.into();
         self
@@ -81,16 +81,16 @@ mod tests {
 
     #[test]
     fn test_context_creation() {
-        let context = TestContext::new("calculate_sum")
-            .with_return_type("i32")
-            .with_parameter(ParameterInfo {
+        let context = TestContext::new("calculate_sum").with_return_type("i32").with_parameter(
+            ParameterInfo {
                 name: "a".to_string(),
                 param_type: "i32".to_string(),
                 nullable: false,
                 default_value: None,
                 constraints: Vec::new(),
-            });
-        
+            },
+        );
+
         assert_eq!(context.function_name, "calculate_sum");
         assert_eq!(context.return_type, "i32");
         assert_eq!(context.parameters.len(), 1);

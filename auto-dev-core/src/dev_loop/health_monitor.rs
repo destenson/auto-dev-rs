@@ -26,16 +26,16 @@ impl HealthMonitor {
     pub async fn check_health(&self) -> Result<HealthStatus> {
         let mut metrics = self.metrics.write().await;
         metrics.update().await?;
-        
+
         let memory_usage = metrics.memory_usage;
         let cpu_usage = metrics.cpu_usage;
         let disk_space = metrics.disk_space;
         let error_rate = metrics.calculate_error_rate();
         let llm_quota = metrics.llm_quota;
-        
+
         let mut warnings = Vec::new();
         let mut is_healthy = true;
-        
+
         // Check memory
         if memory_usage > self.thresholds.memory_critical {
             warnings.push(format!("Critical: Memory usage at {:.1}%", memory_usage * 100.0));
@@ -43,7 +43,7 @@ impl HealthMonitor {
         } else if memory_usage > self.thresholds.memory_warning {
             warnings.push(format!("Warning: Memory usage at {:.1}%", memory_usage * 100.0));
         }
-        
+
         // Check CPU
         if cpu_usage > self.thresholds.cpu_critical {
             warnings.push(format!("Critical: CPU usage at {:.1}%", cpu_usage * 100.0));
@@ -51,21 +51,22 @@ impl HealthMonitor {
         } else if cpu_usage > self.thresholds.cpu_warning {
             warnings.push(format!("Warning: CPU usage at {:.1}%", cpu_usage * 100.0));
         }
-        
+
         // Check disk space
         if disk_space < self.thresholds.disk_critical {
-            warnings.push(format!("Critical: Only {:.1}% disk space remaining", disk_space * 100.0));
+            warnings
+                .push(format!("Critical: Only {:.1}% disk space remaining", disk_space * 100.0));
             is_healthy = false;
         } else if disk_space < self.thresholds.disk_warning {
             warnings.push(format!("Warning: Only {:.1}% disk space remaining", disk_space * 100.0));
         }
-        
+
         // Check error rate
         if error_rate > self.thresholds.error_rate_critical {
             warnings.push(format!("Critical: Error rate at {:.1}%", error_rate * 100.0));
             is_healthy = false;
         }
-        
+
         // Check LLM quota
         if llm_quota < self.thresholds.llm_quota_critical {
             warnings.push(format!("Critical: LLM quota at {:.1}%", llm_quota * 100.0));
@@ -73,7 +74,7 @@ impl HealthMonitor {
         } else if llm_quota < self.thresholds.llm_quota_warning {
             warnings.push(format!("Warning: LLM quota at {:.1}%", llm_quota * 100.0));
         }
-        
+
         let status = HealthStatus {
             memory_usage,
             cpu_usage,
@@ -83,11 +84,11 @@ impl HealthMonitor {
             is_healthy,
             warnings: warnings.clone(),
         };
-        
+
         if !warnings.is_empty() {
             debug!("Health check warnings: {:?}", warnings);
         }
-        
+
         Ok(status)
     }
 
@@ -96,38 +97,38 @@ impl HealthMonitor {
         if !status.is_healthy {
             warn!("Taking corrective action for unhealthy system");
         }
-        
+
         // Memory issues
         if status.memory_usage > self.thresholds.memory_critical {
             info!("Triggering garbage collection due to high memory usage");
             self.trigger_gc().await?;
             self.clear_caches().await?;
         }
-        
+
         // CPU issues
         if status.cpu_usage > self.thresholds.cpu_critical {
             info!("Reducing concurrent tasks due to high CPU usage");
             self.reduce_concurrency().await?;
         }
-        
+
         // Disk space issues
         if status.disk_space < self.thresholds.disk_critical {
             info!("Cleaning up temporary files due to low disk space");
             self.cleanup_temp_files().await?;
         }
-        
+
         // Error rate issues
         if status.error_rate > self.thresholds.error_rate_critical {
             warn!("Entering safe mode due to high error rate");
             self.enter_safe_mode().await?;
         }
-        
+
         // LLM quota issues
         if status.llm_quota < self.thresholds.llm_quota_critical {
             info!("Switching to local model due to low LLM quota");
             self.switch_to_local_model().await?;
         }
-        
+
         Ok(())
     }
 
@@ -277,7 +278,7 @@ impl SystemMetrics {
         self.failed_operations += 1;
         self.total_operations += 1;
         self.recent_errors.push((Utc::now(), error.to_string()));
-        
+
         // Keep only recent errors (last 100)
         if self.recent_errors.len() > 100 {
             self.recent_errors.remove(0);
@@ -307,29 +308,29 @@ impl RecoveryManager {
     /// Recover from error
     pub async fn recover_from_error(&self, error: &anyhow::Error) -> Result<()> {
         let severity = self.assess_severity(error);
-        
+
         match severity {
             Severity::Critical => {
                 error!("Critical error: {}", error);
                 self.rollback_to_checkpoint().await?
-            },
+            }
             Severity::Major => {
                 warn!("Major error: {}", error);
                 self.retry_with_backoff().await?
-            },
+            }
             Severity::Minor => {
                 debug!("Minor error: {}", error);
                 // Continue operation
-            },
+            }
         }
-        
+
         Ok(())
     }
 
     /// Assess error severity
     fn assess_severity(&self, error: &anyhow::Error) -> Severity {
         let error_str = error.to_string();
-        
+
         if error_str.contains("panic") || error_str.contains("fatal") {
             Severity::Critical
         } else if error_str.contains("failed") || error_str.contains("error") {
@@ -342,14 +343,14 @@ impl RecoveryManager {
     /// Rollback to last checkpoint
     async fn rollback_to_checkpoint(&self) -> Result<()> {
         let checkpoints = self.checkpoints.read().await;
-        
+
         if let Some(checkpoint) = checkpoints.last() {
             info!("Rolling back to checkpoint: {}", checkpoint.id);
             // Would restore state from checkpoint
         } else {
             warn!("No checkpoint available for rollback");
         }
-        
+
         Ok(())
     }
 
@@ -363,18 +364,18 @@ impl RecoveryManager {
     /// Create checkpoint
     pub async fn create_checkpoint(&self, id: String) -> Result<()> {
         let mut checkpoints = self.checkpoints.write().await;
-        
+
         checkpoints.push(Checkpoint {
             id,
             timestamp: Utc::now(),
             state: vec![], // Would capture actual state
         });
-        
+
         // Keep only last 10 checkpoints
         if checkpoints.len() > 10 {
             checkpoints.remove(0);
         }
-        
+
         Ok(())
     }
 }
@@ -397,11 +398,7 @@ struct RetryConfig {
 
 impl Default for RetryConfig {
     fn default() -> Self {
-        Self {
-            max_retries: 3,
-            backoff_multiplier: 2.0,
-            max_backoff: Duration::from_secs(60),
-        }
+        Self { max_retries: 3, backoff_multiplier: 2.0, max_backoff: Duration::from_secs(60) }
     }
 }
 
@@ -420,7 +417,7 @@ mod tests {
     #[tokio::test]
     async fn test_health_monitor() {
         let monitor = HealthMonitor::new();
-        
+
         let status = monitor.check_health().await.unwrap();
         assert!(status.is_healthy);
         assert!(status.warnings.is_empty());
@@ -429,12 +426,12 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_tracking() {
         let monitor = HealthMonitor::new();
-        
+
         // Record some operations
         monitor.record_success().await;
         monitor.record_success().await;
         monitor.record_error("Test error").await;
-        
+
         let metrics = monitor.metrics.read().await;
         assert_eq!(metrics.total_operations, 3);
         assert_eq!(metrics.failed_operations, 1);
@@ -444,10 +441,10 @@ mod tests {
     #[tokio::test]
     async fn test_recovery_manager() {
         let recovery = RecoveryManager::new();
-        
+
         // Create checkpoint
         recovery.create_checkpoint("test_checkpoint".to_string()).await.unwrap();
-        
+
         // Test error recovery
         let error = anyhow::anyhow!("Test error");
         recovery.recover_from_error(&error).await.unwrap();

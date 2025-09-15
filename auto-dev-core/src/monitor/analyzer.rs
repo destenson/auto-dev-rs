@@ -1,6 +1,6 @@
 //! Change impact analysis to determine what actions to take
 
-use crate::monitor::{FileCategory, FileChange, ChangeType};
+use crate::monitor::{ChangeType, FileCategory, FileChange};
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -26,34 +26,17 @@ pub enum ChangeImpact {
 #[derive(Debug, Clone)]
 pub enum ChangeAction {
     /// Update implementation to match specification
-    UpdateImplementation {
-        spec_file: PathBuf,
-        target_files: Vec<PathBuf>,
-    },
+    UpdateImplementation { spec_file: PathBuf, target_files: Vec<PathBuf> },
     /// Generate code to pass new test
-    ImplementTest {
-        test_file: PathBuf,
-        target_module: Option<PathBuf>,
-    },
+    ImplementTest { test_file: PathBuf, target_module: Option<PathBuf> },
     /// Update documentation
-    UpdateDocumentation {
-        doc_file: PathBuf,
-        related_code: Vec<PathBuf>,
-    },
+    UpdateDocumentation { doc_file: PathBuf, related_code: Vec<PathBuf> },
     /// Regenerate code from schema
-    RegenerateFromSchema {
-        schema_file: PathBuf,
-        generated_files: Vec<PathBuf>,
-    },
+    RegenerateFromSchema { schema_file: PathBuf, generated_files: Vec<PathBuf> },
     /// Create implementation from example
-    ImplementFromExample {
-        example_file: PathBuf,
-        target_location: PathBuf,
-    },
+    ImplementFromExample { example_file: PathBuf, target_location: PathBuf },
     /// Revalidate implementation
-    Revalidate {
-        changed_files: Vec<PathBuf>,
-    },
+    Revalidate { changed_files: Vec<PathBuf> },
 }
 
 /// Analyzes file changes to determine their impact
@@ -184,9 +167,7 @@ impl ChangeAnalyzer {
             }
             FileCategory::Implementation | FileCategory::Configuration => {
                 // Revalidate after changes
-                actions.push(ChangeAction::Revalidate {
-                    changed_files: vec![change.path.clone()],
-                });
+                actions.push(ChangeAction::Revalidate { changed_files: vec![change.path.clone()] });
             }
             _ => {}
         }
@@ -196,26 +177,17 @@ impl ChangeAnalyzer {
 
     /// Add a dependency relationship between files
     pub fn add_dependency(&self, file: PathBuf, depends_on: PathBuf) {
-        self.dependencies
-            .entry(file)
-            .or_insert_with(HashSet::new)
-            .insert(depends_on);
+        self.dependencies.entry(file).or_insert_with(HashSet::new).insert(depends_on);
     }
 
     /// Link a specification to implementation files
     pub fn link_spec_to_impl(&self, spec: PathBuf, impl_file: PathBuf) {
-        self.spec_to_impl
-            .entry(spec)
-            .or_insert_with(HashSet::new)
-            .insert(impl_file);
+        self.spec_to_impl.entry(spec).or_insert_with(HashSet::new).insert(impl_file);
     }
 
     /// Link a test to implementation files
     pub fn link_test_to_impl(&self, test: PathBuf, impl_file: PathBuf) {
-        self.test_to_impl
-            .entry(test)
-            .or_insert_with(HashSet::new)
-            .insert(impl_file);
+        self.test_to_impl.entry(test).or_insert_with(HashSet::new).insert(impl_file);
     }
 
     /// Get implementation files related to a specification
@@ -231,12 +203,13 @@ impl ChangeAnalyzer {
         // Simple heuristic: if doc is named after a module, find that module
         if let Some(stem) = doc_path.file_stem() {
             let stem_str = stem.to_string_lossy().to_lowercase();
-            
+
             // Look for matching implementation files
             let mut related = Vec::new();
             for entry in self.dependencies.iter() {
                 let path = entry.key();
-                if path.file_stem()
+                if path
+                    .file_stem()
                     .map(|s| s.to_string_lossy().to_lowercase() == stem_str)
                     .unwrap_or(false)
                 {
@@ -253,14 +226,14 @@ impl ChangeAnalyzer {
         // This would be populated by the code generation system
         // For now, use a simple heuristic
         let mut generated = Vec::new();
-        
+
         if let Some(stem) = schema_path.file_stem() {
             let base_name = stem.to_string_lossy();
             // Common patterns for generated files
             generated.push(PathBuf::from(format!("src/generated/{}_types.rs", base_name)));
             generated.push(PathBuf::from(format!("src/generated/{}_client.rs", base_name)));
         }
-        
+
         generated
     }
 
@@ -269,7 +242,7 @@ impl ChangeAnalyzer {
         // Remove _test suffix or test_ prefix to find target
         if let Some(stem) = test_path.file_stem() {
             let stem_str = stem.to_string_lossy();
-            
+
             let target_name = if stem_str.ends_with("_test") {
                 stem_str.trim_end_matches("_test")
             } else if stem_str.starts_with("test_") {
@@ -277,29 +250,28 @@ impl ChangeAnalyzer {
             } else {
                 return None;
             };
-            
+
             // Look for matching implementation file
             let target_path = test_path.with_file_name(format!("{}.rs", target_name));
             if target_path.exists() {
                 return Some(target_path);
             }
-            
+
             // Try in src directory
             let src_path = PathBuf::from("src").join(format!("{}.rs", target_name));
             if src_path.exists() {
                 return Some(src_path);
             }
         }
-        
+
         None
     }
 
     /// Infer target location from example file
     fn infer_target_from_example(&self, example_path: &Path) -> PathBuf {
         // Place implementation in src/ with similar structure
-        let relative = example_path.strip_prefix("examples/")
-            .unwrap_or(example_path);
-        
+        let relative = example_path.strip_prefix("examples/").unwrap_or(example_path);
+
         PathBuf::from("src").join(relative)
     }
 
@@ -307,7 +279,7 @@ impl ChangeAnalyzer {
     pub fn get_cascade_effect(&self, changed_file: &Path) -> HashSet<PathBuf> {
         let mut affected = HashSet::new();
         let mut to_check = vec![changed_file.to_path_buf()];
-        
+
         while let Some(file) = to_check.pop() {
             // Find all files that depend on this file
             for entry in self.dependencies.iter() {
@@ -317,7 +289,7 @@ impl ChangeAnalyzer {
                 }
             }
         }
-        
+
         affected
     }
 }
@@ -331,51 +303,48 @@ mod tests {
     #[test]
     fn test_analyze_spec_change() {
         let analyzer = ChangeAnalyzer::new();
-        
+
         let change = FileChange {
             path: PathBuf::from("SPEC.md"),
             category: FileCategory::Specification,
             change_type: ChangeType::Modified,
             timestamp: SystemTime::now(),
         };
-        
+
         assert_eq!(analyzer.analyze(&change), ChangeImpact::Critical);
     }
 
     #[test]
     fn test_analyze_new_test() {
         let analyzer = ChangeAnalyzer::new();
-        
+
         let change = FileChange {
             path: PathBuf::from("auth_test.rs"),
             category: FileCategory::Test,
             change_type: ChangeType::Created,
             timestamp: SystemTime::now(),
         };
-        
+
         assert_eq!(analyzer.analyze(&change), ChangeImpact::Major);
     }
 
     #[test]
     fn test_determine_actions_for_spec() {
         let analyzer = ChangeAnalyzer::new();
-        
+
         // Link spec to implementation
-        analyzer.link_spec_to_impl(
-            PathBuf::from("specs/auth.md"),
-            PathBuf::from("src/auth.rs"),
-        );
-        
+        analyzer.link_spec_to_impl(PathBuf::from("specs/auth.md"), PathBuf::from("src/auth.rs"));
+
         let change = FileChange {
             path: PathBuf::from("specs/auth.md"),
             category: FileCategory::Specification,
             change_type: ChangeType::Modified,
             timestamp: SystemTime::now(),
         };
-        
+
         let actions = analyzer.determine_actions(&change);
         assert_eq!(actions.len(), 1);
-        
+
         match &actions[0] {
             ChangeAction::UpdateImplementation { spec_file, target_files } => {
                 assert_eq!(spec_file, &PathBuf::from("specs/auth.md"));
@@ -389,11 +358,11 @@ mod tests {
     #[test]
     fn test_cascade_effect() {
         let analyzer = ChangeAnalyzer::new();
-        
+
         // Set up dependencies: C depends on B, B depends on A
         analyzer.add_dependency(PathBuf::from("b.rs"), PathBuf::from("a.rs"));
         analyzer.add_dependency(PathBuf::from("c.rs"), PathBuf::from("b.rs"));
-        
+
         let affected = analyzer.get_cascade_effect(Path::new("a.rs"));
         assert_eq!(affected.len(), 2);
         assert!(affected.contains(&PathBuf::from("b.rs")));

@@ -3,11 +3,11 @@
 // Defines the trait that all modules must implement, along with
 // versioning, capabilities, and state management interfaces.
 
-use std::collections::HashMap;
+use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// Version information for a module
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -20,12 +20,7 @@ pub struct ModuleVersion {
 
 impl ModuleVersion {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self {
-            major,
-            minor,
-            patch,
-            pre_release: None,
-        }
+        Self { major, minor, patch, pre_release: None }
     }
 
     pub fn is_compatible_with(&self, other: &ModuleVersion) -> bool {
@@ -63,11 +58,7 @@ pub struct ModuleState {
 
 impl ModuleState {
     pub fn new(version: ModuleVersion) -> Self {
-        Self {
-            version,
-            data: HashMap::new(),
-            timestamp: chrono::Utc::now(),
-        }
+        Self { version, data: HashMap::new(), timestamp: chrono::Utc::now() }
     }
 
     pub fn set(&mut self, key: String, value: Value) {
@@ -166,7 +157,7 @@ impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
             max_memory_bytes: 100 * 1024 * 1024, // 100MB
-            max_cpu_time_ms: 5000,                // 5 seconds
+            max_cpu_time_ms: 5000,               // 5 seconds
             max_file_handles: 10,
             allowed_paths: vec![],
             network_access: false,
@@ -192,10 +183,7 @@ mod tests {
     fn test_module_state() {
         let mut state = ModuleState::new(ModuleVersion::new(1, 0, 0));
         state.set("key".to_string(), Value::String("value".to_string()));
-        
-        assert_eq!(
-            state.get("key"),
-            Some(&Value::String("value".to_string()))
-        );
+
+        assert_eq!(state.get("key"), Some(&Value::String("value".to_string())));
     }
 }

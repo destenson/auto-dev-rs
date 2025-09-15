@@ -1,23 +1,23 @@
 //! Synthesis pipeline stages
 
 pub mod analyzer;
-pub mod planner;
 pub mod generator;
 pub mod merger;
+pub mod planner;
 pub mod validator;
 
-use super::{Result, ArchitectureDecision, Complexity};
+use super::{ArchitectureDecision, Complexity, Result};
 use crate::parser::model::Specification;
-use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// Pipeline stage trait that all stages must implement
 #[async_trait]
 pub trait PipelineStage: Send + Sync {
     /// Name of the stage
     fn name(&self) -> &'static str;
-    
+
     /// Execute the stage
     async fn execute(&self, context: PipelineContext) -> Result<PipelineContext>;
 }
@@ -53,27 +53,27 @@ impl PipelineContext {
             metadata: PipelineMetadata::new(),
         }
     }
-    
+
     /// Add a generated file
     pub fn add_generated_file(&mut self, path: PathBuf) {
         self.generated_files.push(path);
     }
-    
+
     /// Add a modified file
     pub fn add_modified_file(&mut self, path: PathBuf) {
         self.modified_files.push(path);
     }
-    
+
     /// Add a warning
     pub fn add_warning(&mut self, warning: String) {
         self.warnings.push(warning);
     }
-    
+
     /// Record a decision
     pub fn record_decision(&mut self, decision: ArchitectureDecision) {
         self.decisions.push(decision);
     }
-    
+
     /// Get current status
     pub fn get_status(&self) -> super::state::SpecificationStatus {
         super::state::SpecificationStatus {

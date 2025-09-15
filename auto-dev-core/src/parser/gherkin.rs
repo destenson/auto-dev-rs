@@ -1,7 +1,7 @@
 //! Gherkin/BDD scenario parser
 
-use gherkin::{Feature, Scenario, StepType, GherkinEnv};
 use anyhow::Result;
+use gherkin::{Feature, GherkinEnv, Scenario, StepType};
 use std::path::PathBuf;
 
 use crate::parser::model::*;
@@ -19,29 +19,29 @@ impl GherkinParser {
     /// Parse a Gherkin feature file
     pub fn parse(&self, content: &str) -> Result<Specification> {
         let mut spec = Specification::new(PathBuf::new());
-        
+
         // Parse the Gherkin content
         let env = GherkinEnv::default();
         let feature = Feature::parse(content, env)
             .map_err(|e| anyhow::anyhow!("Failed to parse Gherkin: {:?}", e))?;
-        
+
         // Extract feature-level information
         self.extract_feature_info(&mut spec, &feature)?;
-        
+
         // Extract scenarios as behavior specifications
         for scenario in &feature.scenarios {
             if let Some(behavior) = self.extract_behavior_spec(&feature, scenario)? {
                 spec.behaviors.push(behavior);
-                
+
                 // Also create a requirement from the scenario
                 let req = self.create_requirement_from_scenario(&feature, scenario);
                 spec.requirements.push(req);
             }
         }
-        
+
         // Extract acceptance criteria from scenarios
         self.extract_acceptance_criteria(&mut spec, &feature)?;
-        
+
         Ok(spec)
     }
 
@@ -58,9 +58,9 @@ impl GherkinParser {
             related: Vec::new(),
             tags: feature.tags.clone(),
         };
-        
+
         spec.requirements.push(feature_req);
-        
+
         Ok(())
     }
 
@@ -73,17 +73,17 @@ impl GherkinParser {
         let mut given_steps = Vec::new();
         let mut when_steps = Vec::new();
         let mut then_steps = Vec::new();
-        
+
         for step in &scenario.steps {
             let step_text = format!("{} {}", step.keyword.trim(), step.value);
-            
+
             match step.ty {
                 StepType::Given => given_steps.push(step_text),
                 StepType::When => when_steps.push(step_text),
                 StepType::Then => then_steps.push(step_text),
             }
         }
-        
+
         Ok(Some(BehaviorSpec {
             feature: feature.name.clone(),
             scenario: scenario.name.clone(),
@@ -101,13 +101,13 @@ impl GherkinParser {
         scenario: &Scenario,
     ) -> Requirement {
         let id = format!("SCEN-{}", sanitize_id(&scenario.name));
-        
+
         // Build acceptance criteria from steps
         let mut acceptance_criteria = Vec::new();
         for step in &scenario.steps {
             acceptance_criteria.push(format!("{} {}", step.keyword.trim(), step.value));
         }
-        
+
         Requirement {
             id,
             description: scenario.name.clone(),
@@ -121,18 +121,22 @@ impl GherkinParser {
     }
 
     /// Extract acceptance criteria from all scenarios
-    fn extract_acceptance_criteria(&self, spec: &mut Specification, feature: &Feature) -> Result<()> {
+    fn extract_acceptance_criteria(
+        &self,
+        spec: &mut Specification,
+        feature: &Feature,
+    ) -> Result<()> {
         // Find the feature requirement and add acceptance criteria
-        if let Some(feature_req) = spec.requirements.iter_mut()
-            .find(|r| r.id == format!("FEAT-{}", sanitize_id(&feature.name))) 
+        if let Some(feature_req) = spec
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == format!("FEAT-{}", sanitize_id(&feature.name)))
         {
             for scenario in &feature.scenarios {
-                feature_req.acceptance_criteria.push(
-                    format!("Scenario: {}", scenario.name)
-                );
+                feature_req.acceptance_criteria.push(format!("Scenario: {}", scenario.name));
             }
         }
-        
+
         Ok(())
     }
 
@@ -205,24 +209,22 @@ mod tests {
     Then I should see an error message
     And I should remain on the login page
 "#;
-        
+
         let spec = parser.parse(gherkin).unwrap();
-        
+
         // Check that feature was extracted
         assert!(!spec.requirements.is_empty());
-        let feature_req = spec.requirements.iter()
-            .find(|r| r.id.starts_with("FEAT-"));
+        let feature_req = spec.requirements.iter().find(|r| r.id.starts_with("FEAT-"));
         assert!(feature_req.is_some());
-        
+
         // Check that scenarios were extracted as behaviors
         assert_eq!(spec.behaviors.len(), 2);
-        
+
         // Check that scenarios were also extracted as requirements
-        let scenario_reqs: Vec<_> = spec.requirements.iter()
-            .filter(|r| r.id.starts_with("SCEN-"))
-            .collect();
+        let scenario_reqs: Vec<_> =
+            spec.requirements.iter().filter(|r| r.id.starts_with("SCEN-")).collect();
         assert_eq!(scenario_reqs.len(), 2);
-        
+
         // Check behavior details
         let first_behavior = &spec.behaviors[0];
         assert_eq!(first_behavior.feature, "User Authentication");
@@ -231,10 +233,10 @@ mod tests {
         assert!(!first_behavior.when.is_empty());
         assert!(!first_behavior.then.is_empty());
         assert!(first_behavior.tags.contains(&"critical".to_string()));
-        
+
         // Check priority from tags
-        let critical_req = spec.requirements.iter()
-            .find(|r| r.tags.contains(&"critical".to_string()));
+        let critical_req =
+            spec.requirements.iter().find(|r| r.tags.contains(&"critical".to_string()));
         assert!(critical_req.is_some());
         assert_eq!(critical_req.unwrap().priority, Priority::Critical);
     }
@@ -249,7 +251,7 @@ mod tests {
     #[test]
     fn test_priority_from_tags() {
         let parser = GherkinParser::new();
-        
+
         assert_eq!(
             parser.determine_priority_from_tags(&vec!["critical".to_string()]),
             Priority::Critical

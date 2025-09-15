@@ -15,10 +15,33 @@ impl HeuristicClassifier {
     pub fn is_code(&self, content: &str) -> bool {
         // Common code indicators
         let code_patterns = [
-            "fn ", "def ", "class ", "struct ", "impl ", "interface ",
-            "function ", "const ", "let ", "var ", "import ", "export ",
-            "if (", "for (", "while (", "return ", "async ", "await ",
-            "{", "}", "()", "[]", "=>", "->", "::", "&&", "||",
+            "fn ",
+            "def ",
+            "class ",
+            "struct ",
+            "impl ",
+            "interface ",
+            "function ",
+            "const ",
+            "let ",
+            "var ",
+            "import ",
+            "export ",
+            "if (",
+            "for (",
+            "while (",
+            "return ",
+            "async ",
+            "await ",
+            "{",
+            "}",
+            "()",
+            "[]",
+            "=>",
+            "->",
+            "::",
+            "&&",
+            "||",
         ];
 
         let lines: Vec<&str> = content.lines().take(20).collect();
@@ -42,34 +65,30 @@ impl HeuristicClassifier {
     /// Classify content using heuristics
     pub fn classify_content(&self, content: &str) -> ClassificationResult {
         let lower = content.to_lowercase();
-        
+
         // Check for test indicators
-        let is_test = lower.contains("#[test]") || 
-                     lower.contains("describe(") || 
-                     lower.contains("it(") ||
-                     lower.contains("assert") ||
-                     lower.contains("expect(");
+        let is_test = lower.contains("#[test]")
+            || lower.contains("describe(")
+            || lower.contains("it(")
+            || lower.contains("assert")
+            || lower.contains("expect(");
 
         // Check for config files
-        let is_config = content.starts_with('{') || 
-                       content.starts_with('[') ||
-                       lower.contains("version = ") ||
-                       lower.contains("dependencies");
+        let is_config = content.starts_with('{')
+            || content.starts_with('[')
+            || lower.contains("version = ")
+            || lower.contains("dependencies");
 
         // Check for documentation
-        let is_doc = lower.contains("# ") || 
-                    lower.contains("## ") ||
-                    lower.contains("```") ||
-                    (lower.contains("todo") && !self.is_code(content));
+        let is_doc = lower.contains("# ")
+            || lower.contains("## ")
+            || lower.contains("```")
+            || (lower.contains("todo") && !self.is_code(content));
 
         let is_code = self.is_code(content);
 
         // Try to detect language
-        let language = if is_code {
-            self.detect_language(content)
-        } else {
-            None
-        };
+        let language = if is_code { self.detect_language(content) } else { None };
 
         ClassificationResult {
             is_code,
@@ -85,11 +104,49 @@ impl HeuristicClassifier {
     fn detect_language(&self, content: &str) -> Option<String> {
         let indicators = [
             ("rust", vec!["fn ", "impl ", "struct ", "trait ", "pub ", "use ", "mod ", "cargo"]),
-            ("python", vec!["def ", "import ", "from ", "class ", "if __name__", "pip ", "requirements.txt"]),
-            ("javascript", vec!["function ", "const ", "let ", "var ", "=>", "require(", "import ", "export "]),
-            ("typescript", vec!["interface ", "type ", ": string", ": number", ": boolean", "tsx", "ts"]),
-            ("java", vec!["public class", "private ", "protected ", "static void", "package ", "import java"]),
-            ("go", vec!["func ", "package main", "import (", "var ", "type ", "struct {", "interface{}"]),
+            (
+                "python",
+                vec![
+                    "def ",
+                    "import ",
+                    "from ",
+                    "class ",
+                    "if __name__",
+                    "pip ",
+                    "requirements.txt",
+                ],
+            ),
+            (
+                "javascript",
+                vec!["function ", "const ", "let ", "var ", "=>", "require(", "import ", "export "],
+            ),
+            (
+                "typescript",
+                vec!["interface ", "type ", ": string", ": number", ": boolean", "tsx", "ts"],
+            ),
+            (
+                "java",
+                vec![
+                    "public class",
+                    "private ",
+                    "protected ",
+                    "static void",
+                    "package ",
+                    "import java",
+                ],
+            ),
+            (
+                "go",
+                vec![
+                    "func ",
+                    "package main",
+                    "import (",
+                    "var ",
+                    "type ",
+                    "struct {",
+                    "interface{}",
+                ],
+            ),
             ("c", vec!["#include", "int main", "void ", "printf", "malloc", "typedef"]),
             ("cpp", vec!["#include", "std::", "template", "namespace", "cout", "class "]),
         ];
@@ -117,15 +174,25 @@ impl HeuristicClassifier {
     pub fn classify_question(&self, question: &str) -> QuestionType {
         let lower = question.to_lowercase();
 
-        if lower.starts_with("what is") || lower.starts_with("what are") ||
-           lower.starts_with("define") || lower.starts_with("explain what") {
+        if lower.starts_with("what is")
+            || lower.starts_with("what are")
+            || lower.starts_with("define")
+            || lower.starts_with("explain what")
+        {
             QuestionType::Definition
-        } else if lower.starts_with("is ") || lower.starts_with("are ") ||
-                  lower.starts_with("does ") || lower.starts_with("can ") ||
-                  lower.starts_with("should ") || lower.starts_with("will ") {
+        } else if lower.starts_with("is ")
+            || lower.starts_with("are ")
+            || lower.starts_with("does ")
+            || lower.starts_with("can ")
+            || lower.starts_with("should ")
+            || lower.starts_with("will ")
+        {
             QuestionType::YesNo
-        } else if lower.contains("what type") || lower.contains("what kind") ||
-                  lower.contains("classify") || lower.contains("categorize") {
+        } else if lower.contains("what type")
+            || lower.contains("what kind")
+            || lower.contains("classify")
+            || lower.contains("categorize")
+        {
             QuestionType::Classification
         } else if lower.len() < 50 && !lower.contains("how") && !lower.contains("why") {
             QuestionType::Simple
@@ -177,15 +244,9 @@ mod tests {
     fn test_question_classification() {
         let classifier = HeuristicClassifier::new();
 
-        assert_eq!(
-            classifier.classify_question("What is a socket?"),
-            QuestionType::Definition
-        );
+        assert_eq!(classifier.classify_question("What is a socket?"), QuestionType::Definition);
 
-        assert_eq!(
-            classifier.classify_question("Is this code valid?"),
-            QuestionType::YesNo
-        );
+        assert_eq!(classifier.classify_question("Is this code valid?"), QuestionType::YesNo);
 
         assert_eq!(
             classifier.classify_question("What type of file is this?"),
