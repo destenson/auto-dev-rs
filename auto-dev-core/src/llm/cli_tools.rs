@@ -14,14 +14,18 @@ pub struct ClaudeCLIProvider {
 
 impl ClaudeCLIProvider {
     pub async fn new() -> Self {
-        // Check if claude CLI is available
-        let available = Command::new("claude")
+        // Check if claude CLI is available - try .cmd version on Windows
+        let claude_cmd = if cfg!(windows) { "claude.cmd" } else { "claude" };
+        
+        let available = Command::new(claude_cmd)
             .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
+            .output()
             .await
-            .map(|s| s.success())
+            .map(|output| {
+                output.status.success() || 
+                !output.stdout.is_empty() || 
+                String::from_utf8_lossy(&output.stderr).contains("Claude")
+            })
             .unwrap_or(false);
         
         if available {
@@ -34,8 +38,10 @@ impl ClaudeCLIProvider {
     }
     
     async fn run_claude(&self, prompt: &str) -> Result<String> {
-        let output = Command::new("claude")
-            .arg("ask")
+        let claude_cmd = if cfg!(windows) { "claude.cmd" } else { "claude" };
+        
+        let output = Command::new(claude_cmd)
+            .arg("--print")
             .arg(prompt)
             .output()
             .await
@@ -199,9 +205,21 @@ Requirements:
 pub struct FabricProvider {
     available: bool,
     patterns: Vec<String>,
+    models: Vec<String>,
+    current_model: Option<String>,
 }
 
 impl FabricProvider {
+    /// Get list of available models
+    pub fn get_models(&self) -> &[String] {
+        &self.models
+    }
+    
+    /// Get current selected model
+    pub fn get_current_model(&self) -> Option<&String> {
+        self.current_model.as_ref()
+    }
+    
     pub async fn new() -> Self {
         // Check if fabric is available
         let available = Command::new("fabric")
@@ -214,13 +232,15 @@ impl FabricProvider {
             .unwrap_or(false);
         
         let mut patterns = Vec::new();
+        let mut models = Vec::new();
         
         if available {
-            debug!("Fabric CLI tool found, discovering patterns");
+            debug!("Fabric CLI tool found, discovering patterns and models");
             
             // Try to list available patterns
             if let Ok(output) = Command::new("fabric")
-                .arg("--list")
+                .arg("-l")
+                .stdin(Stdio::null())  // Don't wait for input
                 .output()
                 .await
             {
@@ -232,20 +252,58 @@ impl FabricProvider {
                 
                 debug!("Found {} Fabric patterns", patterns.len());
             }
+            
+            // Try to list available models
+            if let Ok(output) = Command::new("fabric")
+                .arg("-L")
+                .stdin(Stdio::null())  // Don't wait for input
+                .output()
+                .await
+            {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Parse model names from the output
+                // Format is: \t[number]\tmodel-name
+                models = stdout.lines()
+                    .filter(|line| line.starts_with("\t["))
+                    .filter_map(|line| {
+                        // Split by tab and get the third part (after \t[number]\t)
+                        line.split('\t')
+                            .nth(2)
+                            .map(|s| s.trim().to_string())
+                    })
+                    .collect();
+                
+                debug!("Found {} Fabric models", models.len());
+            }
         } else {
             debug!("Fabric CLI tool not found");
         }
         
-        Self { available, patterns }
+        // Default to a good model if available
+        let current_model = if models.contains(&"claude-3-5-sonnet-latest".to_string()) {
+            Some("claude-3-5-sonnet-latest".to_string())
+        } else if !models.is_empty() {
+            Some(models[0].clone())
+        } else {
+            None
+        };
+        
+        Self { available, patterns, models, current_model }
     }
     
     /// Run fabric with a specific pattern
     async fn run_fabric(&self, input: &str, pattern: &str) -> Result<String> {
-        let output = Command::new("fabric")
-            .arg("--pattern")
-            .arg(pattern)
-            .arg("--text")
-            .arg(input)
+        let mut cmd = Command::new("fabric");
+        cmd.arg("--pattern").arg(pattern);
+        
+        // Add model if specified
+        if let Some(model) = &self.current_model {
+            cmd.arg("--model").arg(model);
+        }
+        
+        cmd.arg("--text").arg(input);
+        
+        let output = cmd
             .output()
             .await
             .context("Failed to run fabric CLI")?;
@@ -256,6 +314,84 @@ impl FabricProvider {
         }
         
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+    
+    /// Select best model based on task complexity
+    pub fn select_model_for_tier(&mut self, tier: ModelTier) {
+        let model = match tier {
+            ModelTier::NoLLM => None, // No model needed for heuristics
+            ModelTier::Tiny => self.find_best_model_for_tier(tier),
+            ModelTier::Small => self.find_best_model_for_tier(tier),
+            ModelTier::Medium => self.find_best_model_for_tier(tier),
+            ModelTier::Large => self.find_best_model_for_tier(tier),
+        };
+        
+        if let Some(m) = model {
+            debug!("Selected model {} for tier {:?}", m, tier);
+            self.current_model = Some(m);
+        }
+    }
+    
+    /// Find best model for a given tier based on actual available models
+    fn find_best_model_for_tier(&self, tier: ModelTier) -> Option<String> {
+        // Categorize models by analyzing their names
+        let mut categorized: Vec<(String, ModelTier)> = Vec::new();
+        
+        for model in &self.models {
+            let model_lower = model.to_lowercase();
+            let detected_tier = if model_lower.contains("opus") || 
+                                   model_lower.contains("deepseek-v3") ||
+                                   model_lower.contains("deepseek-r1") ||
+                                   model_lower.contains("405b") ||
+                                   model_lower.contains("120b") {
+                ModelTier::Large
+            } else if model_lower.contains("70b") || 
+                      model_lower.contains("sonnet") ||
+                      model_lower.contains("32b") {
+                ModelTier::Medium
+            } else if model_lower.contains("haiku") || 
+                      model_lower.contains("8b") ||
+                      model_lower.contains("9b") ||
+                      model_lower.contains("7b") ||
+                      model_lower.contains("gemma") {
+                ModelTier::Small
+            } else if model_lower.contains("qwen") ||
+                      model_lower.contains("0.5b") ||
+                      model_lower.contains("whisper") {
+                ModelTier::Tiny
+            } else {
+                // Default based on common patterns
+                ModelTier::Medium
+            };
+            
+            categorized.push((model.clone(), detected_tier));
+        }
+        
+        // Find models matching the requested tier
+        let matching: Vec<String> = categorized
+            .iter()
+            .filter(|(_, t)| *t == tier)
+            .map(|(m, _)| m.clone())
+            .collect();
+        
+        // Prefer certain models if available
+        let preferences = match tier {
+            ModelTier::Large => vec!["claude-3-5-sonnet-latest", "claude-3-opus", "deepseek-v3"],
+            ModelTier::Medium => vec!["claude-3-5-sonnet", "llama-3.3-70b", "qwen3-32b"],
+            ModelTier::Small => vec!["claude-3-5-haiku", "llama-3.1-8b", "hermes3-8b"],
+            ModelTier::Tiny => vec!["qwen", "whisper"],
+            ModelTier::NoLLM => return None,
+        };
+        
+        // Try to find preferred model first
+        for pref in preferences {
+            if let Some(model) = matching.iter().find(|m| m.contains(pref)) {
+                return Some(model.clone());
+            }
+        }
+        
+        // Return first matching model if no preference found
+        matching.first().cloned()
     }
     
     /// Select the best pattern for a task
@@ -289,7 +425,20 @@ impl LLMProvider for FabricProvider {
     }
     
     fn tier(&self) -> ModelTier {
-        ModelTier::Medium // Fabric can use various models
+        // Determine tier based on current model
+        if let Some(model) = &self.current_model {
+            if model.contains("opus") || model.contains("deepseek-v3") {
+                ModelTier::Large
+            } else if model.contains("claude-3-5-sonnet") || model.contains("70b") {
+                ModelTier::Medium
+            } else if model.contains("haiku") || model.contains("8b") {
+                ModelTier::Small
+            } else {
+                ModelTier::Medium // Default
+            }
+        } else {
+            ModelTier::Medium
+        }
     }
     
     async fn is_available(&self) -> bool {
