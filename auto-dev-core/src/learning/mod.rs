@@ -4,8 +4,12 @@ pub mod success_tracker;
 pub mod failure_analyzer;
 pub mod knowledge_base;
 pub mod decision_improver;
+pub mod embeddings;
 
-pub use learner::{LearningSystem, LearningEvent, LearningEventType};
+#[cfg(test)]
+mod integration_tests;
+
+pub use learner::{LearningSystem, LearningEvent, LearningEventType, LearningConfig};
 pub use pattern_extractor::{PatternExtractor, Pattern, PatternContext};
 pub use success_tracker::{SuccessTracker, SuccessMetrics};
 pub use failure_analyzer::{FailureAnalyzer, FailureCause};
