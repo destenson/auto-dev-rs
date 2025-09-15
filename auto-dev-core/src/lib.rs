@@ -13,6 +13,7 @@ pub mod incremental;
 pub mod test_gen;
 pub mod validation;
 pub mod dev_loop;
+pub mod self_target;
 
 use serde::{Deserialize, Serialize};
 

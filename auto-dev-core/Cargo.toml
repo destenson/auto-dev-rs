@@ -49,6 +49,7 @@ quickcheck = "1.0.3"
 proptest = "1.7.0"
 priority-queue = "2.5.0"
 metrics = "0.24.2"
+cargo_metadata = "0.22.0"
 
 
 [dev-dependencies]

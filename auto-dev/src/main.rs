@@ -61,19 +61,19 @@ fn main() -> Result<()> {
             info!("Analyze command: {:?}", args);
             // Create async runtime for the command
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(cli::commands::analyze::execute(args.path))?;
+            runtime.block_on(cli::commands::analyze::execute(args.path, cli.target_self))?;
         }
         Commands::Loop(args) => {
             info!("Loop command: {:?}", args);
             // Create async runtime for the command
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(cli::commands::loop_control::execute(args))?;
+            runtime.block_on(cli::commands::loop_control::execute(args, cli.target_self))?;
         }
         Commands::Run | Commands::Start => {
             info!("Starting autonomous development loop");
             // Create async runtime for the command
             let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(cli::commands::loop_control::run_default())?;
+            runtime.block_on(cli::commands::loop_control::run_default(cli.target_self))?;
         }
         Commands::Init => {
             info!("Initializing auto-dev");

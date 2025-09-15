@@ -17,6 +17,10 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub config: Option<PathBuf>,
 
+    /// Target auto-dev-rs's own codebase for analysis
+    #[arg(long, global = true, help = "Use auto-dev-rs on its own codebase")]
+    pub target_self: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -1,0 +1,57 @@
+# Self-targeting configuration for auto-dev-rs
+# This file configures auto-dev-rs to analyze and improve its own codebase
+
+[project]
+path = "."
+name = "auto-dev-rs"
+workspace_root = "."
+version = "0.1.0"
+src_dirs = ["auto-dev-core/src", "auto-dev/src"]
+
+[monitor]
+# Paths to watch for changes
+watch = [
+    "src/**/*.rs",
+    "auto-dev-core/src/**/*.rs",
+    "auto-dev/src/**/*.rs", 
+    "PRPs/*.md",
+    "*.toml",
+    "README.md",
+    "TODO.md"
+]
+
+# Paths to exclude from watching
+exclude = [
+    "target/",
+    ".git/",
+    "*.bak",
+    ".auto-dev/cache/",
+    "**/*.swp"
+]
+
+# Debounce time in milliseconds
+debounce_ms = 1000
+
+[analyzer]
+language = "rust"
+workspace = true
+extensions = ["rs", "toml", "md"]
+
+[synthesis]
+target = "."
+safety_mode = "Strict"
+allow_destructive = false
+
+[safety]
+# Safety validations for self-targeting operations
+require_confirmation = true
+create_backups = true
+max_file_size = 1048576  # 1MB
+
+# Forbidden paths that should never be modified
+forbidden_paths = [
+    ".git",
+    "target",
+    "Cargo.lock",
+    ".auto-dev/cache"
+]

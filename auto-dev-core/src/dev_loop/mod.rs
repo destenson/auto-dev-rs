@@ -222,6 +222,7 @@ pub struct LoopConfig {
     pub health_check_interval: u64,
     pub llm_optimization: LLMOptimizationConfig,
     pub recovery: RecoveryConfig,
+    pub self_targeting: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,6 +258,7 @@ impl Default for LoopConfig {
                 backoff_multiplier: 2.0,
                 checkpoint_interval: 300,
             },
+            self_targeting: None,
         }
     }
 }

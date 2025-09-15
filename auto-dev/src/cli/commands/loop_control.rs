@@ -85,10 +85,10 @@ impl From<EventTypeArg> for EventType {
 }
 
 /// Execute loop command
-pub async fn execute(command: LoopCommand) -> Result<()> {
+pub async fn execute(command: LoopCommand, target_self: bool) -> Result<()> {
     match command.subcommand {
         LoopSubcommand::Start { config, background } => {
-            start_loop(config, background, 9090).await
+            start_loop(config, background, target_self, 9090).await
         },
         LoopSubcommand::Stop => {
             stop_loop().await
@@ -109,7 +109,7 @@ pub async fn execute(command: LoopCommand) -> Result<()> {
 }
 
 /// Start the development loop
-async fn start_loop(config_path: Option<PathBuf>, background: bool, port: u16) -> Result<()> {
+async fn start_loop(config_path: Option<PathBuf>, background: bool, target_self: bool, port: u16) -> Result<()> {
     info!("Starting autonomous development loop on port {}", port);
     
     // Check if already running
@@ -120,11 +120,21 @@ async fn start_loop(config_path: Option<PathBuf>, background: bool, port: u16) -
     }
     
     // Load configuration
-    let config = if let Some(path) = config_path {
+    let mut config = if let Some(path) = config_path {
         load_config(path).await?
     } else {
         LoopConfig::default()
     };
+    
+    // Apply self-targeting if requested
+    if target_self {
+        info!("Configuring for self-targeting mode");
+        config.self_targeting = Some(true);
+        
+        // Load self-targeting configuration
+        let self_config = auto_dev_core::self_target::SelfTargetConfig::load_or_create()?;
+        info!("Targeting project: {} v{}", self_config.project.name, self_config.project.version);
+    }
     
     if background {
         // Start in background
@@ -348,7 +358,7 @@ use serde_json;
 use toml;
 
 /// Run with default configuration (alias for 'loop start --background')
-pub async fn run_default() -> Result<()> {
+pub async fn run_default(target_self: bool) -> Result<()> {
     // Check for config file
     let config_path = PathBuf::from(".auto-dev/config.toml");
     let config = if config_path.exists() {
@@ -360,7 +370,7 @@ pub async fn run_default() -> Result<()> {
     };
     
     // Always start in background with default port
-    start_loop(config, true, 9090).await
+    start_loop(config, true, target_self, 9090).await
 }
 
 /// Initialize auto-dev project structure
