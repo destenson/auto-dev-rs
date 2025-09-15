@@ -113,3 +113,55 @@ port = 9090
 
 # Server bind address
 host = "127.0.0.1"
+
+# Parser configuration
+[parser]
+# Include TODO comments as specifications
+include_todos = false
+
+# TODO marker patterns to search for
+todo_patterns = ["TODO", "FIXME", "HACK", "XXX", "BUG", "NOTE"]
+
+# File types to scan for TODOs
+todo_file_types = ["*.rs", "*.md", "*.toml", "*.yml", "*.yaml"]
+
+# Priority mapping from markers to priority levels
+[parser.priority_mapping]
+FIXME = "High"
+BUG = "High"
+TODO = "Medium"
+XXX = "Medium"
+HACK = "Low"
+NOTE = "Low"
+
+# Dogfood configuration for self-development
+[dogfood]
+# Enable dogfood mode
+enabled = false
+
+# Safety mode for self-modification
+safety_mode = "strict"
+
+# Paths where modifications are allowed during self-development
+allow_paths = ["src/", "auto-dev-core/src/", "auto-dev/src/", "tests/", "docs/", "examples/"]
+
+# Critical paths that must never be modified
+deny_paths = ["Cargo.lock", ".git/", "target/", "models/", ".github/workflows/"]
+
+# Enable dry-run mode by default for safety
+dry_run_default = true
+
+# Require confirmation before applying changes
+require_confirmation = true
+
+# Enable automatic rollback on failure
+rollback_enabled = true
+
+# Backup directory for rollback
+backup_dir = ".auto-dev/backups"
+
+# Pre-validation commands
+pre_validation = ["cargo check", "cargo fmt --check"]
+
+# Post-validation commands  
+post_validation = ["cargo test", "cargo clippy"]

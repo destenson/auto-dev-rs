@@ -10,6 +10,7 @@ pub mod schema;
 pub mod openapi;
 pub mod gherkin;
 pub mod extractor;
+pub mod todo_extractor;
 
 use std::path::Path;
 use anyhow::Result;
@@ -20,6 +21,7 @@ use crate::parser::schema::SchemaParser;
 use crate::parser::openapi::OpenApiParser;
 use crate::parser::gherkin::GherkinParser;
 use crate::parser::extractor::RequirementExtractor;
+use crate::parser::todo_extractor::{TodoExtractor, TodoConfig};
 
 /// Main parser that orchestrates specification extraction
 pub struct SpecParser {
@@ -28,6 +30,7 @@ pub struct SpecParser {
     openapi_parser: OpenApiParser,
     gherkin_parser: GherkinParser,
     extractor: RequirementExtractor,
+    todo_extractor: TodoExtractor,
 }
 
 impl SpecParser {
@@ -39,6 +42,19 @@ impl SpecParser {
             openapi_parser: OpenApiParser::new(),
             gherkin_parser: GherkinParser::new(),
             extractor: RequirementExtractor::new(),
+            todo_extractor: TodoExtractor::new(),
+        }
+    }
+    
+    /// Create a new specification parser with custom TODO configuration
+    pub fn with_todo_config(todo_config: TodoConfig) -> Self {
+        Self {
+            markdown_parser: MarkdownParser::new(),
+            schema_parser: SchemaParser::new(),
+            openapi_parser: OpenApiParser::new(),
+            gherkin_parser: GherkinParser::new(),
+            extractor: RequirementExtractor::new(),
+            todo_extractor: TodoExtractor::with_config(todo_config),
         }
     }
 
@@ -48,13 +64,37 @@ impl SpecParser {
             .and_then(|ext| ext.to_str())
             .unwrap_or("");
 
-        match extension {
+        let mut spec = match extension {
             "md" | "markdown" => self.parse_markdown(path).await,
             "yaml" | "yml" => self.parse_yaml(path).await,
             "json" => self.parse_json(path).await,
             "feature" => self.parse_gherkin(path).await,
+            "rs" | "js" | "ts" | "py" => self.parse_source_file(path).await,
             _ => self.parse_markdown(path).await, // Default to markdown
+        }?;
+        
+        // Extract TODOs from any file type
+        if let Ok(todo_reqs) = self.todo_extractor.extract_from_file(path).await {
+            spec.requirements.extend(todo_reqs);
         }
+        
+        Ok(spec)
+    }
+    
+    /// Parse a source code file for TODOs and specifications
+    async fn parse_source_file(&self, path: &Path) -> Result<Specification> {
+        let mut spec = Specification::new(path.to_path_buf());
+        
+        // Extract TODOs from source file
+        let todo_reqs = self.todo_extractor.extract_from_file(path).await?;
+        spec.requirements.extend(todo_reqs);
+        
+        // Also try to extract natural language requirements from comments
+        let content = tokio::fs::read_to_string(path).await?;
+        let extracted_reqs = self.extractor.extract_from_text(&content)?;
+        spec.requirements.extend(extracted_reqs);
+        
+        Ok(spec)
     }
 
     /// Parse a markdown specification file
@@ -119,9 +159,27 @@ impl SpecParser {
             let path = entry.path();
             if path.is_file() {
                 if let Ok(spec) = self.parse_file(&path).await {
-                    specs.push(spec);
+                    if !spec.is_empty() {
+                        specs.push(spec);
+                    }
                 }
             }
+        }
+        
+        Ok(specs)
+    }
+    
+    /// Parse directory with TODO extraction enabled
+    pub async fn parse_directory_with_todos(&self, dir: &Path) -> Result<Vec<Specification>> {
+        let mut specs = self.parse_directory(dir).await?;
+        
+        // Also extract TODOs from entire directory
+        let todo_reqs = self.todo_extractor.extract_from_directory(dir).await?;
+        
+        if !todo_reqs.is_empty() {
+            let mut todo_spec = Specification::new(dir.to_path_buf());
+            todo_spec.requirements = todo_reqs;
+            specs.push(todo_spec);
         }
         
         Ok(specs)

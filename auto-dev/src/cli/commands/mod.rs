@@ -10,3 +10,4 @@ pub mod parse;
 pub mod analyze;
 pub mod loop_control;
 pub mod validate;
+pub mod dogfood;

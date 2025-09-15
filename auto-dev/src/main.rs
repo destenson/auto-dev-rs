@@ -53,9 +53,9 @@ fn main() -> Result<()> {
         }
         Commands::Parse(args) => {
             info!("Parse command: {:?}", args);
-            println!("Specification parsing: {}", args.path);
-            // For now, just acknowledge the command
-            println!("Would parse specifications from: {}", args.path);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::parse::execute(args))?;
         }
         Commands::Analyze(args) => {
             info!("Analyze command: {:?}", args);
