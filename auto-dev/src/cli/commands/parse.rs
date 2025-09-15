@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Parse specifications command
 
 use anyhow::Result;

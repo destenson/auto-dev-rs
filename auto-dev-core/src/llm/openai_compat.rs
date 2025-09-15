@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! OpenAI-compatible provider for Groq, Lambda Labs, and other services
 //!
 //! Many providers offer OpenAI-compatible APIs with different base URLs
@@ -5,6 +6,7 @@
 use super::{
     provider::*,
     openai::{extract_code_files, ChatMessage, ChatCompletionRequest, ChatCompletionResponse},
+    ClassificationResult,
 };
 use anyhow::{Result, Context};
 use async_trait::async_trait;

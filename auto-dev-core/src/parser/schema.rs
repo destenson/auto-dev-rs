@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! JSON/YAML schema parser
 
 use serde_json::{Value as JsonValue};

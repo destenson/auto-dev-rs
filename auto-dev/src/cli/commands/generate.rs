@@ -1,3 +1,4 @@
+#![allow(unused)]
 use anyhow::Result;
 
 /// Handle code generation commands

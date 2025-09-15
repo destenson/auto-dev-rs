@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Natural language requirement extraction
 
 use regex::Regex;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Direct model loading using Candle (no external APIs needed)
 
 use super::{ClassificationResult, QuestionType, TinyModel};

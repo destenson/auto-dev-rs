@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Intelligent LLM routing system inspired by OpenRouter
 //!
 //! Routes tasks to the most appropriate model based on:
@@ -11,6 +12,9 @@ use super::{
     tiny::OllamaTinyModel,
     candle::SmartTinyModel,
     TinyModelConfig,
+    ClassificationResult,
+    QuestionType,
+    TinyModel,
 };
 use anyhow::{Result, Context};
 use async_trait::async_trait;

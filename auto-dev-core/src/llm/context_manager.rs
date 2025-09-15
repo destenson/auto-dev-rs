@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Context window management for efficient token usage
 //!
 //! This module manages context windows across different models,

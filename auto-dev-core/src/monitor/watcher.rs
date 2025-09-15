@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Core file system watcher implementation using notify crate
 
 use crate::monitor::{ChangeType, FileChange, FileClassifier, MonitorConfig};

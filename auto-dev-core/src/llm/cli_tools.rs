@@ -1,6 +1,6 @@
 //! CLI tool providers for Claude CLI, Fabric, and other command-line LLM tools
 
-use super::provider::*;
+use super::{provider::*, ClassificationResult};
 use anyhow::{Result, Context};
 use async_trait::async_trait;
 use std::process::Stdio;

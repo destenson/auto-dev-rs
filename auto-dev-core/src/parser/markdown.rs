@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Markdown specification parser
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd, CodeBlockKind};

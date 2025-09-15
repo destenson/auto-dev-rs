@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! LLM Provider trait and implementations
 //!
 //! This module provides a unified interface for different LLM providers,
@@ -88,7 +89,7 @@ pub struct Issue {
     pub suggestion: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum IssueSeverity {
     Error,
     Warning,
@@ -122,7 +123,7 @@ pub struct Explanation {
 }
 
 /// Model tier for routing decisions
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ModelTier {
     NoLLM,      // Heuristics only
     Tiny,       // 0.5B models like Qwen

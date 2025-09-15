@@ -1,6 +1,7 @@
+#![allow(unused)]
 //! Anthropic Claude provider implementation
 
-use super::provider::*;
+use super::{provider::*, ClassificationResult};
 use anyhow::{Result, Context};
 use async_trait::async_trait;
 use reqwest::Client;

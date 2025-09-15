@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! File type classification based on patterns and extensions
 
 use std::path::Path;
