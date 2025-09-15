@@ -898,7 +898,7 @@ mod tests {
     
     #[test]
     fn test_role_prompts() {
-        let prompt = RolePrompts::get_system_prompt(DevelopmentRole::SecurityEngineer);
+        let prompt = RolePrompts::get_system_prompt(&DevelopmentRole::SecurityEngineer);
         assert!(prompt.contains("Security Engineer"));
         assert!(prompt.contains("OWASP"));
     }
