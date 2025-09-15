@@ -1,2 +1,32 @@
+# Rust build artifacts
 /target
+**/*.rs.bk
+*.pdb
+
+# Cargo lock file (keep for binary, remove for library)
+# For workspace with binary, we keep it
+# Cargo.lock
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+*.profraw
+*.profdata
+/coverage/
+
+# Documentation
+/doc/
+
+# Temporary files
+*.tmp
 **/*.local.*
+.auto-dev/tasks/current.json.backup

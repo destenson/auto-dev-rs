@@ -1,0 +1,17 @@
+[package]
+name = "auto-dev"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "auto-dev"
+path = "src/main.rs"
+
+[dependencies]
+auto-dev-core = { path = "../auto-dev-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
