@@ -16,7 +16,7 @@ pub async fn execute(path: String) -> Result<()> {
         // Parse single file
         let spec = parser.parse_file(spec_path).await?;
         
-        println!("\n📄 Specification: {}", spec_path.display());
+        println!("\n Specification: {}", spec_path.display());
         println!("  Requirements: {}", spec.requirements.len());
         println!("  APIs: {}", spec.apis.len());
         println!("  Data Models: {}", spec.data_models.len());
@@ -24,7 +24,7 @@ pub async fn execute(path: String) -> Result<()> {
         
         // Show requirements
         if !spec.requirements.is_empty() {
-            println!("\n📋 Requirements:");
+            println!("\n Requirements:");
             for req in spec.requirements.iter().take(5) {
                 println!("  - [{:?}] {}: {}", 
                     req.priority,
@@ -51,19 +51,19 @@ pub async fn execute(path: String) -> Result<()> {
         // Parse directory
         let specs = parser.parse_directory(spec_path).await?;
         
-        println!("\n📁 Found {} specification files", specs.len());
+        println!("\n Found {} specification files", specs.len());
         
         let total_reqs: usize = specs.iter().map(|s| s.requirements.len()).sum();
         let total_apis: usize = specs.iter().map(|s| s.apis.len()).sum();
         let total_models: usize = specs.iter().map(|s| s.data_models.len()).sum();
         
-        println!("\n📊 Summary:");
+        println!("\n Summary:");
         println!("  Total Requirements: {}", total_reqs);
         println!("  Total APIs: {}", total_apis);
         println!("  Total Data Models: {}", total_models);
         
         for spec in specs.iter().take(10) {
-            println!("\n  📄 {}", spec.source.display());
+            println!("\n   {}", spec.source.display());
             println!("     Requirements: {}, APIs: {}, Models: {}", 
                 spec.requirements.len(),
                 spec.apis.len(),
@@ -75,7 +75,7 @@ pub async fn execute(path: String) -> Result<()> {
             println!("\n  ... and {} more files", specs.len() - 10);
         }
     } else {
-        println!("❌ Path does not exist: {}", path);
+        println!(" Path does not exist: {}", path);
     }
     
     Ok(())

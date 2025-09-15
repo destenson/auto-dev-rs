@@ -18,7 +18,7 @@ pub async fn execute(path: String) -> Result<()> {
         // Analyze entire directory
         analyze_directory(path, &classifier).await?;
     } else {
-        println!("❌ Path does not exist: {}", path.display());
+        println!(" Path does not exist: {}", path.display());
     }
     
     Ok(())
@@ -26,12 +26,12 @@ pub async fn execute(path: String) -> Result<()> {
 
 /// Analyze a single file
 async fn analyze_file(path: &Path, classifier: &HeuristicClassifier) -> Result<()> {
-    println!("🔍 Analyzing: {}", path.display());
+    println!(" Analyzing: {}", path.display());
     
     let content = fs::read_to_string(path).await?;
     let result = classifier.classify_content(&content);
     
-    println!("\n📊 Results:");
+    println!("\n Results:");
     println!("  Type: {}", if result.is_code { 
         "Code" 
     } else if result.is_documentation { 
@@ -47,7 +47,7 @@ async fn analyze_file(path: &Path, classifier: &HeuristicClassifier) -> Result<(
     }
     
     if result.is_test {
-        println!("  ✓ Contains tests");
+        println!("   Contains tests");
     }
     
     println!("  Confidence: {:.0}%", result.confidence * 100.0);
@@ -57,17 +57,17 @@ async fn analyze_file(path: &Path, classifier: &HeuristicClassifier) -> Result<(
 
 /// Analyze a directory
 async fn analyze_directory(dir: &Path, classifier: &HeuristicClassifier) -> Result<()> {
-    println!("🔍 Analyzing directory: {}", dir.display());
+    println!(" Analyzing directory: {}", dir.display());
     
     let mut stats = ProjectStats::new();
     analyze_dir_recursive(dir, classifier, &mut stats).await?;
     
     // Display results
-    println!("\n📊 Project Analysis Results:");
+    println!("\n Project Analysis Results:");
     println!("  Total files: {}", stats.total_files);
     
     if !stats.languages.is_empty() {
-        println!("\n  📝 Languages detected:");
+        println!("\n   Languages detected:");
         let mut langs: Vec<_> = stats.languages.iter().collect();
         langs.sort_by(|a, b| b.1.cmp(a.1));
         
@@ -81,7 +81,7 @@ async fn analyze_directory(dir: &Path, classifier: &HeuristicClassifier) -> Resu
         }
     }
     
-    println!("\n  📁 File types:");
+    println!("\n   File types:");
     println!("    Code files:     {}", stats.code_files);
     println!("    Test files:     {}", stats.test_files);
     println!("    Documentation:  {}", stats.doc_files);
@@ -90,7 +90,7 @@ async fn analyze_directory(dir: &Path, classifier: &HeuristicClassifier) -> Resu
     
     if stats.code_files > 0 {
         let test_coverage = (stats.test_files as f32 / stats.code_files as f32) * 100.0;
-        println!("\n  📈 Metrics:");
+        println!("\n   Metrics:");
         println!("    Test coverage: {:.1}% of code files have tests", test_coverage);
     }
     
@@ -176,13 +176,14 @@ impl ProjectStats {
 
 /// Get emoji for language
 fn get_language_emoji(lang: &str) -> &'static str {
-    match lang.to_lowercase().as_str() {
-        "rust" => "🦀",
-        "python" => "🐍",
-        "javascript" | "typescript" => "📜",
-        "java" => "☕",
-        "go" => "🐹",
-        "c" | "cpp" => "⚙️",
-        _ => "📄",
-    }
+    // match lang.to_lowercase().as_str() {
+    //     "rust" => "🦀",
+    //     "python" => "🐍",
+    //     "javascript" | "typescript" => "📜",
+    //     "java" => "☕",
+    //     "go" => "🐹",
+    //     "c" | "cpp" => "⚙️",
+    //     _ => "",
+    // }
+    lang
 }

@@ -238,7 +238,7 @@ impl LLMProvider for ClaudeProvider {
     ) -> Result<ReviewResult> {
         let req_list = requirements.iter()
             .map(|r| format!("[{}] {}: {} (Priority: {:?})", 
-                           if r.satisfied { "✓" } else { "✗" },
+                           if r.satisfied { "" } else { "" },
                            r.id, r.description, r.priority))
             .collect::<Vec<_>>()
             .join("\n");

@@ -55,7 +55,7 @@ auto-dev scan --pattern unsafe    # Find unsafe blocks
 **Use Case**:
 ```bash
 auto-dev check "must validate email" src/auth.rs
-# Output: "✓ Requirement likely satisfied"
+# Output: " Requirement likely satisfied"
 ```
 
 ## Phase 6: Load Actual GGUF Model

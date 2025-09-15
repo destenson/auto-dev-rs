@@ -176,9 +176,9 @@ let requirement = "Function must validate email";
 let code = "fn check_email(email: &str) -> bool { ... }";
 
 if tiny_model.satisfies_requirement(requirement, code) {
-    println!("✓ Requirement satisfied");
+    println!(" Requirement satisfied");
 } else {
-    println!("✗ Requirement not satisfied");
+    println!(" Requirement not satisfied");
 }
 ```
 
