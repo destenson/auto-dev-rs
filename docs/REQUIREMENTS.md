@@ -19,3 +19,7 @@
   - Local model support (e.g., LLaMA, GPT4All, GGUF models).
   - Automatic model selection based on task requirements and resource availability.
 - **Extensibility**: Modular architecture to allow easy addition of new features and integrations.
+- **Uses Existing Tools**: Leverage existing development tools and platforms to enhance functionality and user experience.
+- **Discover New Tools**: Continuously explore and integrate new tools and technologies to stay up-to-date with industry trends.
+- **MCP Client**: Integrate with MCP (Model Control Protocol) servers for executing tasks on behalf of or instead of an LLM.
+- **Task Management**: Efficiently manage and prioritize development tasks with built-in task management features.
