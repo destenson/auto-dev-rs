@@ -254,7 +254,11 @@ mod tests {
 
         // Would need actual module registration for full test
         // This tests the verifier structure
-        assert!(verifier.verify_module("test_module", runtime).await.is_err());
+        let result = verifier.verify_module("test_module", runtime).await;
+        assert!(result.is_ok());
+        let verification = result.unwrap();
+        assert!(!verification.is_healthy); // Module doesn't exist, so should be unhealthy
+        assert!(!verification.issues.is_empty());
     }
 
     #[tokio::test]

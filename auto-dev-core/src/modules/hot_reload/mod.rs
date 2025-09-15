@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 
 pub mod coordinator;
 pub mod migration;
+pub mod scheduler;
 pub mod state_manager;
 pub mod traffic_controller;
 pub mod verifier;
@@ -19,6 +20,7 @@ mod tests;
 
 pub use coordinator::{ReloadCoordinator, ReloadPhase, ReloadResult};
 pub use migration::{FieldMapping, MigrationEngine, MigrationRule, TransformType};
+pub use scheduler::{ReloadScheduler, ReloadRequest, ReloadPriority, SchedulerConfig, SchedulingStrategy};
 pub use state_manager::{StateManager, StateSnapshot, StateVersion};
 pub use traffic_controller::{TrafficController, TrafficState};
 pub use verifier::{ReloadVerifier, TestType, VerificationResult, VerificationTest};
