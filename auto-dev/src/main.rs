@@ -69,6 +69,18 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::loop_control::execute(args))?;
         }
+        Commands::Run | Commands::Start => {
+            info!("Starting autonomous development loop");
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::loop_control::run_default())?;
+        }
+        Commands::Init => {
+            info!("Initializing auto-dev");
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::loop_control::init_project())?;
+        }
     }
 
     Ok(())

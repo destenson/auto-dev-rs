@@ -54,6 +54,18 @@ pub enum Commands {
     /// Control the autonomous development loop
     #[command(about = "Manage the continuous monitoring and autonomous development loop")]
     Loop(super::commands::loop_control::LoopCommand),
+    
+    /// Start the autonomous development loop (alias for 'loop start --background')
+    #[command(about = "Start the autonomous development loop in background")]
+    Run,
+    
+    /// Start the autonomous development loop (alias for 'loop start --background')
+    #[command(about = "Start the autonomous development loop in background")]
+    Start,
+    
+    /// Initialize auto-dev in the current directory
+    #[command(about = "Initialize auto-dev configuration and directory structure")]
+    Init,
 }
 
 #[derive(Parser, Debug)]

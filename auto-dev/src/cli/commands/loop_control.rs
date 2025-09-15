@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use auto_dev_core::dev_loop::{Event, EventType, LoopConfig, Orchestrator};
-use auto_dev_core::dev_loop::control_server::{ControlClient, ControlServer, ControlCommand};
+use auto_dev_core::dev_loop::control_server::{ControlClient, ControlServer};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
@@ -129,7 +129,7 @@ async fn start_loop(config_path: Option<PathBuf>, background: bool, port: u16) -
     if background {
         // Start in background
         tokio::spawn(async move {
-            if let Err(e) = run_loop_internal(config).await {
+            if let Err(e) = run_loop_internal(config, port).await {
                 error!("Loop error: {}", e);
             }
         });
@@ -137,7 +137,7 @@ async fn start_loop(config_path: Option<PathBuf>, background: bool, port: u16) -
         info!("Loop started in background");
     } else {
         // Run in foreground
-        run_loop_internal(config).await?;
+        run_loop_internal(config, port).await?;
     }
     
     Ok(())
@@ -146,7 +146,7 @@ async fn start_loop(config_path: Option<PathBuf>, background: bool, port: u16) -
 /// Internal loop runner with control server
 async fn run_loop_internal(config: LoopConfig, port: u16) -> Result<()> {
     let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
-    let (command_tx, mut command_rx) = mpsc::channel(100);
+    let (command_tx, _command_rx) = mpsc::channel(100);
     
     // Start control server
     let control_shutdown_tx = shutdown_tx.clone();
@@ -346,6 +346,85 @@ async fn load_config(path: PathBuf) -> Result<LoopConfig> {
 
 use serde_json;
 use toml;
+
+/// Run with default configuration (alias for 'loop start --background')
+pub async fn run_default() -> Result<()> {
+    // Check for config file
+    let config_path = PathBuf::from(".auto-dev/config.toml");
+    let config = if config_path.exists() {
+        info!("Using configuration from .auto-dev/config.toml");
+        Some(config_path)
+    } else {
+        info!("No config file found, using defaults");
+        None
+    };
+    
+    // Always start in background with default port
+    start_loop(config, true, 9090).await
+}
+
+/// Initialize auto-dev project structure
+pub async fn init_project() -> Result<()> {
+    info!("Initializing auto-dev project structure");
+    
+    // Create .auto-dev directory
+    let auto_dev_dir = PathBuf::from(".auto-dev");
+    if !auto_dev_dir.exists() {
+        tokio::fs::create_dir_all(&auto_dev_dir).await?;
+        println!("Created .auto-dev directory");
+    }
+    
+    // Create subdirectories
+    let subdirs = [
+        "loop",
+        "patterns",
+        "templates",
+        "cache",
+        "history",
+        "metrics",
+    ];
+    
+    for subdir in &subdirs {
+        let path = auto_dev_dir.join(subdir);
+        if !path.exists() {
+            tokio::fs::create_dir_all(&path).await?;
+            println!("Created .auto-dev/{}", subdir);
+        }
+    }
+    
+    // Create config file if it doesn't exist
+    let config_path = auto_dev_dir.join("config.toml");
+    if !config_path.exists() {
+        // Embed the default configuration at compile time
+        let default_config = include_str!("../../../../.auto-dev/config.toml.example");
+        tokio::fs::write(&config_path, default_config).await?;
+        println!("Created .auto-dev/config.toml with default configuration");
+    } else {
+        println!("Config file already exists at .auto-dev/config.toml");
+    }
+    
+    // Create a .gitignore for .auto-dev if it doesn't exist
+    let gitignore_path = auto_dev_dir.join(".gitignore");
+    if !gitignore_path.exists() {
+        let gitignore_content = "# Auto-generated files\n\
+                                cache/\n\
+                                *.tmp\n\
+                                *.log\n\
+                                control.port\n\
+                                state.json\n";
+        tokio::fs::write(&gitignore_path, gitignore_content).await?;
+        println!("Created .auto-dev/.gitignore");
+    }
+    
+    println!("\n✅ Auto-dev initialized successfully!");
+    println!("\nNext steps:");
+    println!("  1. Review and customize .auto-dev/config.toml");
+    println!("  2. Run 'auto-dev start' to begin autonomous development");
+    println!("  3. Use 'auto-dev status' to check the loop status");
+    println!("  4. Use 'auto-dev stop' to stop the loop");
+    
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
