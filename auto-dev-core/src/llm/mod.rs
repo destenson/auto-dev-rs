@@ -2,6 +2,14 @@
 //!
 //! This module provides a tiered system for LLM integration, from simple
 //! heuristics to powerful cloud models, with intelligent task routing.
+//!
+//! Key features:
+//! - Local Qwen GGUF model integration for fast, cost-effective tasks
+//! - Tiered routing system (No LLM → Tiny/Qwen → Small → Medium → Large)
+//! - Support for OpenAI, Claude, Groq, Lambda Labs, and CLI tools
+//! - Intelligent task routing based on complexity assessment
+//! - Context window management and prompt optimization
+//! - Response caching and pattern learning
 
 pub mod tiny;
 pub mod classifier;
@@ -12,6 +20,9 @@ pub mod openai;
 pub mod claude;
 pub mod openai_compat;
 pub mod cli_tools;
+pub mod context_manager;
+pub mod prompts;
+pub mod config;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
