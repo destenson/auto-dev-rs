@@ -623,9 +623,11 @@ mod tests {
             timestamp: Utc::now(),
             event_type: crate::learning::learner::LearningEventType::ImplementationFailure,
             specification: Default::default(),
-            implementation: Some(crate::synthesis::engine::Implementation {
-                code: "fn test() { }".to_string(),
-                ..Default::default()
+            implementation: Some(crate::incremental::Implementation {
+                files: vec![],
+                estimated_complexity: crate::incremental::Complexity::Simple,
+                approach: "test".to_string(),
+                language: "rust".to_string(),
             }),
             outcome: crate::learning::learner::Outcome {
                 success: false,

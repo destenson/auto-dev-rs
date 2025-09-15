@@ -488,7 +488,10 @@ mod tests {
     fn test_pattern_extraction() {
         let extractor = PatternExtractor::new();
         let implementation = Implementation {
-            code: r#"
+            files: vec![crate::incremental::FileChange {
+                path: std::path::PathBuf::from("test.rs"),
+                change_type: crate::incremental::ChangeType::Create,
+                content: r#"
                 pub async fn process_data(input: &str) -> Result<String> {
                     let data = input.trim();
                     
@@ -498,8 +501,12 @@ mod tests {
                     }
                 }
             "#
-            .to_string(),
-            ..Default::default()
+                .to_string(),
+                line_range: None,
+            }],
+            estimated_complexity: crate::incremental::Complexity::Simple,
+            approach: "pattern_test".to_string(),
+            language: "rust".to_string(),
         };
 
         let context = crate::learning::learner::EventContext {

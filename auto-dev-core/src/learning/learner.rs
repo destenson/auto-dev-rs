@@ -114,7 +114,7 @@ pub struct Outcome {
     pub details: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PerformanceMetrics {
     pub duration: Duration,
     pub llm_calls: u32,

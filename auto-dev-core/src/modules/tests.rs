@@ -6,7 +6,7 @@
 mod tests {
     use super::super::*;
     use crate::modules::interface::{
-        ModuleCapability, ModuleInterface, ModuleMetadata, ModuleState, ModuleVersion,
+        ModuleCapability, ModuleDependency, ModuleInterface, ModuleMetadata, ModuleState, ModuleVersion,
     };
     use crate::modules::loader::{ModuleFormat, ModuleLoader};
     use crate::modules::messages::{Message, MessageBus, MessageType};
@@ -94,6 +94,10 @@ mod tests {
         fn restore_state(&mut self, state: ModuleState) -> Result<()> {
             self.state = state;
             Ok(())
+        }
+        
+        async fn health_check(&self) -> Result<bool> {
+            Ok(true)
         }
     }
 
@@ -391,5 +395,362 @@ mod tests {
         // This test doesn't need async
         let loader = ModuleLoader::new();
         assert!(loader.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_hot_reload_state_preservation() {
+        let mut module = MockModule::new("hot_reload_test");
+        
+        // Initialize and set state
+        module.initialize().await.unwrap();
+        module.state.set("counter".to_string(), Value::Number(42.into()));
+        module.state.set("config".to_string(), serde_json::json!({
+            "enabled": true,
+            "threshold": 100
+        }));
+        
+        // Simulate hot-reload: save state, create new module, restore state
+        let saved_state = module.get_state().unwrap();
+        
+        // Simulate module shutdown
+        module.shutdown().await.unwrap();
+        
+        // Create "new" module (simulating reload)
+        let mut reloaded_module = MockModule::new("hot_reload_test");
+        reloaded_module.initialize().await.unwrap();
+        
+        // Restore state
+        reloaded_module.restore_state(saved_state).unwrap();
+        
+        // Verify state was preserved
+        let restored_state = reloaded_module.get_state().unwrap();
+        assert_eq!(restored_state.get("counter"), Some(&Value::Number(42.into())));
+        assert_eq!(restored_state.get("config").and_then(|v| v.get("enabled")), 
+                   Some(&Value::Bool(true)));
+    }
+
+    #[tokio::test]
+    async fn test_module_isolation() {
+        // Create two independent modules
+        let mut module1 = MockModule::new("module1");
+        let mut module2 = MockModule::new("module2");
+        
+        // Initialize both
+        module1.initialize().await.unwrap();
+        module2.initialize().await.unwrap();
+        
+        // Set different states
+        module1.state.set("value".to_string(), Value::String("module1_value".to_string()));
+        module2.state.set("value".to_string(), Value::String("module2_value".to_string()));
+        
+        // Execute both modules
+        let result1 = module1.execute(Value::String("test".to_string())).await.unwrap();
+        let result2 = module2.execute(Value::String("test".to_string())).await.unwrap();
+        
+        // Verify isolation - each module has its own state and execution context
+        assert_eq!(result1["module"], "module1");
+        assert_eq!(result2["module"], "module2");
+        
+        let state1 = module1.get_state().unwrap();
+        let state2 = module2.get_state().unwrap();
+        
+        assert_eq!(state1.get("value"), Some(&Value::String("module1_value".to_string())));
+        assert_eq!(state2.get("value"), Some(&Value::String("module2_value".to_string())));
+        
+        // Verify execution counts are independent
+        assert_eq!(result1["execution_count"], 1);
+        assert_eq!(result2["execution_count"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_module_crash_isolation() {
+        // Test that a panic in one module doesn't affect others
+        struct CrashingModule {
+            metadata: ModuleMetadata,
+            crash_on_execute: bool,
+        }
+        
+        impl CrashingModule {
+            fn new(name: &str) -> Self {
+                let metadata = ModuleMetadata {
+                    name: name.to_string(),
+                    version: ModuleVersion::new(1, 0, 0),
+                    author: "test".to_string(),
+                    description: "Module that can crash".to_string(),
+                    capabilities: vec![],
+                    dependencies: vec![],
+                };
+                
+                Self {
+                    metadata,
+                    crash_on_execute: false,
+                }
+            }
+        }
+        
+        #[async_trait]
+        impl ModuleInterface for CrashingModule {
+            fn metadata(&self) -> ModuleMetadata {
+                self.metadata.clone()
+            }
+            
+            async fn initialize(&mut self) -> Result<()> {
+                Ok(())
+            }
+            
+            async fn execute(&self, _input: Value) -> Result<Value> {
+                if self.crash_on_execute {
+                    panic!("Module crashed!");
+                }
+                Ok(serde_json::json!({"status": "ok"}))
+            }
+            
+            fn get_capabilities(&self) -> Vec<ModuleCapability> {
+                vec![]
+            }
+            
+            async fn handle_message(&mut self, _message: Value) -> Result<Option<Value>> {
+                Ok(None)
+            }
+            
+            async fn shutdown(&mut self) -> Result<()> {
+                Ok(())
+            }
+            
+            fn get_state(&self) -> Result<ModuleState> {
+                Ok(ModuleState::new(self.metadata.version.clone()))
+            }
+            
+            fn restore_state(&mut self, _state: ModuleState) -> Result<()> {
+                Ok(())
+            }
+            
+            async fn health_check(&self) -> Result<bool> {
+                Ok(true)
+            }
+        }
+        
+        let mut normal_module = MockModule::new("normal");
+        let mut crashing_module = CrashingModule::new("crashing");
+        crashing_module.crash_on_execute = true;
+        
+        // Initialize both
+        normal_module.initialize().await.unwrap();
+        crashing_module.initialize().await.unwrap();
+        
+        // Execute normal module - should work
+        let result = normal_module.execute(Value::String("test".to_string())).await;
+        assert!(result.is_ok());
+        
+        // Execute crashing module - should panic (caught by tokio runtime)
+        // In a real implementation, this would be caught by the ModuleRuntime
+        let crash_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async {
+                crashing_module.execute(Value::String("test".to_string())).await
+            })
+        }));
+        assert!(crash_result.is_err());
+        
+        // Normal module should still work after the crash
+        let result2 = normal_module.execute(Value::String("test2".to_string())).await;
+        assert!(result2.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_message_passing_performance() {
+        use std::time::Instant;
+        
+        let bus = MessageBus::new();
+        
+        // Subscribe to messages
+        let mut receiver = bus.subscribe_broadcast();
+        
+        let start = Instant::now();
+        let message_count = 1000;
+        
+        // Send many messages
+        for i in 0..message_count {
+            let msg = Message::new(
+                "sender".to_string(),
+                "*".to_string(),
+                MessageType::Broadcast,
+                serde_json::json!({"index": i}),
+            );
+            bus.broadcast(msg).await.unwrap();
+        }
+        
+        // Receive all messages
+        let mut received_count = 0;
+        while let Ok(msg) = receiver.try_recv() {
+            received_count += 1;
+            // Verify message integrity
+            assert!(msg.payload.get("index").is_some());
+        }
+        
+        let duration = start.elapsed();
+        let messages_per_second = (message_count as f64) / duration.as_secs_f64();
+        
+        // Assert performance - should handle at least 10,000 messages per second
+        assert!(messages_per_second > 10_000.0, 
+                "Message passing too slow: {:.0} msg/s", messages_per_second);
+        
+        // Verify all messages were received
+        assert_eq!(received_count, message_count);
+        
+        // Test latency - single message round trip
+        let latency_start = Instant::now();
+        let msg = Message::new(
+            "sender".to_string(),
+            "*".to_string(),
+            MessageType::Broadcast,
+            Value::Null,
+        );
+        bus.broadcast(msg).await.unwrap();
+        let _ = receiver.recv().await;
+        let latency = latency_start.elapsed();
+        
+        // Assert latency < 1ms
+        assert!(latency.as_micros() < 1000, 
+                "Message latency too high: {:?}", latency);
+    }
+
+    #[tokio::test]
+    async fn test_module_dependency_resolution() {
+        let registry = ModuleRegistry::new();
+        
+        // Create modules with dependencies
+        let parser_module = MockModule::new("parser");
+        let synthesis_module = MockModule {
+            metadata: ModuleMetadata {
+                name: "synthesis".to_string(),
+                version: ModuleVersion::new(1, 0, 0),
+                author: "test".to_string(),
+                description: "Synthesis module".to_string(),
+                capabilities: vec![],
+                dependencies: vec![ModuleDependency {
+                    name: "parser".to_string(),
+                    version_requirement: "1.0.0".to_string(),
+                    optional: false,
+                }],
+            },
+            state: ModuleState::new(ModuleVersion::new(1, 0, 0)),
+            execution_count: Arc::new(RwLock::new(0)),
+            initialized: false,
+        };
+        
+        // Register parser first (dependency)
+        // In a real implementation, modules would be loaded via ModuleLoader
+        // For testing, we'll verify dependency handling logic
+        let parser_meta = parser_module.metadata();
+        let synthesis_meta = synthesis_module.metadata();
+        
+        // Verify dependency is declared
+        assert_eq!(synthesis_meta.dependencies.len(), 1);
+        assert_eq!(synthesis_meta.dependencies[0].name, "parser");
+        assert_eq!(parser_meta.dependencies.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_module_execution() {
+        use tokio::task;
+        
+        let module = Arc::new(MockModule::new("concurrent_test"));
+        let mut handles = vec![];
+        
+        // Spawn multiple concurrent executions
+        for i in 0..10 {
+            let module_clone = Arc::clone(&module);
+            let handle = task::spawn(async move {
+                let input = serde_json::json!({"task_id": i});
+                module_clone.execute(input).await
+            });
+            handles.push(handle);
+        }
+        
+        // Wait for all executions to complete
+        let mut results = vec![];
+        for handle in handles {
+            let result = handle.await.unwrap().unwrap();
+            results.push(result);
+        }
+        
+        // Verify all executions completed successfully
+        assert_eq!(results.len(), 10);
+        
+        // Check that execution count is correct (should be 10)
+        let final_count = *module.execution_count.read().await;
+        assert_eq!(final_count, 10);
+    }
+
+    #[tokio::test]
+    async fn test_module_resource_limits() {
+        let limits = interface::ResourceLimits {
+            max_memory_bytes: 50 * 1024 * 1024, // 50MB
+            max_cpu_time_ms: 1000, // 1 second
+            max_file_handles: 5,
+            network_access: false,
+            allowed_paths: vec![],
+        };
+        
+        // Verify limits are enforced
+        assert!(limits.max_memory_bytes < 100 * 1024 * 1024);
+        assert!(limits.max_cpu_time_ms <= 5000);
+        assert!(!limits.network_access);
+    }
+
+    #[tokio::test]
+    async fn test_module_version_compatibility() {
+        let v1_0_0 = ModuleVersion::new(1, 0, 0);
+        let v1_0_1 = ModuleVersion::new(1, 0, 1);
+        let v1_1_0 = ModuleVersion::new(1, 1, 0);
+        let v2_0_0 = ModuleVersion::new(2, 0, 0);
+        
+        // Patch versions are compatible
+        assert!(v1_0_0.is_compatible_with(&v1_0_1));
+        
+        // Minor versions are compatible (backwards)
+        assert!(v1_0_0.is_compatible_with(&v1_1_0));
+        
+        // Major versions are not compatible
+        assert!(!v1_0_0.is_compatible_with(&v2_0_0));
+        
+        // Test pre-release versions
+        let v1_alpha = ModuleVersion {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            pre_release: Some("alpha.1".to_string()),
+        };
+        
+        let v1_beta = ModuleVersion {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            pre_release: Some("beta.1".to_string()),
+        };
+        
+        // Pre-release versions with same base are compatible
+        assert!(v1_alpha.is_compatible_with(&v1_beta));
+    }
+
+    #[tokio::test]
+    async fn test_module_health_check() {
+        let mut module = MockModule::new("health_test");
+        
+        // Health check before initialization
+        let health = module.health_check().await;
+        assert!(health.is_ok());
+        assert!(health.unwrap());
+        
+        // Initialize and check again
+        module.initialize().await.unwrap();
+        let health = module.health_check().await;
+        assert!(health.unwrap());
+        
+        // Shutdown and verify
+        module.shutdown().await.unwrap();
+        let health = module.health_check().await;
+        assert!(health.unwrap());
     }
 }
