@@ -2,8 +2,11 @@
 
 Write-Host "Downloading Qwen2.5-Coder-0.5B Q4 quantized model..." -ForegroundColor Green
 
+$SCRIPT_DIR = $PSScriptRoot
+$WORKSPACE_ROOT = Join-Path $SCRIPT_DIR ".."
+
 # Create models directory
-$modelsDir = "models"
+$modelsDir = Join-Path $WORKSPACE_ROOT "models"
 if (!(Test-Path $modelsDir)) {
     New-Item -ItemType Directory -Path $modelsDir
     Write-Host "Created models directory"
