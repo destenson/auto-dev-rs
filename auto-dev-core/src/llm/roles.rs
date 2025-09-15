@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 /// Different roles in a development project
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DevelopmentRole {
     // Engineering Roles
     SoftwareArchitect,
@@ -728,38 +728,38 @@ impl RolePrompts {
 }
 
 /// Convert role enum to string representation
-fn role_to_string(role: DevelopmentRole) -> &'static str {
+fn role_to_string(role: DevelopmentRole) -> String {
     match role {
-        DevelopmentRole::SoftwareArchitect => "Software Architect",
-        DevelopmentRole::BackendEngineer => "Backend Engineer",
-        DevelopmentRole::FrontendEngineer => "Frontend Engineer",
-        DevelopmentRole::FullStackEngineer => "Full Stack Engineer",
-        DevelopmentRole::DevOpsEngineer => "DevOps Engineer",
-        DevelopmentRole::DataEngineer => "Data Engineer",
-        DevelopmentRole::MLEngineer => "ML Engineer",
-        DevelopmentRole::MobileEngineer => "Mobile Engineer",
-        DevelopmentRole::EmbeddedEngineer => "Embedded Engineer",
-        DevelopmentRole::QAEngineer => "QA Engineer",
-        DevelopmentRole::TestAutomationEngineer => "Test Automation Engineer",
-        DevelopmentRole::PerformanceEngineer => "Performance Engineer",
-        DevelopmentRole::SecurityEngineer => "Security Engineer",
-        DevelopmentRole::TechLead => "Tech Lead",
-        DevelopmentRole::EngineeringManager => "Engineering Manager",
-        DevelopmentRole::ProductManager => "Product Manager",
-        DevelopmentRole::ProjectManager => "Project Manager",
-        DevelopmentRole::ScrumMaster => "Scrum Master",
-        DevelopmentRole::DatabaseAdministrator => "Database Administrator",
-        DevelopmentRole::SystemAdministrator => "System Administrator",
-        DevelopmentRole::CloudArchitect => "Cloud Architect",
-        DevelopmentRole::UIUXDesigner => "UI/UX Designer",
-        DevelopmentRole::TechnicalWriter => "Technical Writer",
-        DevelopmentRole::DataScientist => "Data Scientist",
-        DevelopmentRole::BusinessAnalyst => "Business Analyst",
-        DevelopmentRole::CustomerSupport => "Customer Support",
-        DevelopmentRole::SolutionsArchitect => "Solutions Architect",
-        DevelopmentRole::ComplianceOfficer => "Compliance Officer",
-        DevelopmentRole::SecurityAuditor => "Security Auditor",
-        DevelopmentRole::Custom(name) => return name.as_str(),
+        DevelopmentRole::SoftwareArchitect => "Software Architect".to_string(),
+        DevelopmentRole::BackendEngineer => "Backend Engineer".to_string(),
+        DevelopmentRole::FrontendEngineer => "Frontend Engineer".to_string(),
+        DevelopmentRole::FullStackEngineer => "Full Stack Engineer".to_string(),
+        DevelopmentRole::DevOpsEngineer => "DevOps Engineer".to_string(),
+        DevelopmentRole::DataEngineer => "Data Engineer".to_string(),
+        DevelopmentRole::MLEngineer => "ML Engineer".to_string(),
+        DevelopmentRole::MobileEngineer => "Mobile Engineer".to_string(),
+        DevelopmentRole::EmbeddedEngineer => "Embedded Engineer".to_string(),
+        DevelopmentRole::QAEngineer => "QA Engineer".to_string(),
+        DevelopmentRole::TestAutomationEngineer => "Test Automation Engineer".to_string(),
+        DevelopmentRole::PerformanceEngineer => "Performance Engineer".to_string(),
+        DevelopmentRole::SecurityEngineer => "Security Engineer".to_string(),
+        DevelopmentRole::TechLead => "Tech Lead".to_string(),
+        DevelopmentRole::EngineeringManager => "Engineering Manager".to_string(),
+        DevelopmentRole::ProductManager => "Product Manager".to_string(),
+        DevelopmentRole::ProjectManager => "Project Manager".to_string(),
+        DevelopmentRole::ScrumMaster => "Scrum Master".to_string(),
+        DevelopmentRole::DatabaseAdministrator => "Database Administrator".to_string(),
+        DevelopmentRole::SystemAdministrator => "System Administrator".to_string(),
+        DevelopmentRole::CloudArchitect => "Cloud Architect".to_string(),
+        DevelopmentRole::UIUXDesigner => "UI/UX Designer".to_string(),
+        DevelopmentRole::TechnicalWriter => "Technical Writer".to_string(),
+        DevelopmentRole::DataScientist => "Data Scientist".to_string(),
+        DevelopmentRole::BusinessAnalyst => "Business Analyst".to_string(),
+        DevelopmentRole::CustomerSupport => "Customer Support".to_string(),
+        DevelopmentRole::SolutionsArchitect => "Solutions Architect".to_string(),
+        DevelopmentRole::ComplianceOfficer => "Compliance Officer".to_string(),
+        DevelopmentRole::SecurityAuditor => "Security Auditor".to_string(),
+        DevelopmentRole::Custom(name) => return name.clone(),
     }
 }
 
