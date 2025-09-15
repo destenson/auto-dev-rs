@@ -23,6 +23,7 @@ pub mod cli_tools;
 pub mod context_manager;
 pub mod prompts;
 pub mod config;
+pub mod roles;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
