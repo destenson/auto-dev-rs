@@ -9,3 +9,4 @@ pub mod docs;
 pub mod parse;
 pub mod analyze;
 pub mod loop_control;
+pub mod validate;

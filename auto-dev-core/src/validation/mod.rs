@@ -7,13 +7,15 @@ pub mod quality;
 pub mod security;
 pub mod performance;
 pub mod contracts;
+pub mod tools;
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use anyhow::Result;
 
 pub use verifier::CodeVerifier;
-pub use validator::{SpecValidator, ValidationPipeline};
+pub use validator::{SpecValidator, ValidationPipeline, GeneratedCode};
+pub use tools::{ToolRegistry, ValidationTool, ToolCategory};
 
 /// Result of validation checks
 #[derive(Debug, Clone, Serialize, Deserialize)]

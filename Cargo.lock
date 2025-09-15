@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "auto-dev-core",
+ "chrono",
  "clap",
  "serde_json",
  "tokio",

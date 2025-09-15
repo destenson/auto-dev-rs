@@ -183,7 +183,7 @@ async fn analyze_rust_dependencies(project_root: &Path, graph: &mut DependencyGr
 
 fn parse_cargo_toml(content: &str, graph: &mut DependencyGraph) -> anyhow::Result<()> {
     // Simple regex-based parsing for dependencies
-    let dep_regex = Regex::new(r#"(\w+)\s*=\s*(?:"([^"]+)"|{[^}]+version\s*=\s*"([^"]+)")"#).unwrap();
+    let dep_regex = Regex::new(r#"(\w+)\s*=\s*(?:"([^"]+)"|\{[^}]+version\s*=\s*"([^"]+)"\})"#).unwrap();
     
     let mut in_dependencies = false;
     let mut in_dev_dependencies = false;
