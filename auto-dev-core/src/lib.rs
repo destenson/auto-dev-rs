@@ -9,6 +9,7 @@ pub mod llm;
 pub mod mcp;
 pub mod synthesis;
 pub mod context;
+pub mod incremental;
 
 use serde::{Deserialize, Serialize};
 
