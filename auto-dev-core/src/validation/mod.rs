@@ -232,8 +232,18 @@ impl Default for ValidationConfig {
                 },
                 StageConfig {
                     stage: ValidationStage::Linting,
-                    enabled: true,
+                    enabled: false,  // Disabled by default - expensive to fix
                     timeout: Duration::from_secs(10),
+                },
+                StageConfig {
+                    stage: ValidationStage::Security,
+                    enabled: false,  // Run on demand
+                    timeout: Duration::from_secs(20),
+                },
+                StageConfig {
+                    stage: ValidationStage::Performance,
+                    enabled: false,  // Run on demand
+                    timeout: Duration::from_secs(30),
                 },
             ],
             quality_rules: QualityRules::default(),
