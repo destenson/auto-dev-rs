@@ -26,6 +26,10 @@ Thumbs.db
 # Documentation
 /doc/
 
+# Model files
+/models/
+**/*.gguf
+
 # Temporary files
 *.tmp
 **/*.local.*
