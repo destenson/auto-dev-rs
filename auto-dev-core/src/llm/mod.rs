@@ -1,13 +1,17 @@
-//! Lightweight LLM integration for simple tasks
+//! Comprehensive LLM integration with intelligent routing
 //!
-//! This module provides integration with tiny local models for basic
-//! classification and simple Q&A tasks that don't require large models.
+//! This module provides a tiered system for LLM integration, from simple
+//! heuristics to powerful cloud models, with intelligent task routing.
 
 pub mod tiny;
 pub mod classifier;
 pub mod candle;
 pub mod provider;
 pub mod router;
+pub mod openai;
+pub mod claude;
+pub mod openai_compat;
+pub mod cli_tools;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
