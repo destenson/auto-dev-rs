@@ -20,6 +20,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = {workspace = true}
 async-openai = "0.29.3"
+async-stream = "0.3.6"
 async-trait = "0.1.89"
 bincode = "2.0.1"
 candle-core = "0.9.1"
@@ -39,6 +40,7 @@ log = { version = "0.4.28", optional = true }
 md5 = "0.8.0"
 metrics = "0.24.2"
 notify = "8.2.0"
+ollama-rs = "0.3.2"
 openapiv3 = "2.2.0"
 openrouter-rs = "0.4.5"
 petgraph = "0.8.2"

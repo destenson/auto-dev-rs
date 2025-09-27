@@ -20,6 +20,8 @@ pub mod context_manager;
 pub mod errors;
 #[cfg(test)]
 pub mod mock;
+pub mod ollama;
+pub mod ollama_models;
 pub mod openai;
 pub mod openai_async;
 pub mod openai_compat;
@@ -38,6 +40,8 @@ use serde::{Deserialize, Serialize};
 
 // Re-export commonly used types
 pub use errors::{LLMError, LLMResult};
+pub use ollama::{OllamaProvider, OllamaProviderBuilder};
+pub use ollama_models::{ModelRegistry, ModelCategory, ModelProfile, auto_select_model};
 pub use openai_async::{AsyncOpenAIConfig, AsyncOpenAIProvider};
 pub use openrouter::{OpenRouterConfig, OpenRouterProvider};
 pub use token_manager::{ConversationManager, TokenManager};

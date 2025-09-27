@@ -257,19 +257,27 @@ pub struct ProviderConfig {
 pub struct OllamaConfig {
     pub enabled: bool,
     pub host: String,
+    pub port: u16,
+    pub use_https: bool,
     pub models: Vec<String>,
     pub default_model: String,
     pub pull_on_start: bool,
+    pub default_context_length: usize,
+    pub timeout_secs: u64,
 }
 
 impl Default for OllamaConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            host: "http://localhost:11434".to_string(),
+            host: "localhost".to_string(),
+            port: 11434,
+            use_https: false,
             models: vec!["qwen2.5-coder:0.5b".to_string()],
             default_model: "qwen2.5-coder:0.5b".to_string(),
             pull_on_start: true,
+            default_context_length: 4096,
+            timeout_secs: 120,
         }
     }
 }
