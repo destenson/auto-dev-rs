@@ -2,6 +2,7 @@
 // Future command handlers will be implemented here
 
 pub mod analyze;
+pub mod bootstrap;
 pub mod deploy;
 pub mod docs;
 pub mod generate;

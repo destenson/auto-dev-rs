@@ -84,6 +84,12 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::self_dev::handle_self_dev_command(command))?;
         }
+        Commands::Bootstrap(command) => {
+            info!("Bootstrap command: {:?}", command);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::bootstrap::handle_bootstrap_command(command))?;
+        }
     }
 
     Ok(())

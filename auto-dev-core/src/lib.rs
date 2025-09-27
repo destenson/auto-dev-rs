@@ -3,6 +3,7 @@
 //! This crate contains the core business logic for the auto-dev tool,
 //! including project management, code generation, and plugin systems.
 
+pub mod bootstrap;
 pub mod context;
 pub mod dev_loop;
 pub mod incremental;
