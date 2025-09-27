@@ -37,6 +37,7 @@ pub struct GenerationOptions {
     pub max_tokens: usize,
     pub temperature: f32,
     pub include_tests: bool,
+    pub streaming: bool,
 }
 
 impl Default for GenerationOptions {
@@ -47,6 +48,7 @@ impl Default for GenerationOptions {
             max_tokens: 4096,
             temperature: 0.2,
             include_tests: true,
+            streaming: false,
         }
     }
 }

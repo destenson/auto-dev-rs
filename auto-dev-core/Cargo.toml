@@ -19,6 +19,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = {workspace = true}
+async-openai = "0.29.3"
 async-trait = "0.1.89"
 bincode = "2.0.1"
 candle-core = "0.9.1"

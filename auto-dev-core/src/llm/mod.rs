@@ -21,12 +21,14 @@ pub mod errors;
 #[cfg(test)]
 pub mod mock;
 pub mod openai;
+pub mod openai_async;
 pub mod openai_compat;
 pub mod prompts;
 pub mod provider;
 pub mod roles;
 pub mod router;
 pub mod tiny;
+pub mod token_manager;
 pub mod traits;
 pub mod types;
 
@@ -35,6 +37,8 @@ use serde::{Deserialize, Serialize};
 
 // Re-export commonly used types
 pub use errors::{LLMError, LLMResult};
+pub use openai_async::{AsyncOpenAIConfig, AsyncOpenAIProvider};
+pub use token_manager::{ConversationManager, TokenManager};
 pub use traits::{CachedProvider, LLMProvider, RetryableProvider};
 #[cfg(test)]
 pub use traits::MockProvider;
