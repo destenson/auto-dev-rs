@@ -3,8 +3,6 @@
 //! This module provides a mock implementation of the LLMProvider trait
 //! for use in unit tests only. It is not available in production builds.
 
-#![cfg(test)]
-
 use super::errors::LLMError;
 use super::traits::{LLMProvider, MockProvider};
 use super::types::*;
