@@ -107,14 +107,14 @@ async fn start_loop(
 ) -> Result<()> {
     info!("Starting autonomous development loop on port {}", port);
 
-    // Check if already running
+    // Check if already running (use temp directory for port file if no .auto-dev)
     let mut client = ControlClient::new();
     if client.ping().await.unwrap_or(false) {
         warn!("Loop is already running");
         return Ok(());
     }
 
-    // Load configuration
+    // Load configuration - use defaults if no config provided
     let mut config =
         if let Some(path) = config_path { load_config(path).await? } else { LoopConfig::default() };
 
@@ -189,10 +189,16 @@ async fn stop_loop() -> Result<()> {
 
     info!("Shutdown command sent successfully");
 
-    // Clean up port file
-    let port_file = PathBuf::from(".auto-dev/loop/control.port");
+    // Clean up port file (check both locations)
+    let port_file = get_storage_path("loop").await.join("control.port");
     if port_file.exists() {
         tokio::fs::remove_file(port_file).await.ok();
+    }
+    
+    // Also check legacy location
+    let legacy_port_file = PathBuf::from(".auto-dev/loop/control.port");
+    if legacy_port_file.exists() {
+        tokio::fs::remove_file(legacy_port_file).await.ok();
     }
 
     Ok(())
@@ -200,7 +206,7 @@ async fn stop_loop() -> Result<()> {
 
 /// Show loop status
 async fn show_status() -> Result<()> {
-    // Load state from .auto-dev/loop/state.json
+    // Try to load state from persistent storage if available
     let state_path = PathBuf::from(".auto-dev/loop/state.json");
 
     if state_path.exists() {
@@ -352,15 +358,34 @@ async fn load_config(path: PathBuf) -> Result<LoopConfig> {
 use serde_json;
 use toml;
 
+/// Get or create a path under .auto-dev if it exists, otherwise use temp directory
+pub async fn get_storage_path(subdir: &str) -> PathBuf {
+    let auto_dev_dir = PathBuf::from(".auto-dev");
+    
+    // If .auto-dev exists, use it (and create subdir if needed)
+    if auto_dev_dir.exists() {
+        let path = auto_dev_dir.join(subdir);
+        if !path.exists() {
+            if let Ok(_) = tokio::fs::create_dir_all(&path).await {
+                info!("Created .auto-dev/{} for persistent storage", subdir);
+            }
+        }
+        return path;
+    }
+    
+    // Otherwise use system temp directory (no persistence)
+    std::env::temp_dir().join("auto-dev").join(subdir)
+}
+
 /// Run with default configuration (alias for 'loop start --background')
 pub async fn run_default(target_self: bool) -> Result<()> {
-    // Check for config file
+    // Check for optional config file (but don't require it)
     let config_path = PathBuf::from(".auto-dev/config.toml");
     let config = if config_path.exists() {
         info!("Using configuration from .auto-dev/config.toml");
         Some(config_path)
     } else {
-        info!("No config file found, using defaults");
+        info!("Running with default configuration (no .auto-dev directory needed)");
         None
     };
 
@@ -368,58 +393,70 @@ pub async fn run_default(target_self: bool) -> Result<()> {
     start_loop(config, true, target_self, 9090).await
 }
 
-/// Initialize auto-dev project structure
+/// Initialize auto-dev project structure (completely optional - creates config template)
 pub async fn init_project() -> Result<()> {
-    info!("Initializing auto-dev project structure");
-
-    // Create .auto-dev directory
+    info!("Creating optional .auto-dev configuration directory");
+    
     let auto_dev_dir = PathBuf::from(".auto-dev");
+    
+    // Create the directory structure for users who want persistent config
     if !auto_dev_dir.exists() {
         tokio::fs::create_dir_all(&auto_dev_dir).await?;
-        println!("Created .auto-dev directory");
+        println!("Created .auto-dev directory for persistent configuration");
     }
 
-    // Create subdirectories
-    let subdirs = ["loop", "patterns", "templates", "cache", "history", "metrics"];
-
-    for subdir in &subdirs {
+    // Create subdirectories that will be used if they exist
+    let dirs = ["cache", "history", "metrics", "patterns", "templates"];
+    
+    for subdir in &dirs {
         let path = auto_dev_dir.join(subdir);
         if !path.exists() {
             tokio::fs::create_dir_all(&path).await?;
-            println!("Created .auto-dev/{}", subdir);
+            println!("Created .auto-dev/{} for {}", subdir, match subdir {
+                &"cache" => "caching analysis results",
+                &"history" => "persisting command history",
+                &"metrics" => "tracking performance metrics",
+                &"patterns" => "custom code patterns",
+                &"templates" => "project templates",
+                _ => "data storage"
+            });
         }
     }
 
-    // Create config file if it doesn't exist
+    // Create config file with helpful defaults
     let config_path = auto_dev_dir.join("config.toml");
     if !config_path.exists() {
-        // Embed the default configuration at compile time
-        let default_config = include_str!("../../../../.auto-dev/config.toml.example");
+        // Create a minimal default config
+        let default_config = r#"# Auto-dev Configuration
+# This file is optional - auto-dev works with sane defaults
+
+[monitoring]
+# Patterns to watch
+include = ["src/**/*", "*.toml", "*.md"]
+exclude = ["target/**", ".git/**", "node_modules/**"]
+
+[behavior]
+# Autonomous behavior settings
+auto_fix_tests = false
+auto_generate_tests = false
+auto_update_docs = false
+
+[llm]
+# LLM provider settings (optional)
+# provider = "local"  # or "openai", "claude", etc.
+"#;
         tokio::fs::write(&config_path, default_config).await?;
-        println!("Created .auto-dev/config.toml with default configuration");
+        println!("Created .auto-dev/config.toml with example configuration");
     } else {
         println!("Config file already exists at .auto-dev/config.toml");
     }
 
-    // Create a .gitignore for .auto-dev if it doesn't exist
-    let gitignore_path = auto_dev_dir.join(".gitignore");
-    if !gitignore_path.exists() {
-        let gitignore_content = "# Auto-generated files\n\
-                                cache/\n\
-                                *.tmp\n\
-                                *.log\n\
-                                control.port\n\
-                                state.json\n";
-        tokio::fs::write(&gitignore_path, gitignore_content).await?;
-        println!("Created .auto-dev/.gitignore");
-    }
-
-    println!("\n✅ Auto-dev initialized successfully!");
-    println!("\nNext steps:");
-    println!("  1. Review and customize .auto-dev/config.toml");
-    println!("  2. Run 'auto-dev start' to begin autonomous development");
-    println!("  3. Use 'auto-dev status' to check the loop status");
-    println!("  4. Use 'auto-dev stop' to stop the loop");
+    println!("\n✅ Auto-dev initialized with optional configuration!");
+    println!("\nNote: This step is optional. Auto-dev works with sane defaults.");
+    println!("\nYou can now:");
+    println!("  • Run 'auto-dev run' or 'auto-dev start' to begin");
+    println!("  • Customize .auto-dev/config.toml if desired");
+    println!("  • Use 'auto-dev loop status' to check if running");
 
     Ok(())
 }
