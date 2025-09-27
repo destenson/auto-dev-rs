@@ -90,6 +90,12 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::bootstrap::handle_bootstrap_command(command))?;
         }
+        Commands::Metrics(command) => {
+            info!("Metrics command: {:?}", command);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::metrics::handle_metrics_command(command))?;
+        }
     }
 
     Ok(())

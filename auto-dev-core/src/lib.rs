@@ -10,6 +10,7 @@ pub mod incremental;
 pub mod learning;
 pub mod llm;
 pub mod mcp;
+pub mod metrics;
 pub mod modules;
 pub mod monitor;
 pub mod parser;

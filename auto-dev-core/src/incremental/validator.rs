@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Increment validation and testing
 
 use super::{ExpectedOutcome, IncrementalError, Result, SecurityCheck, TestCase, TestType};

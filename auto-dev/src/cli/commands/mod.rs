@@ -8,6 +8,7 @@ pub mod docs;
 pub mod generate;
 pub mod loop_control;
 pub mod manage;
+pub mod metrics;
 pub mod parse;
 pub mod self_dev;
 pub mod test;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Baseline snapshot creation for bootstrap
 
 use super::{BaselineConfig, BootstrapError, Result};

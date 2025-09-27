@@ -78,6 +78,10 @@ pub enum Commands {
     /// Bootstrap self-development mode
     #[command(name = "bootstrap", about = "Initialize self-development mode with safety checks")]
     Bootstrap(super::commands::bootstrap::BootstrapCommand),
+    
+    /// View and analyze self-improvement metrics
+    #[command(name = "metrics", about = "Track and analyze self-improvement progress")]
+    Metrics(super::commands::metrics::MetricsCommand),
 }
 
 #[derive(Parser, Debug)]
