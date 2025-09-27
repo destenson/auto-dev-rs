@@ -11,11 +11,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-#[cfg(feature = "tracing")]
-use tracing::{debug, info, warn};
-#[cfg(feature = "tracing")]
-#[cfg(feature = "log")]
-use tracing::{debug, info, warn};
+use crate::{debug, info, warn};
 
 /// Event that triggers metric collection
 #[derive(Debug, Clone, Serialize, Deserialize)]

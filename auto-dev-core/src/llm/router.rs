@@ -17,6 +17,7 @@ pub mod registry;
 use super::{
     ClassificationResult, QuestionType, TinyModel, TinyModelConfig,
     candle::SmartTinyModel,
+    openrouter::OpenRouterConfig,
     provider::{self, *},
     tiny::OllamaTinyModel,
 };
@@ -93,8 +94,25 @@ impl LLMRouter {
             }
         }
 
+        // Register OpenRouter provider if API key is available
+        let openrouter_config = self.config.openrouter_config.clone().unwrap_or_default();
+        if std::env::var(&openrouter_config.api_key_env).is_ok() {
+            match super::openrouter::OpenRouterProvider::new(openrouter_config.clone()).await {
+                Ok(provider) => {
+                    self.register_provider(Arc::new(provider));
+                    info!(
+                        "Registered OpenRouter provider with {} as default model",
+                        openrouter_config.default_model
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to create OpenRouter provider: {}", e);
+                }
+            }
+        }
+
         // Register other providers based on config
-        // TODO: Add Claude, OpenAI, etc.
+        // TODO: Add Claude, OpenAI, Groq, etc.
 
         info!("Registered {} providers across {} tiers", self.providers.len(), self.tiers.len());
 
@@ -313,6 +331,7 @@ pub struct RouterConfig {
     pub fallback_enabled: bool,
     pub cost_optimization: bool,
     pub qwen_config: Option<QwenConfig>,
+    pub openrouter_config: Option<OpenRouterConfig>,
 }
 
 impl Default for RouterConfig {
@@ -324,6 +343,7 @@ impl Default for RouterConfig {
             fallback_enabled: true,
             cost_optimization: true,
             qwen_config: Some(QwenConfig::default()),
+            openrouter_config: None, // Disabled by default, enable via config
         }
     }
 }
