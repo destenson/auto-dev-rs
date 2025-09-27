@@ -8,8 +8,8 @@ use tracing::{debug, info, warn};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::monitor::{FileChange, ChangeType, FileCategory};
-use super::watcher::FileWatcher;
-use super::classifier::FileClassifier;
+use crate::monitor::watcher::FileWatcher;
+use crate::monitor::classifier::FileClassifier;
 
 /// Configuration for self-monitoring behavior
 #[derive(Debug, Clone)]
@@ -116,7 +116,6 @@ impl SelfMonitor {
             EventKind::Create(_) => ChangeType::Created,
             EventKind::Modify(_) => ChangeType::Modified,
             EventKind::Remove(_) => ChangeType::Deleted,
-            EventKind::Rename(_) => ChangeType::Renamed,
             _ => return Ok(()),
         };
 

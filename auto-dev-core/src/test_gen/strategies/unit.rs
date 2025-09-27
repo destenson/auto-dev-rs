@@ -35,7 +35,7 @@ impl UnitTestStrategy {
 
         // Add example-based inputs if available
         if let Some(example) = context.examples.first() {
-            test.inputs.push(TestInput::Custom(example.input.to_string()));
+            test.inputs.push(TestInput::Custom(example.input.clone()));
             test.expected =
                 ExpectedOutcome { success: true, value: Some(example.output.clone()), error: None };
         }

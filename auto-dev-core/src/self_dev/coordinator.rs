@@ -130,18 +130,10 @@ impl ComponentCoordinator {
         
         if !self.config.components.testing {
             warn!("Testing component disabled, skipping tests");
-            return Ok(TestResults {
-                passed: 1,
-                failed: 0,
-                skipped: 0,
-            });
+            return Ok(TestResults::new(1, 0, 0));
         }
         
-        Ok(TestResults {
-            passed: 5,
-            failed: 0,
-            skipped: 1,
-        })
+        Ok(TestResults::new(5, 0, 1))
     }
     
     pub async fn deploy_approved_changes(&self) -> Result<()> {

@@ -4,13 +4,20 @@ use anyhow::Result;
 use auto_dev_core::self_dev::{
     ControlCommand, DevelopmentMode, SafetyLevel, SelfDevConfig, SelfDevOrchestrator,
 };
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
 
+/// Self-development control commands
+#[derive(Debug, Args)]
+pub struct SelfDevCommand {
+    #[command(subcommand)]
+    pub subcommand: SelfDevSubcommand,
+}
+
 #[derive(Debug, Subcommand)]
-pub enum SelfDevCommand {
+pub enum SelfDevSubcommand {
     /// Start self-development mode
     Start {
         /// Development mode (observation, assisted, semi-autonomous, fully-autonomous)
@@ -101,26 +108,26 @@ static ORCHESTRATOR: once_cell::sync::Lazy<Arc<RwLock<Option<SelfDevOrchestrator
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(None)));
 
 pub async fn handle_self_dev_command(command: SelfDevCommand) -> Result<()> {
-    match command {
-        SelfDevCommand::Start { mode, safety } => {
+    match command.subcommand {
+        SelfDevSubcommand::Start { mode, safety } => {
             start_self_dev(parse_mode(&mode)?, parse_safety(&safety)?).await
         }
-        SelfDevCommand::Stop => stop_self_dev().await,
-        SelfDevCommand::Pause => pause_self_dev().await,
-        SelfDevCommand::Resume => resume_self_dev().await,
-        SelfDevCommand::EmergencyStop => emergency_stop().await,
-        SelfDevCommand::Status => show_status().await,
-        SelfDevCommand::Review => review_changes().await,
-        SelfDevCommand::Approve { change_id } => approve_change(change_id).await,
-        SelfDevCommand::Reject { change_id } => reject_change(change_id).await,
-        SelfDevCommand::SetLimit { limit } => set_change_limit(limit).await,
-        SelfDevCommand::Run { task, dry_run, skip_validation, no_confirm } => {
+        SelfDevSubcommand::Stop => stop_self_dev().await,
+        SelfDevSubcommand::Pause => pause_self_dev().await,
+        SelfDevSubcommand::Resume => resume_self_dev().await,
+        SelfDevSubcommand::EmergencyStop => emergency_stop().await,
+        SelfDevSubcommand::Status => show_status().await,
+        SelfDevSubcommand::Review => review_changes().await,
+        SelfDevSubcommand::Approve { change_id } => approve_change(change_id).await,
+        SelfDevSubcommand::Reject { change_id } => reject_change(change_id).await,
+        SelfDevSubcommand::SetLimit { limit } => set_change_limit(limit).await,
+        SelfDevSubcommand::Run { task, dry_run, skip_validation, no_confirm } => {
             run_manual_task(task, dry_run, skip_validation, no_confirm).await
         }
-        SelfDevCommand::Monitor { watch } => monitor_source(watch).await,
-        SelfDevCommand::Validate => validate_configuration().await,
-        SelfDevCommand::Init { force } => init_self_dev(force).await,
-        SelfDevCommand::CheckSafety => check_safety_boundaries().await,
+        SelfDevSubcommand::Monitor { watch } => monitor_source(watch).await,
+        SelfDevSubcommand::Validate => validate_configuration().await,
+        SelfDevSubcommand::Init { force } => init_self_dev(force).await,
+        SelfDevSubcommand::CheckSafety => check_safety_boundaries().await,
     }
 }
 
@@ -129,8 +136,8 @@ async fn start_self_dev(mode: DevelopmentMode, safety: SafetyLevel) -> Result<()
     
     let config = SelfDevConfig {
         enabled: true,
-        mode,
-        safety_level: safety,
+        mode: mode.clone(),
+        safety_level: safety.clone(),
         auto_approve: matches!(mode, DevelopmentMode::FullyAutonomous),
         max_changes_per_day: 10,
         require_tests: true,
@@ -230,7 +237,7 @@ async fn show_status() -> Result<()> {
         if !status.pending_changes.is_empty() {
             println!("\nPending Changes:");
             for change in &status.pending_changes {
-                println!("  - {} ({}): {}", change.id, change.change_type, change.description);
+                println!("  - {} ({:?}): {}", change.id, change.change_type, change.description);
             }
         }
     } else {
@@ -400,7 +407,7 @@ async fn run_manual_task(task: String, dry_run: bool, skip_validation: bool, no_
             },
         };
         
-        let orchestrator = auto_dev_core::self_dev::initialize(config).await?;
+        let _orchestrator = auto_dev_core::self_dev::initialize(config).await?;
         
         // TODO: Implement actual task execution through orchestrator
         println!("Task execution through orchestrator pending full integration");

@@ -1,7 +1,7 @@
 //! Individual validation gate implementations
 
 use super::gates::{GateResult, ValidationGate};
-use super::{CodeModification, RiskLevel};
+use super::{CodeModification, ModificationType, RiskLevel};
 use async_trait::async_trait;
 use regex::Regex;
 use std::collections::HashSet;
@@ -448,7 +448,7 @@ impl ValidationGate for ReversibilityValidator {
         
         // Check if original content is preserved somewhere
         if modification.original.is_empty() && 
-           matches!(modification.modification_type, super::super::ModificationType::Delete) {
+           matches!(modification.modification_type, ModificationType::Delete) {
             issues.push("Deletion without backup".to_string());
             suggestions.push("Create backup before deletion".to_string());
         }

@@ -69,8 +69,8 @@ impl EdgeCaseStrategy {
 
         // Special values
         cases.push(TestInput::NaN);
-        cases.push(TestInput::Custom(serde_json::Number::from_f64(f64::INFINITY).unwrap().to_value()));
-        cases.push(TestInput::Custom(serde_json::Number::from_f64(f64::NEG_INFINITY).unwrap().to_value()));
+        cases.push(TestInput::Custom(serde_json::json!(f64::INFINITY)));
+        cases.push(TestInput::Custom(serde_json::json!(f64::NEG_INFINITY)));
 
         cases
     }
@@ -112,7 +112,7 @@ impl EdgeCaseStrategy {
 
         // Deeply nested
         cases.push(TestInput::Custom(serde_json::json!({
-            "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":\"deep\"}}}}}"
+            "a": {"b": {"c": {"d": {"e": "deep"}}}}
         })));
 
         // Circular reference simulation

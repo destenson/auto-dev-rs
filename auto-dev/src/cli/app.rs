@@ -71,10 +71,6 @@ pub enum Commands {
     #[command(about = "Initialize auto-dev configuration and directory structure")]
     Init,
 
-    /// Dogfood mode for self-development (DEPRECATED - use self-dev instead)
-    #[command(about = "[DEPRECATED] Use 'self-dev' command instead")]
-    Dogfood(super::commands::dogfood::DogfoodCommand),
-    
     /// Self-development integration control
     #[command(name = "self-dev", about = "Control self-development integration and orchestration")]
     SelfDev(super::commands::self_dev::SelfDevCommand),

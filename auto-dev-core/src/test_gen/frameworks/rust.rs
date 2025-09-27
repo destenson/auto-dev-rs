@@ -132,7 +132,7 @@ impl RustTestAdapter {
             TestInput::SingleElement => "vec![1]".to_string(),
             TestInput::Duplicates => "vec![1, 1, 2, 2, 3, 3]".to_string(),
             TestInput::LargeArray(size) => format!("vec![0; {}]", size),
-            TestInput::Custom(s) => s.clone(),
+            TestInput::Custom(s) => s.to_string(),
         }
     }
 

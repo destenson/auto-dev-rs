@@ -4,7 +4,6 @@
 pub mod analyze;
 pub mod deploy;
 pub mod docs;
-pub mod dogfood;
 pub mod generate;
 pub mod loop_control;
 pub mod manage;

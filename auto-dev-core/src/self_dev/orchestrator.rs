@@ -345,6 +345,14 @@ pub struct TestResults {
 }
 
 impl TestResults {
+    pub fn new(passed: usize, failed: usize, skipped: usize) -> Self {
+        Self {
+            passed,
+            failed,
+            skipped,
+        }
+    }
+    
     pub fn all_passed(&self) -> bool {
         self.failed == 0 && self.passed > 0
     }
