@@ -10,14 +10,14 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | Metric | Count | Percentage |
 |--------|-------|------------|
 | Total PRPs | 51 | 100% |
-| Completed (Archived) | 29 | 57% |
+| Completed (Archived) | 30 | 59% |
 | Partial (Active) | 0 | 0% |
-| Not Started (Active) | 22 | 43% |
+| Not Started (Active) | 21 | 41% |
 
 ### Implementation Progress
 
 ```
-[████████████████░░░░░░░░░░░░] 57% Complete (29/51 PRPs fully implemented)
+[█████████████████░░░░░░░░░░░] 59% Complete (30/51 PRPs fully implemented)
 ```
 
 ## Active PRPs (Pending Work)
@@ -40,7 +40,6 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 230 | Fabric Patterns Integration | ❌ NOT STARTED | 2025-09-27 | Community patterns |
 | 231 | Claude Code CLI Integration | ❌ NOT STARTED | 2025-09-27 | Advanced CLI features |
 | 233-238 | Claude Binary/Command Suite | ❌ NOT STARTED | 2025-09-27 | Full Claude Code integration |
-| 261 | CLAUDE.md File Loader | ❌ NOT STARTED | 2025-09-27 | Loads and validates CLAUDE.md content |
 | 262 | Claude Command Parser | ❌ NOT STARTED | 2025-09-27 | Parses command files from .claude/commands/ |
 | 263 | Claude Context Integration | ❌ NOT STARTED | 2025-09-27 | Integrates CLAUDE.md into ContextManager |
 | 264 | Claude Command Registry | ❌ NOT STARTED | 2025-09-27 | Central registry for discovered commands |
@@ -90,6 +89,7 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 226 | Ollama Provider | 2025-09-27 | Local/remote model support with full features |
 | 232 | OpenRouter Gateway | 2025-09-27 | 400+ models via unified gateway |
 | 260 | Claude Configuration Discovery | 2025-09-27 | Foundation for .claude directory support |
+| 261 | CLAUDE.md File Loader | 2025-09-27 | Loads and validates CLAUDE.md content |
 
 ## Implementation Roadmap
 
@@ -134,6 +134,7 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 
 ## Recent Updates
 
+- 2025-09-27: Completed CLAUDE.md File Loader (PRP-261) with validation, UTF-8 handling, and merge support
 - 2025-09-27: Completed Claude Configuration Discovery (PRP-260) with full path discovery, caching, and priority system
 - 2025-09-27: Completed OpenRouter gateway (PRP-232) with 400+ model access
 - 2025-09-27: Completed Ollama provider (PRP-226) with local/remote model support
