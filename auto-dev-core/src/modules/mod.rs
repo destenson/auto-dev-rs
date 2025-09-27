@@ -18,6 +18,7 @@ pub mod messages;
 pub mod native_host;
 pub mod registry;
 pub mod runtime;
+pub mod sandbox;
 pub mod wasm_host;
 
 #[cfg(test)]

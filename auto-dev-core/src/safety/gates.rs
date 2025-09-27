@@ -4,7 +4,7 @@ use super::{
     CodeModification, Result, SafetyConfig, SafetyError, ValidationReport, RiskLevel,
 };
 use async_trait::async_trait;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

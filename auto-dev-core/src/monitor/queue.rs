@@ -326,7 +326,7 @@ mod tests {
 
         queue.enqueue(change, ChangeImpact::Major).unwrap();
 
-        let mut queued = queue.dequeue().unwrap();
+        let queued = queue.dequeue().unwrap();
         assert_eq!(queued.attempt_count, 0);
 
         // Requeue should increment attempts

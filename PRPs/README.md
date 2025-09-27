@@ -10,25 +10,23 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | Metric | Count | Percentage |
 |--------|-------|------------|
 | Total PRPs | 28 | 100% |
-| Completed (Archived) | 22 | 78.6% |
-| Partial (Active) | 2 | 7.1% |
+| Completed (Archived) | 24 | 85.7% |
+| Partial (Active) | 0 | 0% |
 | Not Started (Active) | 4 | 14.3% |
 
 ### Implementation Progress
 
 ```
-[██████████████████████░░░] 85.7% Complete (24/28 PRPs with some implementation)
+[████████████████████████░░░░] 85.7% Complete (24/28 PRPs fully implemented)
 ```
 
 ## Active PRPs (Pending Work)
 
 | PRP | Title | Status | Last Verified | Notes |
 |-----|-------|--------|---------------|-------|
-| 207 | Module Sandboxing | 🔄 PARTIAL | 2025-09-27 | Basic WASM sandboxing implemented, capability model pending |
 | 210 | Version Control Integration | ❌ NOT STARTED | 2025-09-27 | No git integration module implemented |
 | 213 | Module Marketplace | ❌ NOT STARTED | 2025-09-27 | Only basic registry exists |
 | 214 | Self-Documentation | ❌ NOT STARTED | 2025-09-27 | No automatic documentation generation |
-| 215 | Self-Development Integration | 🔄 PARTIAL | 2025-09-27 | Orchestration created but not integrated to CLI |
 
 ## Archived PRPs (Completed)
 
@@ -45,7 +43,9 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 208 | Self-Test Framework | 2025-09-27 | Comprehensive testing with sandbox |
 | 209 | Bootstrap Sequence | 2025-09-27 | Full bootstrap with stages, checkpoints, and resume |
 | 211 | Self-Improvement Metrics | 2025-09-27 | Complete metrics with collection, storage, analysis, dashboard |
+| 207 | Module Sandboxing | 2025-09-27 | Full capability model with resource limits and audit logging |
 | 212 | Safety Validation Gates | 2025-09-27 | Full 5-layer safety gate system |
+| 215 | Self-Development Integration | 2025-09-27 | Full orchestration with CLI integration |
 
 ### 100 Series - Core Infrastructure
 | PRP | Title | Completion Date | Notes |
@@ -104,6 +104,8 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 
 ## Recent Updates
 
+- 2025-09-27: Completed module sandboxing (PRP-207) with full capability model
+- 2025-09-27: Completed self-development integration (PRP-215) with full CLI support
 - 2025-09-27: Implemented self-improvement metrics (PRP-211) with full collection and dashboard
 - 2025-09-27: Implemented bootstrap sequence (PRP-209) with all stages and commands  
 - 2025-09-27: Moved completed PRPs (201, 205, 206, 209, 211) to archive

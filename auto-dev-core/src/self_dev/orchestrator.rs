@@ -302,6 +302,132 @@ impl SelfDevOrchestrator {
     pub async fn handle_control_command(&self, command: ControlCommand) -> Result<()> {
         self.operator_interface.handle_command(command).await
     }
+    
+    pub async fn execute_task(&self, task_description: &str) -> Result<()> {
+        info!("Executing task: {}", task_description);
+        
+        // Transition to analyzing state
+        self.transition_state(DevelopmentState::Analyzing).await?;
+        
+        // Parse the task to understand what needs to be done
+        use crate::parser::{Requirement, RequirementType, Specification, SpecParser};
+        use std::path::{Path, PathBuf};
+        
+        let mut spec = Specification {
+            source: PathBuf::from("manual_task"),
+            requirements: vec![],
+            metadata: Default::default(),
+        };
+        
+        // Try to find specification files if they reference a specific format
+        if let Some(path_str) = extract_file_reference(task_description) {
+            let path = Path::new(&path_str);
+            if path.exists() {
+                info!("Found referenced file: {}", path.display());
+                let parser = SpecParser::new();
+                spec = parser.parse_file(path).await?;
+            }
+        }
+        
+        // If no spec was loaded, create one from the task description
+        if spec.requirements.is_empty() {
+            let requirement = Requirement {
+                id: format!("task_{}", chrono::Utc::now().timestamp()),
+                requirement_type: RequirementType::Functional,
+                description: task_description.to_string(),
+                priority: "high".to_string(),
+                tags: vec!["manual".to_string()],
+                source_location: None,
+            };
+            spec.requirements.push(requirement);
+        }
+        
+        // Transition to planning
+        self.transition_state(DevelopmentState::Planning).await?;
+        
+        // Use synthesis engine to generate implementation
+        use crate::synthesis::{SynthesisEngine, SynthesisConfig};
+        let synthesis_config = SynthesisConfig::default();
+        let mut engine = SynthesisEngine::new(synthesis_config)?;
+        
+        info!("Synthesizing implementation for {} requirements...", spec.requirements.len());
+        
+        // Transition to developing
+        self.transition_state(DevelopmentState::Developing).await?;
+        
+        let result = engine.synthesize(&spec).await?;
+        
+        // Transition to testing  
+        self.transition_state(DevelopmentState::Testing).await?;
+        
+        // Apply safety validation before writing
+        use crate::safety::{SafetyGatekeeper, CodeModification, ModificationType, RiskLevel};
+        let safety_gate = SafetyGatekeeper::default();
+        
+        let mut applied_count = 0;
+        for generated_file in &result.generated_files {
+            let modification = CodeModification {
+                file_path: generated_file.path.clone(),
+                modification_type: if generated_file.path.exists() {
+                    ModificationType::Modify
+                } else {
+                    ModificationType::Create
+                },
+                content: generated_file.content.clone(),
+                risk_assessment: RiskLevel::Medium,
+            };
+            
+            // Transition to reviewing
+            self.transition_state(DevelopmentState::Reviewing).await?;
+            
+            if safety_gate.validate(&modification).await?.passed {
+                // Transition to deploying
+                self.transition_state(DevelopmentState::Deploying).await?;
+                
+                info!("Writing generated file: {}", generated_file.path.display());
+                
+                // Create parent directories if needed
+                if let Some(parent) = generated_file.path.parent() {
+                    tokio::fs::create_dir_all(parent).await.ok();
+                }
+                
+                tokio::fs::write(&generated_file.path, &generated_file.content).await?;
+                applied_count += 1;
+            } else {
+                warn!("Safety validation failed for: {}", generated_file.path.display());
+            }
+        }
+        
+        info!("Applied {} of {} generated files", applied_count, result.generated_files.len());
+        
+        // Transition back to idle
+        self.transition_state(DevelopmentState::Idle).await?;
+        
+        info!("Task execution completed");
+        Ok(())
+    }
+}
+
+/// Extract file reference from task description
+fn extract_file_reference(task_description: &str) -> Option<String> {
+    // Look for patterns like "implement X.md" or "parse /path/to/file"
+    let patterns = [
+        r"(?i)(?:implement|parse|process|read|analyze)\s+([^\s]+\.[a-z]+)",
+        r"(?i)from\s+([^\s]+\.[a-z]+)",
+        r"([^\s]+\.[a-z]+)",
+    ];
+    
+    for pattern in &patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if let Some(captures) = re.captures(task_description) {
+                if let Some(path) = captures.get(1) {
+                    return Some(path.as_str().to_string());
+                }
+            }
+        }
+    }
+    
+    None
 }
 
 #[derive(Debug, Clone)]

@@ -407,10 +407,13 @@ async fn run_manual_task(task: String, dry_run: bool, skip_validation: bool, no_
             },
         };
         
-        let _orchestrator = auto_dev_core::self_dev::initialize(config).await?;
+        let orchestrator = auto_dev_core::self_dev::initialize(config).await?;
         
-        // TODO: Implement actual task execution through orchestrator
-        println!("Task execution through orchestrator pending full integration");
+        // Execute the task through the orchestrator
+        println!("Processing task: {}", task);
+        orchestrator.start().await?;
+        orchestrator.execute_task(&task).await?;
+        orchestrator.stop().await?;
         
         if !skip_validation {
             println!("\nRunning post-validation checks...");
