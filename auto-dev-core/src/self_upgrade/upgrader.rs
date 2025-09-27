@@ -7,7 +7,7 @@ use std::process::Command;
 use tracing::{error, info, warn};
 
 use super::platform::BinarySwapper;
-use super::{RollbackManager, StatePreserver, UpgradeConfig, VersionVerifier};
+use super::{BuildProfile, RollbackManager, StatePreserver, UpgradeConfig, VersionVerifier};
 
 /// Main upgrade orchestrator
 pub struct SelfUpgrader {
@@ -84,10 +84,16 @@ impl SelfUpgrader {
 
     /// Compile the modified version
     async fn compile_new_version(&self) -> Result<PathBuf> {
-        info!("Building release version");
+        info!("Building {} version", 
+            match &self.config.build_profile {
+                BuildProfile::Debug => "debug",
+                BuildProfile::Release => "release",
+                BuildProfile::Custom(name) => name.as_str()
+            }
+        );
 
         let output = Command::new("cargo")
-            .args(&["build", "--release"])
+            .args(&self.config.build_profile.cargo_args())
             .output()
             .context("Failed to run cargo build")?;
 
@@ -99,7 +105,7 @@ impl SelfUpgrader {
         // Find the built binary
         let binary_name = if cfg!(windows) { "auto-dev.exe" } else { "auto-dev" };
 
-        let new_binary = PathBuf::from("target/release").join(binary_name);
+        let new_binary = self.config.build_profile.target_dir().join(binary_name);
 
         if !new_binary.exists() {
             return Err(anyhow::anyhow!("Built binary not found at {:?}", new_binary));

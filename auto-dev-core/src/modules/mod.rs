@@ -30,6 +30,30 @@ pub use messages::{Message, MessageBus, MessageHandler};
 pub use registry::{ModuleInfo, ModuleRegistry, ModuleStatus};
 pub use runtime::{ExecutionContext, ModuleRuntime};
 
+/// Build configuration for modules
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleBuildConfig {
+    /// Build profile to use
+    pub build_profile: crate::self_upgrade::BuildProfile,
+    /// Whether to enable debug symbols
+    pub debug_symbols: bool,
+    /// Additional cargo features to enable
+    pub features: Vec<String>,
+    /// Environment variables for build
+    pub env_vars: HashMap<String, String>,
+}
+
+impl Default for ModuleBuildConfig {
+    fn default() -> Self {
+        Self {
+            build_profile: crate::self_upgrade::BuildProfile::Debug,
+            debug_symbols: true,
+            features: Vec::new(),
+            env_vars: HashMap::new(),
+        }
+    }
+}
+
 /// Main module system that coordinates all module operations
 pub struct ModuleSystem {
     registry: Arc<RwLock<ModuleRegistry>>,
