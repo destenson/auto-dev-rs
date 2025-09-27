@@ -189,16 +189,10 @@ async fn stop_loop() -> Result<()> {
 
     info!("Shutdown command sent successfully");
 
-    // Clean up port file (check both locations)
-    let port_file = get_storage_path("loop").await.join("control.port");
+    // Clean up port file
+    let port_file = PathBuf::from(".auto-dev/loop/control.port");
     if port_file.exists() {
         tokio::fs::remove_file(port_file).await.ok();
-    }
-    
-    // Also check legacy location
-    let legacy_port_file = PathBuf::from(".auto-dev/loop/control.port");
-    if legacy_port_file.exists() {
-        tokio::fs::remove_file(legacy_port_file).await.ok();
     }
 
     Ok(())

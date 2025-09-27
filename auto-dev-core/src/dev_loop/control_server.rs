@@ -3,6 +3,7 @@
 use super::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -32,12 +33,20 @@ impl ControlServer {
         let listener = TcpListener::bind(&addr).await?;
         info!("Control server listening on {}", addr);
 
-        // Save port to file for client discovery
-        let port_file = PathBuf::from(".auto-dev/loop/control.port");
-        if let Some(parent) = port_file.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+        // Save port to file for client discovery (create .auto-dev/loop as needed)
+        let port_dir = PathBuf::from(".auto-dev/loop");
+        if !port_dir.exists() {
+            if let Err(e) = tokio::fs::create_dir_all(&port_dir).await {
+                warn!("Could not create .auto-dev/loop directory: {} (continuing anyway)", e);
+            }
         }
-        tokio::fs::write(&port_file, self.port.to_string()).await?;
+        
+        let port_file = port_dir.join("control.port");
+        
+        // Try to write port file, but don't fail if we can't
+        if let Err(e) = tokio::fs::write(&port_file, self.port.to_string()).await {
+            warn!("Could not write port file: {} (continuing anyway)", e);
+        }
 
         loop {
             tokio::select! {
@@ -159,15 +168,19 @@ impl ControlClient {
             return Ok(port);
         }
 
+        // Check for port file in .auto-dev/loop
         let port_file = PathBuf::from(".auto-dev/loop/control.port");
+        
         if port_file.exists() {
-            let content = tokio::fs::read_to_string(&port_file).await?;
-            let port: u16 = content.trim().parse()?;
-            self.port = Some(port);
-            Ok(port)
-        } else {
-            Err(anyhow::anyhow!("Control server not running (port file not found)"))
+            if let Ok(content) = tokio::fs::read_to_string(&port_file).await {
+                if let Ok(port) = content.trim().parse::<u16>() {
+                    self.port = Some(port);
+                    return Ok(port);
+                }
+            }
         }
+        
+        Err(anyhow::anyhow!("Control server not running (port file not found)"))
     }
 
     /// Send a control request
@@ -245,8 +258,6 @@ impl ControlClient {
         }
     }
 }
-
-use std::path::PathBuf;
 
 #[cfg(test)]
 mod tests {
