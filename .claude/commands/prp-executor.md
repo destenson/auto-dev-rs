@@ -204,7 +204,7 @@ When creating new PRPs:
 1. **Start Small**: Pick PRPs you can complete in one session
 2. **Verify First**: Always check current state before implementing
 3. **Follow Patterns**: Use existing code as template
-4. **Test Often**: Run tests frequently during implementation
+4. **Test Early and Often**: Run tests frequently during implementation
 5. **Clear Commits**: Reference PRP number in commit messages
 6. **Stay Focused**: Don't expand beyond PRP scope
 
