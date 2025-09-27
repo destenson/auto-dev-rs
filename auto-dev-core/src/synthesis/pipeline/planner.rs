@@ -2,6 +2,7 @@
 //! Implementation planning stage
 
 use super::{PipelineContext, PipelineStage};
+use crate::{debug, info};
 use crate::synthesis::{
     Complexity, ImplementationApproach, Result, SynthesisError, state::ImplementationTask,
 };
@@ -164,7 +165,7 @@ impl PipelineStage for ImplementationPlanner {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!("Planning implementation for: {}", context.spec.source.display());
+        info!("Planning implementation for: {}", context.spec.source.display());
 
         context.metadata.current_stage = self.name().to_string();
 
@@ -199,7 +200,7 @@ impl PipelineStage for ImplementationPlanner {
 
         context.record_decision(decision);
 
-        tracing::debug!(
+        debug!(
             "Planned {} tasks with {:?} complexity",
             context.pending_tasks.len(),
             plan.estimated_complexity

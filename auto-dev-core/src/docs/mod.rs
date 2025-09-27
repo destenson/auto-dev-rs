@@ -131,7 +131,7 @@ pub struct ApiDoc {
 }
 
 /// API item kind
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ApiItemKind {
     Function,
     Method,

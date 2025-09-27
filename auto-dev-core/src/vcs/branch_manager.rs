@@ -121,8 +121,7 @@ impl BranchManager {
                 let is_current = name == current;
                 let upstream = branch.upstream()
                     .ok()
-                    .and_then(|u| u.name().ok())
-                    .map(|n| n.to_string());
+                    .and_then(|u| u.name().ok().flatten().map(|n| n.to_string()));
                 
                 branch_list.push(BranchInfo {
                     name: name.to_string(),

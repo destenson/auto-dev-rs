@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+use crate::{debug, info};
 use crate::incremental::Implementation;
 use crate::learning::failure_analyzer::AntiPattern;
 use crate::learning::pattern_extractor::{Pattern, PatternContext};
@@ -49,7 +50,7 @@ impl KnowledgeBase {
         self.usage_stats.total_patterns += 1;
         self.metadata.last_updated = Utc::now();
 
-        tracing::debug!("Added pattern {} to knowledge base", pattern.name);
+        debug!("Added pattern {} to knowledge base", pattern.name);
 
         Ok(pattern_id)
     }
@@ -61,7 +62,7 @@ impl KnowledgeBase {
         self.usage_stats.total_anti_patterns += 1;
         self.metadata.last_updated = Utc::now();
 
-        tracing::debug!("Added anti-pattern to knowledge base");
+        debug!("Added anti-pattern to knowledge base");
 
         Ok(anti_pattern_id)
     }
@@ -203,7 +204,7 @@ impl KnowledgeBase {
 
         self.rebuild_index()?;
 
-        tracing::info!(
+        info!(
             "Imported {} patterns and {} anti-patterns",
             pattern_count,
             anti_pattern_count
@@ -274,7 +275,7 @@ impl KnowledgeBase {
     }
 
     fn track_pattern_usage(&self, pattern_id: PatternId) {
-        tracing::debug!("Pattern {} used", pattern_id);
+        debug!("Pattern {} used", pattern_id);
     }
 
     pub async fn persist(&self) -> Result<()> {

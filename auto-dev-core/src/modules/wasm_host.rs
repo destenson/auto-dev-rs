@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::path::Path;
 use std::sync::Arc;
 use wasmtime::{Engine, Func, Instance, Linker, Memory, Module, Store};
+use crate::info;
 
 use crate::modules::interface::{
     ModuleCapability, ModuleDependency, ModuleInterface, ModuleMetadata, ModuleState,
@@ -91,7 +92,7 @@ impl WasmModule {
                 let msg = std::str::from_utf8(&data[ptr as usize..(ptr + len) as usize])
                     .map_err(|e| anyhow::anyhow!("Invalid UTF-8: {}", e))?;
 
-                tracing::info!("WASM module log: {}", msg);
+                info!("WASM module log: {}", msg);
                 Ok(())
             },
         )?;

@@ -3,6 +3,7 @@
 
 use super::{PipelineContext, PipelineStage};
 use crate::{
+    debug, info,
     llm::provider::LLMProvider,
     synthesis::{Result, SynthesisError},
 };
@@ -28,7 +29,7 @@ impl CodeGenerator {
     ) -> Result<GeneratedCode> {
         // Check cache first
         if let Some(cached) = self.cache.get(&task.id) {
-            tracing::debug!("Using cached generation for task: {}", task.id);
+            debug!("Using cached generation for task: {}", task.id);
             return Ok(cached);
         }
 
@@ -137,7 +138,7 @@ impl PipelineStage for CodeGenerator {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!("Generating code for {} tasks", context.pending_tasks.len());
+        info!("Generating code for {} tasks", context.pending_tasks.len());
 
         context.metadata.current_stage = self.name().to_string();
 
@@ -166,7 +167,7 @@ impl PipelineStage for CodeGenerator {
             context.add_generated_file(path);
         }
 
-        tracing::debug!(
+        debug!(
             "Generated code for {} tasks, {} completed",
             context.completed_tasks.len(),
             context.completed_tasks.len()

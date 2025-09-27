@@ -134,16 +134,20 @@ impl ConflictResolver {
                     current_section = 2;
                 } else if line.starts_with(">>>>>>>") && in_conflict {
                     // Decide resolution strategy
-                    let ours_slice: Vec<String> = ours.cloned();
-                    let theirs_slice: Vec<String> = theirs.cloned();
-                    if let Some(resolved) = self.choose_resolution(&ours_slice, &theirs_slice) {
-                        result.extend(resolved);
+                    let ours_refs: Vec<&str> = ours.iter().map(|s| s.as_ref()).collect();
+                    let theirs_refs: Vec<&str> = theirs.iter().map(|s| s.as_ref()).collect();
+                    if let Some(resolved) = self.choose_resolution(&ours_refs, &theirs_refs) {
+                        for r in resolved {
+                            result.push(r.to_string());
+                        }
                     } else {
                         // Can't auto-resolve, keep conflict markers
                         return None;
                     }
                     in_conflict = false;
                     current_section = 0;
+                    ours.clear();
+                    theirs.clear();
                 } else if in_conflict {
                     match current_section {
                         1 => ours.push(line),
@@ -151,7 +155,7 @@ impl ConflictResolver {
                         _ => {}
                     }
                 } else {
-                    result.push(line);
+                    result.push(line.to_string());
                 }
             }
             

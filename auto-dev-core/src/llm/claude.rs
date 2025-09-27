@@ -217,8 +217,7 @@ impl LLMProvider for ClaudeProvider {
             .iter()
             .map(|r| {
                 format!(
-                    "[{}] {}: {} (Priority: {:?})",
-                    if r.satisfied { "" } else { "" },
+                    "{}: {} (Priority: {:?})",
                     r.id,
                     r.description,
                     r.priority

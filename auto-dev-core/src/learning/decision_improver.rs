@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::{debug, warn};
 use crate::learning::failure_analyzer::FailureCause;
 use crate::learning::learner::LearningEvent;
 
@@ -45,7 +46,7 @@ impl DecisionImprover {
 
         self.decision_history.add_event(event.clone());
 
-        tracing::debug!("Improved decision weights for {:?} after success", decision.decision_type);
+        debug!("Improved decision weights for {:?} after success", decision.decision_type);
     }
 
     pub fn improve_from_failure(&mut self, event: &LearningEvent, cause: &FailureCause) {
@@ -59,7 +60,7 @@ impl DecisionImprover {
 
         self.decision_history.add_event(event.clone());
 
-        tracing::debug!("Adjusted decision weights for {:?} after failure", decision.decision_type);
+        debug!("Adjusted decision weights for {:?} after failure", decision.decision_type);
     }
 
     pub fn select_decision(&self, options: Vec<Decision>) -> Decision {
@@ -198,7 +199,7 @@ impl DecisionImprover {
     }
 
     fn deprecate_decision_type(&mut self, decision_type: &DecisionType) {
-        tracing::warn!("Deprecating decision type {:?} due to poor performance", decision_type);
+        warn!("Deprecating decision type {:?} due to poor performance", decision_type);
 
         if let Some(performance) = self.performance_tracking.get_mut(decision_type) {
             performance.deprecated = true;

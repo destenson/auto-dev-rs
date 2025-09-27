@@ -6,6 +6,7 @@
 pub mod bootstrap;
 pub mod context;
 pub mod dev_loop;
+pub mod docs;
 pub mod incremental;
 pub mod learning;
 pub mod llm;
@@ -26,6 +27,58 @@ pub mod validation;
 pub mod vcs;
 
 use serde::{Deserialize, Serialize};
+
+// Re-export logging macros at crate level
+#[cfg(feature = "tracing")]
+pub use tracing::{debug, error, info, trace, warn};
+
+#[cfg(all(not(feature = "tracing"), feature = "log"))]
+pub use log::{debug, error, info, trace, warn};
+
+// Fallback macros when neither tracing nor log is enabled
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+#[macro_export]
+macro_rules! info {
+    ($($arg:tt)*) => {
+        println!("[INFO] {}", format!($($arg)*));
+    };
+}
+
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        println!("[DEBUG] {}", format!($($arg)*));
+    };
+}
+
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        eprintln!("[WARN] {}", format!($($arg)*));
+    };
+}
+
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => {
+        eprintln!("[ERROR] {}", format!($($arg)*));
+    };
+}
+
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+#[macro_export]
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        println!("[TRACE] {}", format!($($arg)*));
+    };
+}
+
+// Re-export the macros at crate level for consistent access
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+pub use {debug, error, info, trace, warn};
 
 /// Core struct that will hold the main application state
 #[derive(Debug, Default)]

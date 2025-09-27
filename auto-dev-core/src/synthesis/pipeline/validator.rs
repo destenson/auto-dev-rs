@@ -2,6 +2,7 @@
 //! Implementation validator
 
 use super::{PipelineContext, PipelineStage};
+use crate::{debug, info};
 use crate::synthesis::{Result, SynthesisError};
 use async_trait::async_trait;
 use std::process::Command;
@@ -49,7 +50,7 @@ impl PipelineStage for ImplementationValidator {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!("Validating implementation");
+        info!("Validating implementation");
 
         context.metadata.current_stage = self.name().to_string();
 
@@ -74,7 +75,7 @@ impl PipelineStage for ImplementationValidator {
             )));
         }
 
-        tracing::debug!(
+        debug!(
             "Validation complete: {} passed, {} warnings, {} errors",
             validation_result.passed_count(),
             validation_result.warning_count(),

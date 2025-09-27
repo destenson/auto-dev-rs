@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
-use tracing::info;
+use crate::info;
 
 /// Swap binary on Unix systems
 pub fn swap_binary(current: &Path, new: &Path) -> Result<()> {

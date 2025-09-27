@@ -6,6 +6,7 @@ use super::{
     pipeline::{PipelineContext, PipelineStage},
     state::SynthesisState,
 };
+use crate::{debug, error, info};
 use crate::parser::model::Specification;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -79,14 +80,14 @@ impl SynthesisEngine {
 
     /// Synthesize code from a specification
     pub async fn synthesize(&mut self, spec: &Specification) -> Result<SynthesisResult> {
-        tracing::info!("Starting synthesis for specification: {}", spec.source.display());
+        info!("Starting synthesis for specification: {}", spec.source.display());
 
         // Create pipeline context
         let mut context = PipelineContext::new(spec.clone(), self.config.clone());
 
         // Execute pipeline stages
         for stage in &self.pipeline {
-            tracing::debug!("Executing stage: {}", stage.name());
+            debug!("Executing stage: {}", stage.name());
             context = stage.execute(context).await?;
 
             // Update state after each stage
@@ -113,7 +114,7 @@ impl SynthesisEngine {
             match self.synthesize(&spec).await {
                 Ok(result) => results.push(result),
                 Err(e) => {
-                    tracing::error!("Failed to synthesize {}: {}", spec.source.display(), e);
+                    error!("Failed to synthesize {}: {}", spec.source.display(), e);
                     if !self.config.incremental {
                         return Err(e);
                     }

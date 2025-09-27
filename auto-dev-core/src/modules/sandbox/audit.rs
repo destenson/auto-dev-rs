@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use crate::{debug, error, info, warn};
 
 /// Represents a security event that should be logged
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,9 +102,9 @@ impl AuditLogger {
             Severity::Debug => debug!("Security Event: {:?}", event),
             Severity::Info => info!("Security Event: {:?}", event),
             Severity::Warning => warn!("Security Event: {:?}", event),
-            Severity::Error => tracing::error!("Security Event: {:?}", event),
+            Severity::Error => error!("Security Event: {:?}", event),
             Severity::Critical => {
-                tracing::error!("CRITICAL Security Event: {:?}", event);
+                error!("CRITICAL Security Event: {:?}", event);
                 if self.config.alert_on_critical {
                     self.raise_alert(&event).await?;
                 }
@@ -254,7 +254,7 @@ impl AuditLogger {
         // - Alert administrators
         // - Create incident tickets
         
-        tracing::error!(
+        error!(
             "🚨 CRITICAL SECURITY ALERT 🚨\nModule: {}\nEvent: {:?}\nDetails: {}",
             event.module_id,
             event.event_type,

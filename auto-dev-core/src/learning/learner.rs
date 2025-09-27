@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
+use crate::{debug, info};
 use crate::incremental::Implementation;
 use crate::parser::model::Specification;
 use crate::validation::ValidationResult;
@@ -155,7 +156,7 @@ impl LearningSystem {
             self.import_knowledge().await?;
         }
 
-        tracing::info!(
+        info!(
             "Learning system initialized with {} patterns",
             self.knowledge_base.pattern_count()
         );
@@ -168,7 +169,7 @@ impl LearningSystem {
             return Ok(());
         }
 
-        tracing::debug!("Processing learning event: {:?}", event.event_type);
+        debug!("Processing learning event: {:?}", event.event_type);
 
         match event.event_type {
             LearningEventType::ImplementationSuccess => {
@@ -342,7 +343,7 @@ impl LearningSystem {
         let json = serde_json::to_string_pretty(&export)?;
         tokio::fs::write(export_path, json).await?;
 
-        tracing::info!("Exported knowledge base with {} patterns", export.patterns.len());
+        info!("Exported knowledge base with {} patterns", export.patterns.len());
         Ok(())
     }
 
@@ -350,7 +351,7 @@ impl LearningSystem {
         let import_path = self.config.export_path.join("knowledge_export.json");
 
         if !import_path.exists() {
-            tracing::debug!("No knowledge export found at {:?}", import_path);
+            debug!("No knowledge export found at {:?}", import_path);
             return Ok(());
         }
 
@@ -359,7 +360,7 @@ impl LearningSystem {
 
         self.knowledge_base.import(export)?;
 
-        tracing::info!(
+        info!(
             "Imported knowledge base with {} patterns",
             self.knowledge_base.pattern_count()
         );

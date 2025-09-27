@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use git2::{Commit, Diff, DiffOptions, Oid, Repository, Time};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use crate::info;
 
 /// Commit history search and analysis
 pub struct HistorySearcher {

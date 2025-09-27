@@ -1,9 +1,10 @@
+#![allow(unused)]
 //! System initialization for bootstrap
 
 use super::{BootstrapError, ModulesConfig, MonitoringConfig, Result, SafetyConfig};
 use std::path::{Path, PathBuf};
 use std::fs;
-use tracing::{debug, info};
+use crate::{debug, info};
 
 pub struct SystemInitializer {
     safety_config: SafetyConfig,

@@ -2,6 +2,7 @@
 //! Code analyzer for understanding existing code
 
 use super::{PipelineContext, PipelineStage};
+use crate::{debug, info};
 use crate::synthesis::{Result, SynthesisError};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
@@ -72,7 +73,7 @@ impl PipelineStage for CodeAnalyzer {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!(
+        info!(
             "Analyzing existing code for specification: {}",
             context.spec.source.display()
         );
@@ -104,7 +105,7 @@ impl PipelineStage for CodeAnalyzer {
         if analyses.is_empty() {
             context.add_warning("No existing code found to analyze".to_string());
         } else {
-            tracing::debug!("Analyzed {} files", analyses.len());
+            debug!("Analyzed {} files", analyses.len());
         }
 
         Ok(context)

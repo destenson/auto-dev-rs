@@ -3,7 +3,7 @@
 use super::{BootstrapError, PreflightConfig, Result};
 use std::path::Path;
 use std::process::Command;
-use tracing::{debug, info, warn};
+use crate::{debug, info, warn};
 
 pub struct PreflightChecker {
     config: PreflightConfig,

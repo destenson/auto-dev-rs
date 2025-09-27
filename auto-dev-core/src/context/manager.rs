@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::{debug, info};
 use crate::context::analyzer::{CodePattern, CodingConventions, ProjectAnalyzer};
 use crate::context::embeddings::EmbeddingStore;
 use crate::context::query::ContextQuery;
@@ -64,7 +65,7 @@ impl ContextManager {
     }
 
     pub async fn initialize(&self) -> anyhow::Result<()> {
-        log::info!("Initializing project context for: {:?}", self.project_root);
+        info!("Initializing project context for: {:?}", self.project_root);
 
         // Analyze project structure
         let structure = self.analyzer.analyze_structure().await?;
@@ -89,12 +90,12 @@ impl ContextManager {
         // Save to disk
         self.storage.save(&ctx).await?;
 
-        log::info!("Project context initialized successfully");
+        info!("Project context initialized successfully");
         Ok(())
     }
 
     pub async fn update(&self, update: ContextUpdate) -> anyhow::Result<()> {
-        log::debug!("Processing context update: {:?}", update);
+        debug!("Processing context update: {:?}", update);
 
         match update {
             ContextUpdate::FileAdded(path) => {

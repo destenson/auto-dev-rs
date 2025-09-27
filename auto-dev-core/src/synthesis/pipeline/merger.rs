@@ -2,6 +2,7 @@
 //! Code merger for integrating generated code with existing code
 
 use super::{PipelineContext, PipelineStage};
+use crate::{debug, info};
 use crate::synthesis::{Result, SynthesisError};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
@@ -75,7 +76,7 @@ impl PipelineStage for CodeMerger {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        tracing::info!("Merging generated code into project");
+        info!("Merging generated code into project");
 
         context.metadata.current_stage = self.name().to_string();
 
@@ -103,7 +104,7 @@ impl PipelineStage for CodeMerger {
                         modified_files.push(file_path.clone());
                     }
 
-                    tracing::debug!(
+                    debug!(
                         "Merged code into {} (added: {}, modified: {})",
                         file_path.display(),
                         result.lines_added,

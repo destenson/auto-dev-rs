@@ -46,7 +46,9 @@ fn main() -> Result<()> {
         }
         Commands::Docs(args) => {
             info!("Docs command: {:?}", args);
-            println!("Documentation generation coming soon!");
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::docs::execute(args))?;
         }
         Commands::Parse(args) => {
             info!("Parse command: {:?}", args);

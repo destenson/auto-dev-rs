@@ -10,14 +10,14 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | Metric | Count | Percentage |
 |--------|-------|------------|
 | Total PRPs | 28 | 100% |
-| Completed (Archived) | 25 | 89.3% |
+| Completed (Archived) | 26 | 92.9% |
 | Partial (Active) | 0 | 0% |
-| Not Started (Active) | 2 | 7.1% |
+| Not Started (Active) | 1 | 3.6% |
 
 ### Implementation Progress
 
 ```
-[██████████████████████████░░] 89.3% Complete (25/28 PRPs fully implemented)
+[███████████████████████████░] 92.9% Complete (26/28 PRPs fully implemented)
 ```
 
 ## Active PRPs (Pending Work)
@@ -25,7 +25,6 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | PRP | Title | Status | Last Verified | Notes |
 |-----|-------|--------|---------------|-------|
 | 213 | Module Marketplace | ❌ NOT STARTED | 2025-09-27 | Only basic registry exists |
-| 214 | Self-Documentation | ❌ NOT STARTED | 2025-09-27 | No automatic documentation generation |
 
 ## Archived PRPs (Completed)
 
@@ -45,6 +44,7 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 210 | Version Control Integration | 2025-09-27 | Git operations, bisect, and history search |
 | 211 | Self-Improvement Metrics | 2025-09-27 | Complete metrics with collection, storage, analysis, dashboard |
 | 212 | Safety Validation Gates | 2025-09-27 | Full 5-layer safety gate system |
+| 214 | Self-Documentation | 2025-09-27 | Complete documentation system with extractor, generator, changelog |
 | 215 | Self-Development Integration | 2025-09-27 | Full orchestration with CLI integration |
 
 ### 100 Series - Core Infrastructure
@@ -104,11 +104,12 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 
 ## Recent Updates
 
+- 2025-09-27: Completed self-documentation system (PRP-214) with full docs module
 - 2025-09-27: Completed module sandboxing (PRP-207) with full capability model
 - 2025-09-27: Completed self-development integration (PRP-215) with full CLI support
 - 2025-09-27: Implemented self-improvement metrics (PRP-211) with full collection and dashboard
 - 2025-09-27: Implemented bootstrap sequence (PRP-209) with all stages and commands  
-- 2025-09-27: Moved completed PRPs (201, 205, 206, 209, 211) to archive
+- 2025-09-27: Moved completed PRPs (201, 205, 206, 209, 211, 214) to archive
 - 2025-09-27: Updated all active PRPs with current implementation status
 - 2025-09-27: Reorganized dashboard to separate active/archived PRPs
 - 2025-09-27: Implemented self-test framework (PRP-208)
