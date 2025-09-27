@@ -67,7 +67,7 @@ Work in `auto-dev-core/src/llm/`:
 
 ```bash
 # Build and run tests first
-cargo build --package auto-dev-core
+cargo check --package auto-dev-core
 cargo test --package auto-dev-core --lib llm::
 
 # Verify no unwrap/panic
