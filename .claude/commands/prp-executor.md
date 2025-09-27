@@ -267,3 +267,46 @@ Remember: PRPs are guides, not contracts. Implementation details may vary based 
 6. **Repeat** the cycle
 
 This creates a self-improving system where the codebase continuously evolves based on identified needs and gaps.
+
+## PRP Rebalancing Strategy - 70% Equilibrium
+
+### When to Rebalance
+
+Rebalancing should occur periodically, NOT after every PRP:
+- **Trigger Point**: When completion rate approaches 80%
+- **Target**: Maintain ~70% completion rate
+- **Formula**: When implementing N PRPs, add ~0.43N new PRPs
+
+### Rebalancing Process
+
+1. **Monitor Completion Rate**
+   - Check ratio after implementing batches (e.g., 5-10 PRPs)
+   - Calculate: `completed_PRPs / total_PRPs`
+   - If approaching 80%, initiate rebalancing
+
+2. **User-Driven Generation**
+   - Present current completion metrics to user
+   - User specifies areas for new PRPs
+   - Agent suggests candidates based on gaps
+   - User approves/modifies before generation
+
+3. **Maintain Equilibrium**
+   - Example: After implementing 10 PRPs, add 4-5 new ones
+   - This maintains healthy pipeline without backlog overwhelm
+   - Ensures continuous forward momentum
+
+### Benefits of 70% Equilibrium
+
+- **Psychological**: Always have achievements and goals
+- **Practical**: Prevents empty pipeline or overwhelming backlog
+- **Strategic**: Forces periodic review and prioritization
+- **Quality**: New PRPs reflect lessons learned
+
+### Important Notes
+
+- **User Control**: User must approve new PRP themes
+- **Batch Processing**: Rebalance after batches, not individual PRPs
+- **Flexible Target**: 65-75% range is acceptable
+- **Quality Over Quantity**: Better to have fewer, high-value PRPs
+
+Reference `PRPs/REBALANCING-STRATEGY.md` for detailed methodology.
