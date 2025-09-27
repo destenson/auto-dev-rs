@@ -19,199 +19,173 @@ PRPs (Project Requirement Plans) are detailed blueprints for implementing specif
 - Some projects archive completed PRPs in `_archive/` or `completed/` subdirectories
 - The actual code is the source of truth - PRPs are planning documents
 
-## CRITICAL: Use MCP Tools, Not Bash Commands
+### 2. Analysis Phase - Determine Implementation Status
 
-**IMPORTANT**: You have access to MCP (Model Context Protocol) tools that MUST be used instead of bash commands. The MCP tools available include:
-- `mcp__Cargo__*` - For all Rust/Cargo operations (build, test, run, add dependencies, etc.)
-- File operations through native tools (Read, Write, Edit, MultiEdit, LS, Glob, Grep)
-- Other tools as available in your environment
+For each PRP found, determine if it's been implemented:
 
-**DO NOT** use the Bash tool for operations that have dedicated MCP tools available. Only use Bash as a last resort for git operations.
+**Quick Checks:**
+- Does the code/module/feature described exist?
+- Use `Glob` to find files that should have been created
+- Use `Grep` to search for key classes, functions, or features mentioned
+- Check if test files exist for the feature
+- Look for TODO comments mentioning the PRP number
 
-## Finding the Next PRP
+**Implementation States:**
+- **Not Started**: No code found matching the PRP description
+- **Partial**: Some components exist but incomplete
+- **Complete**: All major deliverables appear implemented
+- **Unknown**: Can't determine status (needs deeper investigation)
 
-1. **Check the dashboard:**
-   ```
-   Read "PRPs/README.md"
-   ```
+### 3. Selection Phase - Choose Next PRP
 
-2. **Find PRPs needing implementation:**
-   - Look for PRPs with status "NOT STARTED" or "PARTIAL"
-   - Prioritize PRP-215 (Self-Development Integration) as recommended
-   - Check dependencies in each PRP's markdown file
+**Selection Criteria:**
+1. **Dependencies Met**: If PRP mentions dependencies, check they exist
+2. **Logical Order**: Lower numbered PRPs often come first
+3. **Foundation First**: Infrastructure before features
+4. **Simplest Viable**: Start with PRPs you can complete fully
+5. **Clear Scope**: PRPs with well-defined deliverables
 
-3. **Pick the best PRP based on:**
-   - Dependencies completed (check "Dependencies" section in PRP)
-   - Strategic importance (PRP-215 enables self-development)
-   - Current technical debt (see TODO.md for gaps)
+**Red Flags to Skip:**
+- Depends on external services not available
+- References code that doesn't exist
+- Requires domain knowledge not in context
+- Blocked by incomplete prerequisites
 
-## Execution Pattern
+## Implementation Process
 
-For each PRP:
+### Step 1: Read and Understand
+```
+Read "PRPs/{selected-prp}.md"
+```
+- Identify key deliverables
+- Note architectural decisions
+- List files to create/modify
+- Understand validation criteria
 
-1. **Read the PRP:**
-   ```
-   Read "PRPs/{number}-{name}.md"
-   ```
+### Step 2: Check Prerequisites
+- Verify mentioned dependencies exist
+- Check if referenced modules/files are present
+- Ensure build system is working
+- Confirm tests are passing before starting
 
-2. **Verify prerequisites:**
-   - Check the "Dependencies" section
-   - Ensure required modules exist
-   - Review "Requirements" and "Architectural Decisions" sections
+### Step 3: Implement
+- Create directories and files as specified
+- Follow existing code patterns in the project
+- Implement incrementally, testing as you go
+- Keep changes focused on the PRP scope
 
-3. **Implement according to the PRP document:**
-   - Create modules in `auto-dev-core/src/` as specified
-   - Follow the "Implementation Blueprint" section exactly
-   - Maintain consistency with existing architecture
-   - Use existing patterns from completed modules
+### Step 4: Validate
+- Run build/compilation
+- Execute existing tests to ensure no regression
+- Add tests for new functionality
+- Run linters if available
+- Check for TODO comments you may have added
 
-4. **Update tests:**
-   - Add unit tests in the module
-   - Add integration tests if specified
-   - Ensure existing tests still pass
+### Step 5: Document Completion
+Options for tracking completion:
+- Move PRP to archive directory (if project uses this pattern)
+- Create a `.done` or `.complete` marker file
+- Update a tracking document (README, dashboard, etc.)
+- Add completion note to the PRP itself
+- Leave clear TODO comments if partially complete
 
-5. **Validate:**
-   ```
-   mcp__Cargo__cargo_build with project_path: "C:\\Users\\deste\\repos\\auto-dev-rs"
-   mcp__Cargo__cargo_test with project_path: "C:\\Users\\deste\\repos\\auto-dev-rs"
-   mcp__Cargo__cargo_clippy with project_path: "C:\\Users\\deste\\repos\\auto-dev-rs"
-   ```
+### Step 6: Version Control (Optional but Recommended)
+While git operations can be done manually for review purposes:
+- **Manual Review**: Reviewing changes before committing is valuable
+- **Clear Messages**: When you commit, reference the PRP number
+- **Atomic Commits**: One PRP = one commit (when possible)
+- **Work Tracking**: Git history shows PRP implementation progression
 
-6. **Update PRP status:**
-   ```
-   Edit "PRPs/{number}-{name}.md" to add/update:
-   **Status**: COMPLETE (YYYY-MM-DD) - All deliverables implemented
-   ```
+*Note: This executor doesn't auto-commit to allow human review of changes*
 
-7. **Update dashboard:**
-   ```
-   Edit "PRPs/README.md" to reflect completion
-   ```
+## Tool Usage Guidelines
 
-8. **Update TODO.md:**
-   - Remove completed items
-   - Add any new technical debt discovered
+### Prefer Native Tools Over Shell Commands
+- Use language-specific tools when available (cargo, npm, etc.)
+- Use file operation tools (Read, Write, Edit) over shell
+- Use Grep/Glob for searching instead of find/grep commands
+- Only use shell/bash as last resort
 
-9. **Commit immediately:**
-   ```
-   git add -A
-   git commit -m "Implement PRP-{number}: {title}
-   
-   - {list key deliverables}
-   - {note any deviations}
-   
-   Co-Authored-By: Claude <noreply@anthropic.com>"
-   ```
+### MCP Tools (if available)
+- `mcp__*` tools should be preferred over bash equivalents
+- Check what MCP servers are available for your project
+- Use specialized tools for builds, tests, and operations
 
-## Project Structure
+## Common Patterns Across Projects
 
-Key directories in auto-dev-rs:
-- `auto-dev-core/src/` - Core library implementation
-  - `context/` - Project understanding and analysis
-  - `dev_loop/` - Main development loop orchestration
-  - `incremental/` - Incremental implementation engine
-  - `learning/` - Pattern extraction and knowledge base
-  - `llm/` - LLM integration and routing
-  - `modules/` - Dynamic module system with hot-reload
-  - `monitor/` - Filesystem monitoring
-  - `parser/` - Specification parsing
-  - `synthesis/` - Code generation pipeline
-  - `test_gen/` - Test generation
-  - `validation/` - Code validation
-- `auto-dev/src/cli/` - CLI commands
-- `PRPs/` - Project Requirement Plans
-- `models/` - Local model files
+### Rust Projects
+- PRPs often map to modules in `src/`
+- Look for `mod.rs` files indicating module structure
+- Tests typically in same file or `tests/` directory
+- Use `cargo` commands for validation
 
-## Priority PRPs for Implementation
+### Node/TypeScript Projects
+- PRPs may map to directories in `src/` or `lib/`
+- Look for `index.ts` or feature-specific files
+- Tests often in `__tests__/` or `*.test.ts` files
+- Use `npm` or `yarn` commands
 
-Based on the current state:
+### Python Projects
+- PRPs might map to packages or modules
+- Look for `__init__.py` files
+- Tests in `tests/` or `test_*.py` files
+- Use `pytest` or unittest for validation
 
-1. **PRP-215: Self-Development Integration** (RECOMMENDED NEXT)
-   - Ties together all existing infrastructure
-   - Enables autonomous PRP implementation
-   - Orchestrates self-development workflows
+## Determining Completion
 
-2. **PRP-212: Safety Validation Gates** (PARTIAL)
-   - Critical for safe autonomous operation
-   - Build on existing validation module
+A PRP is typically complete when:
+1. **Core Functionality**: Main features described are working
+2. **Tests Pass**: Existing tests still work, new tests added
+3. **No Placeholders**: No "TODO: implement" or stub functions
+4. **Integration**: Works with rest of system
+5. **Validation**: Meets criteria specified in PRP
 
-3. **PRP-201: Recursive Self-Monitoring** (PARTIAL)
-   - Enhance monitoring for self-awareness
-   - Add loop prevention and audit trails
+## Handling Blockers
 
-4. **PRP-207: Module Sandboxing** (PARTIAL)
-   - Complete security features
-   - Add capability model and resource limits
+If you can't complete a PRP:
+1. Document what's blocking (missing deps, unclear requirements)
+2. Implement what you can
+3. Add TODO comments with PRP reference
+4. Move to next viable PRP
+5. Return to blocked PRPs when dependencies are met
 
-5. **PRP-208: Self-Test Framework**
-   - Validate changes before deployment
-   - Ensure safe self-modification
-
-## Validation Gates
-
-Each PRP implementation must pass:
-1. **Compilation**: Clean build with no errors
-2. **Tests**: All existing tests pass, new tests added
-3. **Warnings**: Address compiler warnings (149 currently)
-4. **Integration**: Works with existing modules
-5. **Documentation**: Update relevant docs and comments
-
-## Common Patterns to Follow
-
-Look at completed modules for patterns:
-- **Module Structure**: See `modules/` for registry, runtime, interface patterns
-- **Error Handling**: Use `Result<T>` and `anyhow::Result`
-- **Async Operations**: Use `tokio` for all async code
-- **Configuration**: Use `serde` for serialization
-- **Testing**: Unit tests in module, integration tests in `tests/`
-
-## Completion Status
-
-PRP is complete when:
-- All deliverables from "Requirements" section implemented
-- Tests pass (unit and integration)
-- Documentation updated
-- Status marked as COMPLETE in PRP file
-- Dashboard updated in PRPs/README.md
-- No placeholder code remains (no "TODO: Implement")
-
-## Notes for the AI Agent
-
-- **Source of Truth**: The source code is truth, not documentation
-- **Incremental Progress**: Each PRP builds on previous ones
-- **Technical Debt**: Track TODOs and add to TODO.md
-- **Memory Constraints**: Use `-j 1` for builds on Windows if memory errors occur
-- **Existing Examples**: Reference completed modules for patterns
-- **Safety First**: PRPs involving self-modification need extra care
-- **Dashboard Maintenance**: Keep PRPs/README.md current
-
-## Execution Priority Algorithm
+## Example Execution Flow
 
 ```
-1. Check dependencies are met
-2. Prioritize based on:
-   - Enables other PRPs (e.g., PRP-215)
-   - Fixes critical gaps (safety, testing)
-   - Completes partial implementations
-   - Strategic value for autonomy
-3. Implement smallest complete unit
-4. Validate thoroughly before marking complete
+1. Discover: Found PRPs/001-setup.md through PRPs/010-advanced.md
+2. Analyze: 001-003 appear complete (code exists), 004 partial, 005-010 not started
+3. Select: Choose 004 since partially done and dependencies met
+4. Implement: Complete missing parts of 004
+5. Validate: Tests pass, feature works
+6. Document: Mark as complete, commit changes
+7. Repeat: Move to 005
 ```
 
-## Common Issues and Solutions
+## Tips for Success
 
-- **Memory errors during build**: Use `mcp__Cargo__cargo_build` with args `["-j", "1"]`
-- **Test compilation fails**: Check for missing dependencies or example issues
-- **Placeholder code**: Replace all "TODO: Implement" with actual implementation
-- **Integration conflicts**: Review existing module interfaces before adding new ones
+1. **Start Small**: Pick PRPs you can complete in one session
+2. **Verify First**: Always check current state before implementing
+3. **Follow Patterns**: Use existing code as template
+4. **Test Often**: Run tests frequently during implementation
+5. **Clear Commits**: Reference PRP number in commit messages
+6. **Stay Focused**: Don't expand beyond PRP scope
 
-## Success Criteria
+## Project-Specific Adaptation
 
-The auto-dev-rs system is ready when:
-- PRP-215 enables self-development
-- Safety gates prevent dangerous modifications
-- System can implement its own TODOs
-- Learning system improves over time
-- All critical PRPs (201, 207, 208, 212, 215) complete
+This executor is generic. For specific projects, consider:
+- Creating a `PRPs/README.md` with project-specific notes
+- Adding `.prp-config` with project conventions
+- Documenting any special build/test commands
+- Noting technology stack and patterns
+- Listing common blockers and solutions
 
-Remember: The goal is autonomous development that can safely modify itself, learn from implementations, and continuously improve. Each PRP adds a critical capability toward this vision.
+## Success Indicators
+
+You're making progress when:
+- PRPs are moving from "not started" to "complete"
+- Tests continue passing as you add features
+- Code follows consistent patterns
+- Each PRP takes roughly similar time to complete
+- Blockers are documented and worked around
+
+Remember: PRPs are guides, not contracts. Implementation details may vary based on what you discover in the code. The goal is to deliver the intended functionality, not necessarily follow the PRP exactly if better approaches become apparent during implementation.
