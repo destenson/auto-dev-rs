@@ -12,6 +12,7 @@ pub mod mcp;
 pub mod modules;
 pub mod monitor;
 pub mod parser;
+pub mod self_monitor;
 pub mod self_target;
 pub mod self_upgrade;
 pub mod synthesis;
