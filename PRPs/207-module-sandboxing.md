@@ -1,5 +1,7 @@
 # PRP: Module Sandboxing and Isolation
 
+**Status**: PARTIAL (2025-09-27) - Basic WASM sandboxing implemented, capability model pending
+
 ## Overview
 Implement sandboxing and isolation mechanisms for dynamically loaded modules to prevent malicious or buggy modules from compromising the system during self-development.
 

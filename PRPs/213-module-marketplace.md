@@ -1,5 +1,7 @@
 # PRP: Module Marketplace and Discovery
 
+**Status**: NOT STARTED (2025-09-27) - Only basic registry exists, no marketplace features implemented
+
 ## Overview
 Create a module marketplace system that allows auto-dev-rs to discover, evaluate, and integrate community modules, expanding its capabilities through shared components.
 

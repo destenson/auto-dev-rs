@@ -256,7 +256,7 @@ impl SuccessMetrics {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct SuccessPattern {
+pub struct SuccessPattern {
     record_id: Uuid,
     pattern_type: String,
     confidence: f32,

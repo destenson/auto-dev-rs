@@ -1,5 +1,7 @@
 # PRP: Self-Development Integration and Orchestration
 
+**Status**: PARTIAL (2025-09-27) - Orchestration module created but not integrated into CLI
+
 ## Overview
 Integrate all self-development components into a cohesive system that enables auto-dev-rs to autonomously improve itself while maintaining stability, safety, and continuous operation.
 
