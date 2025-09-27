@@ -151,7 +151,6 @@ mod tests {
         learning_system.process_event(event).await.unwrap();
 
         let metrics = learning_system.get_metrics();
-        assert!(metrics.anti_patterns_identified >= 0);
         assert_eq!(metrics.total_learning_events, 1);
     }
 

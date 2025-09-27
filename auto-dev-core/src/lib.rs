@@ -23,6 +23,7 @@ pub mod self_upgrade;
 pub mod synthesis;
 pub mod test_gen;
 pub mod validation;
+pub mod vcs;
 
 use serde::{Deserialize, Serialize};
 

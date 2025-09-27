@@ -10,21 +10,20 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | Metric | Count | Percentage |
 |--------|-------|------------|
 | Total PRPs | 28 | 100% |
-| Completed (Archived) | 24 | 85.7% |
+| Completed (Archived) | 25 | 89.3% |
 | Partial (Active) | 0 | 0% |
-| Not Started (Active) | 4 | 14.3% |
+| Not Started (Active) | 2 | 7.1% |
 
 ### Implementation Progress
 
 ```
-[████████████████████████░░░░] 85.7% Complete (24/28 PRPs fully implemented)
+[██████████████████████████░░] 89.3% Complete (25/28 PRPs fully implemented)
 ```
 
 ## Active PRPs (Pending Work)
 
 | PRP | Title | Status | Last Verified | Notes |
 |-----|-------|--------|---------------|-------|
-| 210 | Version Control Integration | ❌ NOT STARTED | 2025-09-27 | No git integration module implemented |
 | 213 | Module Marketplace | ❌ NOT STARTED | 2025-09-27 | Only basic registry exists |
 | 214 | Self-Documentation | ❌ NOT STARTED | 2025-09-27 | No automatic documentation generation |
 
@@ -40,10 +39,11 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 204 | Self-Upgrade Mechanism | 2025-09-27 | With rollback support |
 | 205 | Dynamic Module System | 2025-09-27 | Full module system with registry and runtime |
 | 206 | Hot-Reload Infrastructure | 2025-09-27 | Complete 8-phase reload with rollback |
+| 207 | Module Sandboxing | 2025-09-27 | Full capability model with resource limits and audit logging |
 | 208 | Self-Test Framework | 2025-09-27 | Comprehensive testing with sandbox |
 | 209 | Bootstrap Sequence | 2025-09-27 | Full bootstrap with stages, checkpoints, and resume |
+| 210 | Version Control Integration | 2025-09-27 | Git operations, bisect, and history search |
 | 211 | Self-Improvement Metrics | 2025-09-27 | Complete metrics with collection, storage, analysis, dashboard |
-| 207 | Module Sandboxing | 2025-09-27 | Full capability model with resource limits and audit logging |
 | 212 | Safety Validation Gates | 2025-09-27 | Full 5-layer safety gate system |
 | 215 | Self-Development Integration | 2025-09-27 | Full orchestration with CLI integration |
 

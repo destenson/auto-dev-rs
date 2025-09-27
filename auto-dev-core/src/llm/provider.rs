@@ -97,13 +97,7 @@ pub enum IssueSeverity {
 }
 
 /// Requirement for code implementation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Requirement {
-    pub id: String,
-    pub description: String,
-    pub priority: Priority,
-    pub satisfied: bool,
-}
+pub use crate::parser::model::Requirement;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Priority {

@@ -365,7 +365,7 @@ impl SelfDevOrchestrator {
         let safety_gate = SafetyGatekeeper::default();
         
         let mut applied_count = 0;
-        for generated_file in &result.generated_files {
+        for generated_file in &result.files_generated {
             let modification = CodeModification {
                 file_path: generated_file.path.clone(),
                 modification_type: if generated_file.path.exists() {
@@ -373,7 +373,6 @@ impl SelfDevOrchestrator {
                 } else {
                     ModificationType::Create
                 },
-                content: generated_file.content.clone(),
                 risk_assessment: RiskLevel::Medium,
             };
             
