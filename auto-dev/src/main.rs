@@ -84,6 +84,12 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::dogfood::execute(config))?;
         }
+        Commands::SelfDev(command) => {
+            info!("Self-dev command: {:?}", command);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::self_dev::handle_self_dev_command(command))?;
+        }
     }
 
     Ok(())

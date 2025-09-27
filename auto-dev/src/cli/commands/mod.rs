@@ -9,5 +9,6 @@ pub mod generate;
 pub mod loop_control;
 pub mod manage;
 pub mod parse;
+pub mod self_dev;
 pub mod test;
 pub mod validate;

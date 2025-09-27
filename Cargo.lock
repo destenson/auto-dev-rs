@@ -180,6 +180,7 @@ dependencies = [
  "auto-dev-core",
  "chrono",
  "clap",
+ "once_cell",
  "serde",
  "serde_json",
  "tokio",

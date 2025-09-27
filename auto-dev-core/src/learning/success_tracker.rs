@@ -354,7 +354,7 @@ impl SuccessMetricsAggregator {
         let compilation_rate = self.successful_compilations as f32 / self.total_attempts as f32;
         let test_rate = self.successful_tests as f32 / self.total_attempts as f32;
 
-        (compilation_rate * 0.6 + test_rate * 0.4)
+        compilation_rate * 0.6 + test_rate * 0.4
     }
 
     fn get_average_implementation_time(&self) -> Duration {

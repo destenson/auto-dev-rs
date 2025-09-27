@@ -63,7 +63,7 @@ pub enum TestInput {
     SingleElement,
     Duplicates,
     LargeArray(usize),
-    Custom(String),
+    Custom(serde_json::Value),
 }
 
 /// Expected outcome

@@ -47,9 +47,9 @@ impl EdgeCaseStrategy {
         if self.include_security {
             cases.push(TestInput::SqlInjection("'; DROP TABLE users; --".to_string()));
             cases.push(TestInput::SqlInjection("' OR '1'='1".to_string()));
-            cases.push(TestInput::Custom("<script>alert('XSS')</script>".to_string()));
-            cases.push(TestInput::Custom("../../../etc/passwd".to_string()));
-            cases.push(TestInput::Custom("%00".to_string())); // Null byte
+            cases.push(TestInput::Unicode("<script>alert('XSS')</script>".to_string()));
+            cases.push(TestInput::Unicode("../../../etc/passwd".to_string()));
+            cases.push(TestInput::Unicode("%00".to_string())); // Null byte
         }
 
         cases
@@ -69,8 +69,8 @@ impl EdgeCaseStrategy {
 
         // Special values
         cases.push(TestInput::NaN);
-        cases.push(TestInput::Custom("Infinity".to_string()));
-        cases.push(TestInput::Custom("-Infinity".to_string()));
+        cases.push(TestInput::Custom(serde_json::Number::from_f64(f64::INFINITY).unwrap().to_value()));
+        cases.push(TestInput::Custom(serde_json::Number::from_f64(f64::NEG_INFINITY).unwrap().to_value()));
 
         cases
     }
@@ -91,10 +91,10 @@ impl EdgeCaseStrategy {
         }
 
         // Nested arrays
-        cases.push(TestInput::Custom("[[],[[]]]".to_string()));
+        cases.push(TestInput::Custom(serde_json::json!([[], [[]]])));
 
         // Mixed types (if applicable)
-        cases.push(TestInput::Custom("[1, 'string', null, true]".to_string()));
+        cases.push(TestInput::Custom(serde_json::json!([1, "string", null, true])));
 
         cases
     }
@@ -103,20 +103,20 @@ impl EdgeCaseStrategy {
         let mut cases = Vec::new();
 
         // Empty object
-        cases.push(TestInput::Custom("{}".to_string()));
+        cases.push(TestInput::Custom(serde_json::json!({})));
 
         // Null values
         if self.include_nulls {
-            cases.push(TestInput::Custom("{\"key\": null}".to_string()));
+            cases.push(TestInput::Custom(serde_json::json!({"key": null})));
         }
 
         // Deeply nested
-        cases.push(TestInput::Custom(
-            "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":\"deep\"}}}}}".to_string(),
-        ));
+        cases.push(TestInput::Custom(serde_json::json!({
+            "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":\"deep\"}}}}}"
+        })));
 
         // Circular reference simulation
-        cases.push(TestInput::Custom("{\"self\": \"[Circular]\"}".to_string()));
+        cases.push(TestInput::Custom(serde_json::json!({"self": "[Circular]"})));
 
         // Large object
         if self.include_bounds {
@@ -127,7 +127,7 @@ impl EdgeCaseStrategy {
                     .collect::<Vec<_>>()
                     .join(", ")
             );
-            cases.push(TestInput::Custom(large_obj));
+            cases.push(TestInput::Custom(serde_json::json!(large_obj)));
         }
 
         cases
