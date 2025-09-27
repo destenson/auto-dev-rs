@@ -30,7 +30,9 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Generate(args) => {
             info!("Generate command: {:?}", args);
-            println!("Code generation feature coming soon!");
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::commands::generate::execute(args))?;
         }
         Commands::Manage(args) => {
             info!("Manage command: {:?}", args);

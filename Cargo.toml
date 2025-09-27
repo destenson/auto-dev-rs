@@ -1,5 +1,5 @@
 [workspace]
-members = ["auto-dev", "auto-dev-core"]
+members = ["auto-dev", "auto-dev-core", "regex-utils"]
 resolver = "2"
 
 [workspace.package]
@@ -10,9 +10,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/destenson/auto-dev-rs.git"
 
 [workspace.dependencies]
+anyhow = "1.0.100"
 clap = { version = "4.5.48", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.47.1", features = ["full"] }
 thiserror = "2.0.16"
-anyhow = "1.0.100"
+tokio = { version = "1.47.1", features = ["full"] }
+regex-utils = { path = "regex-utils" }
 tracing = "0.1.41"

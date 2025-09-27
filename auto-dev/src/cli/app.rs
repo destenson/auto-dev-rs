@@ -86,17 +86,29 @@ pub enum Commands {
 
 #[derive(Parser, Debug)]
 pub struct GenerateArgs {
-    /// Type of code to generate (e.g., rust, python, javascript)
-    #[arg(help = "Language or framework for code generation")]
-    pub target: Option<String>,
-
-    /// Component to generate (e.g., struct, class, function)
-    #[arg(help = "Type of component to generate")]
-    pub component: Option<String>,
-
-    /// Name of the generated item
-    #[arg(help = "Name for the generated code")]
-    pub name: Option<String>,
+    /// Instructions for project generation (string or file path)
+    #[arg(help = "Instructions as a string or path to instruction file")]
+    pub instructions: Option<String>,
+    
+    /// Output directory for generated project
+    #[arg(short, long, help = "Output directory (defaults to project name or 'new-project')")]
+    pub output: Option<PathBuf>,
+    
+    /// Path to instruction file (alternative to positional argument)
+    #[arg(short = 'f', long, help = "Path to instruction file")]
+    pub file: Option<PathBuf>,
+    
+    /// Use local model for enhanced generation
+    #[arg(long, help = "Use local Qwen model for code generation")]
+    pub use_local_model: bool,
+    
+    /// Dry run - show what would be done without doing it
+    #[arg(long, help = "Show what would be generated without creating files")]
+    pub dry_run: bool,
+    
+    /// Maximum iterations for build-fix loop
+    #[arg(long, default_value = "3", help = "Maximum build-fix iterations")]
+    pub max_iterations: usize,
 }
 
 #[derive(Parser, Debug)]
