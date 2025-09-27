@@ -23,6 +23,7 @@ pub mod mock;
 pub mod openai;
 pub mod openai_async;
 pub mod openai_compat;
+pub mod openrouter;
 pub mod prompts;
 pub mod provider;
 pub mod roles;
@@ -38,6 +39,7 @@ use serde::{Deserialize, Serialize};
 // Re-export commonly used types
 pub use errors::{LLMError, LLMResult};
 pub use openai_async::{AsyncOpenAIConfig, AsyncOpenAIProvider};
+pub use openrouter::{OpenRouterConfig, OpenRouterProvider};
 pub use token_manager::{ConversationManager, TokenManager};
 pub use traits::{CachedProvider, LLMProvider, RetryableProvider};
 #[cfg(test)]
