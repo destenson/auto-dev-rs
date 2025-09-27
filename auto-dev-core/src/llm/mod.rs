@@ -17,6 +17,9 @@ pub mod claude;
 pub mod cli_tools;
 pub mod config;
 pub mod context_manager;
+pub mod errors;
+#[cfg(test)]
+pub mod mock;
 pub mod openai;
 pub mod openai_compat;
 pub mod prompts;
@@ -24,9 +27,22 @@ pub mod provider;
 pub mod roles;
 pub mod router;
 pub mod tiny;
+pub mod traits;
+pub mod types;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+
+// Re-export commonly used types
+pub use errors::{LLMError, LLMResult};
+pub use traits::{CachedProvider, LLMProvider, RetryableProvider};
+#[cfg(test)]
+pub use traits::MockProvider;
+pub use types::{
+    Choice, CompletionOptions, CompletionResponse, Delta, Embedding, EmbeddingRequest,
+    EmbeddingResponse, FinishReason, Function, FunctionCall, FunctionCallMode, Message,
+    ModelInfo, ProviderMetadata, RateLimit, Role, StreamChoice, StreamChunk, Usage,
+};
 
 /// Simple question types that can be handled by tiny models
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
