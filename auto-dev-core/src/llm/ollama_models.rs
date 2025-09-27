@@ -361,10 +361,12 @@ mod tests {
     async fn test_auto_select() {
         let model = auto_select_model("code").await;
         assert!(model.is_ok());
-        assert!(model.unwrap().contains("coder") || model.unwrap().contains("code"));
+        let model_name = model.unwrap();
+        assert!(model_name.contains("coder") || model_name.contains("code"));
         
         let model = auto_select_model("embedding").await;
         assert!(model.is_ok());
-        assert!(model.unwrap().contains("embed") || model.unwrap().contains("minilm"));
+        let model_name = model.unwrap();
+        assert!(model_name.contains("embed") || model_name.contains("minilm"));
     }
 }
