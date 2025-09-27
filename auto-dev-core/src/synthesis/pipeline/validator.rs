@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Implementation validator
 
 use super::{PipelineContext, PipelineStage};

@@ -1,6 +1,7 @@
-// WASM Module Host
-//
-// Provides sandboxed execution environment for WebAssembly modules
+#![allow(unused)]
+//! WASM Module Host
+//!
+//! Provides sandboxed execution environment for WebAssembly modules
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;

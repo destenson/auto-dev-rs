@@ -1,4 +1,5 @@
-// Reload Verifier - Validates successful module reload
+#![allow(unused)]
+//! Reload Verifier - Validates successful module reload
 
 use super::{HotReloadError, HotReloadResult};
 use crate::modules::{ExecutionContext, ModuleRuntime};

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Task complexity classification for intelligent routing
 
 use crate::llm::provider::{ModelTier, TaskComplexity};

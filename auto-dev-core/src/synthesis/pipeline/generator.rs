@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Code generation coordinator
 
 use super::{PipelineContext, PipelineStage};

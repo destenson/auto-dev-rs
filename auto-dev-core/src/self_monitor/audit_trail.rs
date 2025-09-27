@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use std::fs::{self, OpenOptions};

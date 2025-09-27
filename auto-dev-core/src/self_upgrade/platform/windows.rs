@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Windows specific binary replacement
 
 use anyhow::{Context, Result};

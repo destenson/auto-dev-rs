@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Main upgrade orchestrator
 
 use anyhow::{Context, Result};

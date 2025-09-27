@@ -1,6 +1,7 @@
-// Module Registry
-//
-// Tracks loaded modules, manages lifecycle, and handles dependencies
+#![allow(unused)]
+//! Module Registry
+//!
+//! Tracks loaded modules, manages lifecycle, and handles dependencies
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

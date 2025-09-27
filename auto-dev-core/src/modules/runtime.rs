@@ -1,6 +1,7 @@
-// Module Runtime
-//
-// Manages module execution, state, and isolation
+#![allow(unused)]
+//! Module Runtime
+//!
+//! Manages module execution, state, and isolation
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

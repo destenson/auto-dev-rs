@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Synthesis state management
 
 use super::{ArchitectureDecision, Result, SynthesisError};

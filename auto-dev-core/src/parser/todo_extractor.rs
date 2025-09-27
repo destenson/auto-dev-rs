@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! TODO comment and documentation specification extraction
 
 use anyhow::Result;

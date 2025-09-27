@@ -1,6 +1,7 @@
-// Native Module Host
-//
-// Provides execution environment for native dynamic library modules
+#![allow(unused)]
+//! Native Module Host
+//!
+//! Provides execution environment for native dynamic library modules
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;

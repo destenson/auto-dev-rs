@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Code verification using existing tools like cargo check, cargo test, etc.
 
 use super::{

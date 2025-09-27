@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Prompt templates optimized for different models and tasks
 //!
 //! Provides specialized prompts for Qwen and other models based on their strengths

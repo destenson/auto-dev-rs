@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! JavaScript Jest framework adapter - generates Jest test code
 
 use super::{TestFrameworkAdapter, codegen};

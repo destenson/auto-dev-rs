@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Transport implementations for MCP communication
 
 use super::client::McpTransport;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! LLM usage optimization to minimize costs and improve performance
 
 use super::*;

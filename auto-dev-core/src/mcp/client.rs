@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! MCP client implementation for connecting to MCP servers
 
 use super::*;

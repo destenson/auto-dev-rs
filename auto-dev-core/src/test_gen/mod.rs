@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Test generation module for automatically creating comprehensive test suites from specifications
 
 pub mod coverage;

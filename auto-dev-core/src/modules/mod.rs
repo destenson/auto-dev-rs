@@ -1,7 +1,8 @@
-// Dynamic Module System
-//
-// This module provides runtime loading, unloading, and hot-reload capabilities
-// for auto-dev-rs, enabling safe self-modification through modular updates.
+#![allow(unused)]
+//! Dynamic Module System
+//!
+//! This module provides runtime loading, unloading, and hot-reload capabilities
+//! for auto-dev-rs, enabling safe self-modification through modular updates.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

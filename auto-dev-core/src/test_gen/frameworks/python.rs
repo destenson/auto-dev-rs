@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Python pytest framework adapter - generates pytest test code
 
 use super::{TestFrameworkAdapter, codegen};

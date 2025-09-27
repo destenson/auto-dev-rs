@@ -1,6 +1,7 @@
-// Hot-Reload Infrastructure
-//
-// Provides seamless module reloading with state preservation and zero downtime
+#![allow(unused)]
+//! Hot-Reload Infrastructure
+//!
+//! Provides seamless module reloading with state preservation and zero downtime
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

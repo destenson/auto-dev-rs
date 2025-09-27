@@ -1,4 +1,5 @@
-// Reload Scheduler - Manages timing and coordination of module reloads
+#![allow(unused)]
+//! Reload Scheduler - Manages timing and coordination of module reloads
 
 use super::{HotReloadConfig, HotReloadError, HotReloadResult, ReloadCoordinator, ReloadResult};
 use crate::modules::{ModuleLoader, ModuleRegistry, ModuleRuntime};

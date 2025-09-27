@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Code merger for integrating generated code with existing code
 
 use super::{PipelineContext, PipelineStage};

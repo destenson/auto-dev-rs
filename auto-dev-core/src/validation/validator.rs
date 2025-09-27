@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Specification validation and validation pipeline
 
 use super::{

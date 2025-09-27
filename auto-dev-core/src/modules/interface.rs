@@ -1,7 +1,8 @@
-// Module Interface Definition
-//
-// Defines the trait that all modules must implement, along with
-// versioning, capabilities, and state management interfaces.
+#![allow(unused)]
+//! Module Interface Definition
+//!
+//! Defines the trait that all modules must implement, along with
+//! versioning, capabilities, and state management interfaces.
 
 use anyhow::Result;
 use async_trait::async_trait;

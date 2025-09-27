@@ -1,4 +1,5 @@
-// Reload Coordinator - Orchestrates the hot-reload process
+#![allow(unused)]
+//! Reload Coordinator - Orchestrates the hot-reload process
 
 use super::{
     HotReloadConfig, HotReloadError, HotReloadResult, MigrationEngine, ReloadMetrics,

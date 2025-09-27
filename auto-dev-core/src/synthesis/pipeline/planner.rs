@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Implementation planning stage
 
 use super::{PipelineContext, PipelineStage};

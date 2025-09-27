@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Fast local classification without LLM for obvious cases
 
 use super::{ClassificationResult, QuestionType};

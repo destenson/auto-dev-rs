@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Test framework adapters for generating framework-specific test code
 
 pub mod javascript;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! OpenAPI specification parser
 
 use anyhow::{Context, Result};

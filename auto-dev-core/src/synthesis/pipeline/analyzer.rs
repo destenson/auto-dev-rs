@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Code analyzer for understanding existing code
 
 use super::{PipelineContext, PipelineStage};

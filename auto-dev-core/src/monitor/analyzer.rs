@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Change impact analysis to determine what actions to take
 
 use crate::monitor::{ChangeType, FileCategory, FileChange};

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Self-targeting configuration for auto-dev-rs
 //!
 //! Enables auto-dev-rs to analyze and improve its own codebase

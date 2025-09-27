@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Validation module for ensuring code quality and correctness
 //! Leverages existing tools like cargo check, clippy, rustfmt, etc.
 

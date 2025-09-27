@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Main synthesis orchestrator
 
 use super::{

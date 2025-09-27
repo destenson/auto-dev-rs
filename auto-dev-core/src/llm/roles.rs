@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Role-based system prompts for different development perspectives
 //!
 //! Provides specialized prompts for examining projects from various roles
