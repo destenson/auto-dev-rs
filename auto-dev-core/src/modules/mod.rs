@@ -19,6 +19,7 @@ pub mod native_host;
 pub mod registry;
 pub mod runtime;
 pub mod sandbox;
+pub mod store;
 pub mod wasm_host;
 
 #[cfg(test)]
@@ -30,6 +31,7 @@ pub use loader::{ModuleFormat, ModuleLoader};
 pub use messages::{Message, MessageBus, MessageHandler};
 pub use registry::{ModuleInfo, ModuleRegistry, ModuleStatus};
 pub use runtime::{ExecutionContext, ModuleRuntime};
+pub use store::{ModuleStore, StoreConfig};
 
 /// Build configuration for modules
 #[derive(Debug, Clone, Serialize, Deserialize)]
