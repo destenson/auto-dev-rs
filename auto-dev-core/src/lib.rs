@@ -12,6 +12,7 @@ pub mod mcp;
 pub mod modules;
 pub mod monitor;
 pub mod parser;
+pub mod safety;
 pub mod self_dev;
 pub mod self_monitor;
 pub mod self_target;

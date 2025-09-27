@@ -2,6 +2,7 @@
 
 use super::{Result, SelfDevConfig, SelfDevError};
 use super::orchestrator::{PendingChange, ChangeType, RiskLevel, TestResults};
+use crate::safety::{SafetyGatekeeper, SafetyConfig, CodeModification, ModificationType};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
