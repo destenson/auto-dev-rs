@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{debug, warn};
 use crate::learning::failure_analyzer::FailureCause;
 use crate::learning::learner::LearningEvent;
+use crate::{debug, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecisionImprover {

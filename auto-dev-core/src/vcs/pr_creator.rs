@@ -27,11 +27,8 @@ impl PullRequestCreator {
     pub fn new(repo_path: impl AsRef<Path>) -> Result<Self> {
         let repo_path = repo_path.as_ref().to_path_buf();
         let provider = Self::detect_provider(&repo_path)?;
-        
-        Ok(Self {
-            repo_path,
-            provider,
-        })
+
+        Ok(Self { repo_path, provider })
     }
 
     /// Detect git provider from remote URL
@@ -41,9 +38,9 @@ impl PullRequestCreator {
             .current_dir(repo_path)
             .output()
             .context("Failed to get remote URL")?;
-        
+
         let url = String::from_utf8_lossy(&output.stdout);
-        
+
         if url.contains("github.com") {
             Ok(GitProvider::GitHub)
         } else if url.contains("gitlab.com") || url.contains("gitlab") {
@@ -71,40 +68,43 @@ impl PullRequestCreator {
         if !self.is_gh_available()? {
             return self.fallback_pr_instructions(title, description);
         }
-        
+
         // Get current branch
         let current_branch = self.get_current_branch()?;
-        
+
         // Push current branch to origin
         self.push_branch(&current_branch)?;
-        
+
         // Create PR using gh CLI
         let output = Command::new("gh")
             .args(&[
                 "pr",
                 "create",
-                "--title", title,
-                "--body", description,
-                "--head", &current_branch,
+                "--title",
+                title,
+                "--body",
+                description,
+                "--head",
+                &current_branch,
             ])
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to create GitHub PR")?;
-        
+
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("Failed to create PR: {}", error);
         }
-        
+
         // Parse PR URL from output
         let output_str = String::from_utf8_lossy(&output.stdout);
         let pr_url = output_str.trim().to_string();
-        
+
         // Extract PR number from URL
         let pr_number = self.extract_pr_number(&pr_url)?;
-        
+
         info!("Created GitHub PR #{}: {}", pr_number, pr_url);
-        
+
         Ok(PullRequestInfo {
             number: pr_number,
             url: pr_url,
@@ -119,40 +119,43 @@ impl PullRequestCreator {
         if !self.is_glab_available()? {
             return self.fallback_pr_instructions(title, description);
         }
-        
+
         // Get current branch
         let current_branch = self.get_current_branch()?;
-        
+
         // Push current branch to origin
         self.push_branch(&current_branch)?;
-        
+
         // Create MR using glab CLI
         let output = Command::new("glab")
             .args(&[
                 "mr",
                 "create",
-                "--title", title,
-                "--description", description,
-                "--source-branch", &current_branch,
+                "--title",
+                title,
+                "--description",
+                description,
+                "--source-branch",
+                &current_branch,
             ])
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to create GitLab MR")?;
-        
+
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("Failed to create MR: {}", error);
         }
-        
+
         // Parse MR URL from output
         let output_str = String::from_utf8_lossy(&output.stdout);
         let mr_url = output_str.trim().to_string();
-        
+
         // Extract MR number from URL
         let mr_number = self.extract_pr_number(&mr_url)?;
-        
+
         info!("Created GitLab MR !{}: {}", mr_number, mr_url);
-        
+
         Ok(PullRequestInfo {
             number: mr_number,
             url: mr_url,
@@ -163,19 +166,15 @@ impl PullRequestCreator {
 
     /// Check if gh CLI is available
     fn is_gh_available(&self) -> Result<bool> {
-        let output = Command::new("gh")
-            .arg("--version")
-            .output();
-        
+        let output = Command::new("gh").arg("--version").output();
+
         Ok(output.is_ok() && output.unwrap().status.success())
     }
 
     /// Check if glab CLI is available
     fn is_glab_available(&self) -> Result<bool> {
-        let output = Command::new("glab")
-            .arg("--version")
-            .output();
-        
+        let output = Command::new("glab").arg("--version").output();
+
         Ok(output.is_ok() && output.unwrap().status.success())
     }
 
@@ -186,29 +185,29 @@ impl PullRequestCreator {
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to get current branch")?;
-        
+
         if !output.status.success() {
             anyhow::bail!("Failed to get current branch");
         }
-        
+
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
     /// Push branch to origin
     fn push_branch(&self, branch: &str) -> Result<()> {
         info!("Pushing branch {} to origin", branch);
-        
+
         let output = Command::new("git")
             .args(&["push", "-u", "origin", branch])
             .current_dir(&self.repo_path)
             .output()
             .context("Failed to push branch")?;
-        
+
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("Failed to push branch: {}", error);
         }
-        
+
         Ok(())
     }
 
@@ -216,29 +215,29 @@ impl PullRequestCreator {
     fn extract_pr_number(&self, url: &str) -> Result<u32> {
         // GitHub: https://github.com/owner/repo/pull/123
         // GitLab: https://gitlab.com/owner/repo/-/merge_requests/123
-        
+
         let parts: Vec<&str> = url.split('/').collect();
-        
+
         if let Some(last) = parts.last() {
             if let Ok(number) = last.parse::<u32>() {
                 return Ok(number);
             }
         }
-        
+
         // Fallback: look for number in URL
         for part in parts {
             if let Ok(number) = part.parse::<u32>() {
                 return Ok(number);
             }
         }
-        
+
         anyhow::bail!("Could not extract PR number from URL: {}", url)
     }
 
     /// Provide fallback instructions when CLI tools aren't available
     fn fallback_pr_instructions(&self, title: &str, description: &str) -> Result<PullRequestInfo> {
         let current_branch = self.get_current_branch()?;
-        
+
         println!("\n=== Manual Pull Request Creation ===");
         println!("CLI tools (gh/glab) not available.");
         println!("\nTo create a pull request manually:");
@@ -250,7 +249,7 @@ impl PullRequestCreator {
         println!("   Source: {}", current_branch);
         println!("   Target: main");
         println!("=====================================\n");
-        
+
         Ok(PullRequestInfo {
             number: 0,
             url: "manual".to_string(),
@@ -273,12 +272,12 @@ impl PullRequestCreator {
         if !self.is_gh_available()? {
             return Ok(Vec::new());
         }
-        
+
         let output = Command::new("gh")
             .args(&["pr", "list", "--json", "number,url,headRefName,baseRefName"])
             .current_dir(&self.repo_path)
             .output()?;
-        
+
         if output.status.success() {
             let json = String::from_utf8_lossy(&output.stdout);
             // Parse JSON manually or use serde_json
@@ -294,12 +293,10 @@ impl PullRequestCreator {
         if !self.is_glab_available()? {
             return Ok(Vec::new());
         }
-        
-        let output = Command::new("glab")
-            .args(&["mr", "list"])
-            .current_dir(&self.repo_path)
-            .output()?;
-        
+
+        let output =
+            Command::new("glab").args(&["mr", "list"]).current_dir(&self.repo_path).output()?;
+
         if output.status.success() {
             // Parse output
             // For now, return empty
@@ -322,11 +319,11 @@ mod tests {
             repo_path: dir.path().to_path_buf(),
             provider: GitProvider::GitHub,
         };
-        
+
         // GitHub URL
         let url = "https://github.com/owner/repo/pull/123";
         assert_eq!(creator.extract_pr_number(url).unwrap(), 123);
-        
+
         // GitLab URL
         let url = "https://gitlab.com/owner/repo/-/merge_requests/456";
         assert_eq!(creator.extract_pr_number(url).unwrap(), 456);

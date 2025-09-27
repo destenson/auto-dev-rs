@@ -1,15 +1,15 @@
 #![allow(unused)]
+use anyhow::Result;
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use std::collections::HashMap;
-use anyhow::Result;
 use tracing::{debug, info, warn};
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-use crate::monitor::{FileChange, ChangeType, FileCategory};
-use crate::monitor::watcher::FileWatcher;
 use crate::monitor::classifier::FileClassifier;
+use crate::monitor::watcher::FileWatcher;
+use crate::monitor::{ChangeType, FileCategory, FileChange};
 
 /// Configuration for self-monitoring behavior
 #[derive(Debug, Clone)]
@@ -61,17 +61,16 @@ impl SelfMonitor {
     pub fn start(&mut self) -> Result<()> {
         let project_root = self.config.project_root.clone();
         let tracker = self.modification_tracker.clone();
-        
-        let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-            match res {
+
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
                 Ok(event) => {
                     if let Err(e) = Self::handle_event(event, &tracker) {
                         warn!("Error handling file event: {}", e);
                     }
                 }
                 Err(e) => warn!("Watch error: {}", e),
-            }
-        })?;
+            })?;
 
         // Watch the project source directories
         for path in &self.config.modifiable_paths {
@@ -126,7 +125,7 @@ impl SelfMonitor {
 
             let mut tracker_guard = tracker.lock().unwrap();
             tracker_guard.record_modification(&path, change_type)?;
-            
+
             info!("Self-modification detected: {:?} {:?}", change_type, path);
         }
 
@@ -137,9 +136,7 @@ impl SelfMonitor {
     fn should_ignore(path: &Path) -> bool {
         // Ignore build artifacts and temporary files
         if path.components().any(|c| {
-            c.as_os_str() == "target" ||
-            c.as_os_str() == ".git" ||
-            c.as_os_str() == "node_modules"
+            c.as_os_str() == "target" || c.as_os_str() == ".git" || c.as_os_str() == "node_modules"
         }) {
             return true;
         }
@@ -147,9 +144,7 @@ impl SelfMonitor {
         // Ignore temporary and backup files
         if let Some(name) = path.file_name() {
             let name_str = name.to_string_lossy();
-            if name_str.ends_with(".tmp") ||
-               name_str.ends_with("~") ||
-               name_str.starts_with(".#") {
+            if name_str.ends_with(".tmp") || name_str.ends_with("~") || name_str.starts_with(".#") {
                 return true;
             }
         }
@@ -174,15 +169,12 @@ struct ModificationTracker {
 
 impl ModificationTracker {
     fn new() -> Self {
-        Self {
-            history: Vec::new(),
-            last_modified: HashMap::new(),
-        }
+        Self { history: Vec::new(), last_modified: HashMap::new() }
     }
 
     fn record_modification(&mut self, path: &Path, change_type: ChangeType) -> Result<()> {
         let now = SystemTime::now();
-        
+
         // Check cooldown period
         if let Some(last_time) = self.last_modified.get(path) {
             if let Ok(duration) = now.duration_since(*last_time) {
@@ -213,11 +205,7 @@ impl ModificationTracker {
 
     fn get_recent_modifications(&self, duration: Duration) -> Vec<ModificationRecord> {
         let cutoff = SystemTime::now() - duration;
-        self.history
-            .iter()
-            .filter(|r| r.timestamp > cutoff)
-            .cloned()
-            .collect()
+        self.history.iter().filter(|r| r.timestamp > cutoff).cloned().collect()
     }
 }
 
@@ -250,10 +238,7 @@ mod tests {
     fn test_safe_to_modify() {
         let config = SelfMonitorConfig {
             project_root: PathBuf::from("/project"),
-            modifiable_paths: vec![
-                PathBuf::from("src"),
-                PathBuf::from("tests"),
-            ],
+            modifiable_paths: vec![PathBuf::from("src"), PathBuf::from("tests")],
             ..Default::default()
         };
 
@@ -262,7 +247,7 @@ mod tests {
         // Test allowed paths
         assert!(monitor.is_safe_to_modify(&PathBuf::from("/project/src/module.rs")));
         assert!(monitor.is_safe_to_modify(&PathBuf::from("/project/tests/test.rs")));
-        
+
         // Test disallowed paths
         assert!(!monitor.is_safe_to_modify(&PathBuf::from("/project/Cargo.toml")));
         assert!(!monitor.is_safe_to_modify(&PathBuf::from("/project/src/main.rs")));

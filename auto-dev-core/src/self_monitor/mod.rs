@@ -1,4 +1,3 @@
-
 //! Self-monitoring module for auto-dev-rs
 //!
 //! This module enables auto-dev-rs to monitor its own source directory,
@@ -17,7 +16,9 @@ pub mod loop_detector;
 pub mod modification_guard;
 pub mod self_monitor;
 
-pub use audit_trail::{AuditTrail, AuditEntry, AuditConfig, AuditAction, ModificationInitiator, ModificationResult};
-pub use loop_detector::{LoopDetector, LoopDetectorConfig, LoopDetectionResult};
+pub use audit_trail::{
+    AuditAction, AuditConfig, AuditEntry, AuditTrail, ModificationInitiator, ModificationResult,
+};
+pub use loop_detector::{LoopDetectionResult, LoopDetector, LoopDetectorConfig};
 pub use modification_guard::{ModificationGuard, ValidationResult};
-pub use self_monitor::{SelfMonitor, SelfMonitorConfig, ModificationRecord, ModificationSource};
+pub use self_monitor::{ModificationRecord, ModificationSource, SelfMonitor, SelfMonitorConfig};

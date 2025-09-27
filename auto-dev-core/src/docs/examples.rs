@@ -13,15 +13,13 @@ pub struct ExampleGenerator {
 impl ExampleGenerator {
     /// Create new example generator
     pub fn new() -> Self {
-        Self {
-            language: "rust".to_string(),
-        }
+        Self { language: "rust".to_string() }
     }
 
     /// Generate example from function signature
     pub fn generate_from_signature(&self, signature: &str, name: &str) -> Result<Example> {
         let code = self.create_example_code(signature, name);
-        
+
         Ok(Example {
             title: format!("Using {}", name),
             description: format!("Example usage of {}", name),
@@ -35,7 +33,7 @@ impl ExampleGenerator {
     pub fn generate_from_test(&self, test_code: &str, test_name: &str) -> Result<Example> {
         // Extract the relevant parts of the test
         let cleaned_code = self.clean_test_code(test_code);
-        
+
         Ok(Example {
             title: format!("Test: {}", test_name),
             description: "Example from test code".to_string(),
@@ -48,13 +46,10 @@ impl ExampleGenerator {
     /// Generate examples for a module
     pub fn generate_module_examples(&self, module_path: &Path) -> Result<Vec<Example>> {
         let mut examples = Vec::new();
-        
+
         // Basic usage example
-        let module_name = module_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("module");
-        
+        let module_name = module_path.file_stem().and_then(|s| s.to_str()).unwrap_or("module");
+
         examples.push(Example {
             title: "Basic Usage".to_string(),
             description: format!("How to use the {} module", module_name),
@@ -65,7 +60,7 @@ impl ExampleGenerator {
             output: None,
             language: self.language.clone(),
         });
-        
+
         Ok(examples)
     }
 
@@ -75,13 +70,13 @@ impl ExampleGenerator {
         let mut in_example = false;
         let mut current_code = String::new();
         let mut example_count = 0;
-        
+
         for line in doc_content.lines() {
             if line.contains("# Example") || line.contains("# Examples") {
                 in_example = true;
                 continue;
             }
-            
+
             if in_example {
                 if line.starts_with("```") {
                     if !current_code.is_empty() {
@@ -104,19 +99,19 @@ impl ExampleGenerator {
                 }
             }
         }
-        
+
         examples
     }
 
     fn create_example_code(&self, signature: &str, name: &str) -> String {
         // Parse signature to determine parameters
         let params = self.extract_parameters(signature);
-        
+
         let mut code = String::new();
-        
+
         // Add necessary imports
         code.push_str("use auto_dev_core::*;\n\n");
-        
+
         // Create example based on function type
         if signature.contains("async") {
             code.push_str("#[tokio::main]\n");
@@ -136,7 +131,7 @@ impl ExampleGenerator {
             code.push_str(&format!("    {}({});\n", name, params));
             code.push_str("}\n");
         }
-        
+
         code
     }
 
@@ -145,10 +140,10 @@ impl ExampleGenerator {
         if signature.contains("()") {
             return String::new();
         }
-        
+
         // Generate example parameters based on types
         let mut params = Vec::new();
-        
+
         if signature.contains("&str") {
             params.push("\"example\"");
         }
@@ -164,34 +159,34 @@ impl ExampleGenerator {
         if signature.contains("Path") {
             params.push("Path::new(\"./example\")");
         }
-        
+
         params.join(", ")
     }
 
     fn clean_test_code(&self, test_code: &str) -> String {
         let mut cleaned = String::new();
         let mut skip_assert = false;
-        
+
         for line in test_code.lines() {
             // Skip test attributes and assertions for examples
             if line.trim().starts_with("#[test]") || line.trim().starts_with("#[tokio::test]") {
                 continue;
             }
-            
+
             if line.trim().starts_with("assert") {
                 skip_assert = true;
             }
-            
+
             if !skip_assert {
                 cleaned.push_str(line);
                 cleaned.push('\n');
             }
-            
+
             if skip_assert && line.ends_with(';') {
                 skip_assert = false;
             }
         }
-        
+
         cleaned.trim().to_string()
     }
 }
@@ -212,7 +207,7 @@ mod tests {
         let example = generator
             .generate_from_signature("pub fn process(input: &str) -> Result<String>", "process")
             .unwrap();
-        
+
         assert!(example.code.contains("process("));
         assert_eq!(example.language, "rust");
     }
@@ -220,7 +215,7 @@ mod tests {
     #[test]
     fn test_extract_parameters() {
         let generator = ExampleGenerator::new();
-        
+
         let params = generator.extract_parameters("fn test(s: &str, n: usize)");
         assert!(params.contains("\"example\""));
         assert!(params.contains("42"));
@@ -229,7 +224,7 @@ mod tests {
     #[test]
     fn test_clean_test_code() {
         let generator = ExampleGenerator::new();
-        
+
         let test_code = r#"
 #[test]
 fn test_example() {
@@ -237,7 +232,7 @@ fn test_example() {
     assert_eq!(value, 42);
 }
 "#;
-        
+
         let cleaned = generator.clean_test_code(test_code);
         assert!(!cleaned.contains("#[test]"));
         assert!(!cleaned.contains("assert_eq"));

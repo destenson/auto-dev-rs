@@ -1,7 +1,7 @@
 #![allow(unused)]
-use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 use super::{SelfTestError, sandbox_env::TestSandbox};
@@ -13,46 +13,48 @@ pub struct CompatibilityChecker {
 
 impl CompatibilityChecker {
     pub fn new() -> Self {
-        Self {
-            known_interfaces: HashMap::new(),
-        }
+        Self { known_interfaces: HashMap::new() }
     }
-    
+
     /// Check interfaces for breaking changes
-    pub async fn check_interfaces(&self, sandbox: &TestSandbox) -> Result<Vec<InterfaceChange>, SelfTestError> {
+    pub async fn check_interfaces(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<Vec<InterfaceChange>, SelfTestError> {
         info!("Checking interface compatibility");
-        
+
         let mut changes = Vec::new();
-        
+
         // Check public API surface
         let api_check = sandbox.run_command("cargo", &["public-api", "diff"]).await;
-        
+
         if let Ok(result) = api_check {
             if !result.success {
                 // Parse API differences
                 changes.extend(self.parse_api_changes(&result.output));
             }
         }
-        
+
         // Check module interfaces
         changes.extend(self.check_module_interfaces(sandbox).await?);
-        
+
         // Check configuration compatibility
         changes.extend(self.check_config_compatibility(sandbox).await?);
-        
+
         Ok(changes)
     }
-    
+
     /// Check module interface compatibility
-    async fn check_module_interfaces(&self, sandbox: &TestSandbox) -> Result<Vec<InterfaceChange>, SelfTestError> {
+    async fn check_module_interfaces(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<Vec<InterfaceChange>, SelfTestError> {
         let mut changes = Vec::new();
-        
+
         // Check if module trait definitions have changed
-        let module_check = sandbox.run_command(
-            "cargo",
-            &["test", "--", "module_interface_compatibility"]
-        ).await;
-        
+        let module_check =
+            sandbox.run_command("cargo", &["test", "--", "module_interface_compatibility"]).await;
+
         if let Ok(result) = module_check {
             if !result.success {
                 changes.push(InterfaceChange {
@@ -63,20 +65,21 @@ impl CompatibilityChecker {
                 });
             }
         }
-        
+
         Ok(changes)
     }
-    
+
     /// Check configuration format compatibility
-    async fn check_config_compatibility(&self, sandbox: &TestSandbox) -> Result<Vec<InterfaceChange>, SelfTestError> {
+    async fn check_config_compatibility(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<Vec<InterfaceChange>, SelfTestError> {
         let mut changes = Vec::new();
-        
+
         // Check if config structures can still deserialize old formats
-        let config_test = sandbox.run_command(
-            "cargo",
-            &["test", "--", "config_backward_compat"]
-        ).await;
-        
+        let config_test =
+            sandbox.run_command("cargo", &["test", "--", "config_backward_compat"]).await;
+
         if let Ok(result) = config_test {
             if !result.success {
                 changes.push(InterfaceChange {
@@ -87,14 +90,14 @@ impl CompatibilityChecker {
                 });
             }
         }
-        
+
         Ok(changes)
     }
-    
+
     /// Parse API changes from output
     fn parse_api_changes(&self, output: &str) -> Vec<InterfaceChange> {
         let mut changes = Vec::new();
-        
+
         for line in output.lines() {
             if line.contains("BREAKING") {
                 changes.push(InterfaceChange {
@@ -119,32 +122,29 @@ impl CompatibilityChecker {
                 });
             }
         }
-        
+
         changes
     }
-    
+
     fn extract_interface_name(&self, line: &str) -> String {
         // Extract interface name from change description
-        line.split_whitespace()
-            .nth(1)
-            .unwrap_or("Unknown")
-            .to_string()
+        line.split_whitespace().nth(1).unwrap_or("Unknown").to_string()
     }
-    
+
     /// Store current interfaces as baseline
     pub async fn capture_baseline(&mut self, sandbox: &TestSandbox) -> Result<(), SelfTestError> {
         info!("Capturing interface baseline");
-        
+
         // Capture public API signatures
         let api_dump = sandbox.run_command("cargo", &["public-api", "dump"]).await;
-        
+
         if let Ok(result) = api_dump {
             self.parse_interface_signatures(&result.output);
         }
-        
+
         Ok(())
     }
-    
+
     fn parse_interface_signatures(&mut self, output: &str) {
         for line in output.lines() {
             if let Some((name, signature)) = self.parse_signature_line(line) {
@@ -152,7 +152,7 @@ impl CompatibilityChecker {
             }
         }
     }
-    
+
     fn parse_signature_line(&self, line: &str) -> Option<(String, InterfaceSignature)> {
         // Parse interface signature from output
         // This is a simplified version - real implementation would be more sophisticated
@@ -169,7 +169,7 @@ impl CompatibilityChecker {
             None
         }
     }
-    
+
     fn detect_interface_kind(&self, line: &str) -> InterfaceKind {
         if line.contains("trait") {
             InterfaceKind::Trait
@@ -183,11 +183,11 @@ impl CompatibilityChecker {
             InterfaceKind::Other
         }
     }
-    
+
     fn hash_signature(&self, signature: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         signature.hash(&mut hasher);
         hasher.finish()
@@ -207,7 +207,7 @@ impl InterfaceChange {
     pub fn is_breaking(&self) -> bool {
         matches!(self.severity, Severity::Breaking | Severity::Critical)
     }
-    
+
     pub fn description(&self) -> String {
         format!("{}: {} ({})", self.interface_name, self.details, self.severity)
     }

@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::{debug, info};
 use crate::incremental::Implementation;
 use crate::learning::failure_analyzer::AntiPattern;
 use crate::learning::pattern_extractor::{Pattern, PatternContext};
 use crate::parser::model::Specification;
+use crate::{debug, info};
 
 pub type PatternId = Uuid;
 
@@ -204,11 +204,7 @@ impl KnowledgeBase {
 
         self.rebuild_index()?;
 
-        info!(
-            "Imported {} patterns and {} anti-patterns",
-            pattern_count,
-            anti_pattern_count
-        );
+        info!("Imported {} patterns and {} anti-patterns", pattern_count, anti_pattern_count);
 
         Ok(())
     }

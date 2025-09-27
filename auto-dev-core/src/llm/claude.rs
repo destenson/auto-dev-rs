@@ -215,14 +215,7 @@ impl LLMProvider for ClaudeProvider {
     async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
         let req_list = requirements
             .iter()
-            .map(|r| {
-                format!(
-                    "{}: {} (Priority: {:?})",
-                    r.id,
-                    r.description,
-                    r.priority
-                )
-            })
+            .map(|r| format!("{}: {} (Priority: {:?})", r.id, r.description, r.priority))
             .collect::<Vec<_>>()
             .join("\n");
 

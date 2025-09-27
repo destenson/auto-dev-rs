@@ -1,10 +1,10 @@
 //! State preservation across upgrades
 
+use crate::info;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
-use crate::info;
 
 /// Preserves application state across upgrades
 pub struct StatePreserver {

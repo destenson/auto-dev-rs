@@ -1,20 +1,20 @@
 //! Self-development integration and orchestration module
-//! 
+//!
 //! This module ties together all self-development capabilities to enable
 //! auto-dev-rs to autonomously improve itself while maintaining stability,
 //! safety, and continuous operation.
 
-pub mod orchestrator;
-pub mod state_machine;
+pub mod control;
 pub mod coordinator;
 pub mod monitor;
-pub mod control;
+pub mod orchestrator;
+pub mod state_machine;
 
-pub use orchestrator::SelfDevOrchestrator;
-pub use state_machine::{DevelopmentState, DevelopmentStateMachine};
+pub use control::{ControlCommand, OperatorInterface};
 pub use coordinator::ComponentCoordinator;
 pub use monitor::SafetyMonitor;
-pub use control::{OperatorInterface, ControlCommand};
+pub use orchestrator::SelfDevOrchestrator;
+pub use state_machine::{DevelopmentState, DevelopmentStateMachine};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,19 +23,19 @@ use thiserror::Error;
 pub enum SelfDevError {
     #[error("Orchestration error: {0}")]
     Orchestration(String),
-    
+
     #[error("State transition error: {0}")]
     StateTransition(String),
-    
+
     #[error("Safety validation failed: {0}")]
     SafetyViolation(String),
-    
+
     #[error("Component coordination error: {0}")]
     Coordination(String),
-    
+
     #[error("Control command error: {0}")]
     Control(String),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
 }

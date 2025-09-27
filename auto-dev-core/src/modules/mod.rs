@@ -71,7 +71,7 @@ impl ModuleSystem {
     pub fn new() -> Result<Self> {
         Self::with_config(HotReloadConfig::default())
     }
-    
+
     /// Create a new module system with custom hot-reload configuration
     pub fn with_config(hot_reload_config: HotReloadConfig) -> Result<Self> {
         let registry = Arc::new(RwLock::new(ModuleRegistry::new()));
@@ -80,13 +80,7 @@ impl ModuleSystem {
         let runtime = Arc::new(ModuleRuntime::new());
         let reload_coordinator = Arc::new(ReloadCoordinator::new(hot_reload_config));
 
-        Ok(Self { 
-            registry, 
-            loader, 
-            message_bus, 
-            runtime,
-            reload_coordinator,
-        })
+        Ok(Self { registry, loader, message_bus, runtime, reload_coordinator })
     }
 
     /// Load a module from the specified path
@@ -120,7 +114,8 @@ impl ModuleSystem {
     /// Hot-reload a module while preserving state
     pub async fn reload_module(&self, module_id: &str, new_path: PathBuf) -> Result<ReloadResult> {
         // Use the hot-reload coordinator for safe, atomic reload with all phases
-        let result = self.reload_coordinator
+        let result = self
+            .reload_coordinator
             .reload_module(
                 module_id,
                 new_path,
@@ -129,13 +124,13 @@ impl ModuleSystem {
                 self.runtime.clone(),
             )
             .await;
-        
+
         match result {
             Ok(reload_result) => Ok(reload_result),
             Err(e) => Err(anyhow::anyhow!("Hot-reload failed: {}", e)),
         }
     }
-    
+
     /// Hot-reload a module with the simple interface (for backwards compatibility)
     pub async fn reload_module_simple(&self, module_id: &str, new_path: PathBuf) -> Result<()> {
         let result = self.reload_module(module_id, new_path).await?;
@@ -174,17 +169,17 @@ impl ModuleSystem {
     pub async fn health_check(&self, module_id: &str) -> Result<bool> {
         self.runtime.health_check(module_id).await
     }
-    
+
     /// Get hot-reload metrics
     pub async fn get_reload_metrics(&self) -> hot_reload::ReloadMetrics {
         self.reload_coordinator.get_metrics().await
     }
-    
+
     /// Check if a module is currently being reloaded
     pub async fn is_reloading(&self, module_id: &str) -> bool {
         self.reload_coordinator.is_reloading(module_id).await
     }
-    
+
     /// Get the current reload phase for a module
     pub async fn get_reload_phase(&self, module_id: &str) -> Option<hot_reload::ReloadPhase> {
         self.reload_coordinator.get_reload_phase(module_id).await

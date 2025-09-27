@@ -1,7 +1,7 @@
 #![allow(unused)]
-use std::time::Instant;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tracing::{debug, info};
 
 use super::{SelfTestError, sandbox_env::TestSandbox};
@@ -13,21 +13,23 @@ pub struct RegressionSuite {
 
 impl RegressionSuite {
     pub fn new() -> Self {
-        Self {
-            test_cases: Self::default_test_cases(),
-        }
+        Self { test_cases: Self::default_test_cases() }
     }
-    
+
     /// Get all regression test cases
     pub fn get_test_cases(&self) -> Vec<RegressionTest> {
         self.test_cases.clone()
     }
-    
+
     /// Run a specific regression test
-    pub async fn run_test(&self, test: &RegressionTest, sandbox: &mut TestSandbox) -> Result<TestExecutionResult, SelfTestError> {
+    pub async fn run_test(
+        &self,
+        test: &RegressionTest,
+        sandbox: &mut TestSandbox,
+    ) -> Result<TestExecutionResult, SelfTestError> {
         info!("Running regression test: {}", test.name);
         let start = Instant::now();
-        
+
         // Setup test environment
         if let Some(setup) = &test.setup_commands {
             for cmd in setup {
@@ -42,14 +44,14 @@ impl RegressionSuite {
                 }
             }
         }
-        
+
         // Run the test command
         let test_args: Vec<&str> = test.command.args.iter().map(|s| s.as_str()).collect();
         let test_result = sandbox.run_command(&test.command.program, &test_args).await?;
-        
+
         // Validate result
         let passed = self.validate_result(&test_result, &test.expected);
-        
+
         // Cleanup if needed
         if let Some(cleanup) = &test.cleanup_commands {
             for cmd in cleanup {
@@ -57,27 +59,34 @@ impl RegressionSuite {
                 let _ = sandbox.run_command(&cmd.program, &cleanup_args).await;
             }
         }
-        
+
         Ok(TestExecutionResult {
             passed,
             duration_ms: start.elapsed().as_millis() as u64,
             message: if passed {
                 "Test passed".to_string()
             } else {
-                format!("Expected: {:?}, Got exit code: {:?}", test.expected.exit_code, test_result.exit_code)
+                format!(
+                    "Expected: {:?}, Got exit code: {:?}",
+                    test.expected.exit_code, test_result.exit_code
+                )
             },
         })
     }
-    
+
     /// Validate test result against expected outcome
-    fn validate_result(&self, actual: &super::sandbox_env::CommandResult, expected: &ExpectedResult) -> bool {
+    fn validate_result(
+        &self,
+        actual: &super::sandbox_env::CommandResult,
+        expected: &ExpectedResult,
+    ) -> bool {
         // Check exit code
         if let Some(expected_code) = expected.exit_code {
             if actual.exit_code != Some(expected_code) {
                 return false;
             }
         }
-        
+
         // Check stdout contains expected strings
         if let Some(ref contains) = expected.stdout_contains {
             for s in contains {
@@ -86,7 +95,7 @@ impl RegressionSuite {
                 }
             }
         }
-        
+
         // Check stderr
         if let Some(ref stderr_contains) = expected.stderr_contains {
             for s in stderr_contains {
@@ -95,7 +104,7 @@ impl RegressionSuite {
                 }
             }
         }
-        
+
         // Check that stderr doesn't contain error patterns
         if let Some(ref not_contains) = expected.stderr_not_contains {
             for s in not_contains {
@@ -104,10 +113,10 @@ impl RegressionSuite {
                 }
             }
         }
-        
+
         true
     }
-    
+
     /// Default regression test cases
     fn default_test_cases() -> Vec<RegressionTest> {
         vec![
@@ -128,7 +137,6 @@ impl RegressionSuite {
                 setup_commands: None,
                 cleanup_commands: None,
             },
-            
             // Module loading
             RegressionTest {
                 name: "Module Loading".to_string(),
@@ -146,14 +154,17 @@ impl RegressionSuite {
                 setup_commands: None,
                 cleanup_commands: None,
             },
-            
             // Monitoring functionality
             RegressionTest {
                 name: "File Monitoring".to_string(),
                 description: "File monitoring detects changes".to_string(),
                 command: TestCommand {
                     program: "cargo".to_string(),
-                    args: vec!["test".to_string(), "--".to_string(), "monitor::tests::test_file_change_detection".to_string()],
+                    args: vec![
+                        "test".to_string(),
+                        "--".to_string(),
+                        "monitor::tests::test_file_change_detection".to_string(),
+                    ],
                 },
                 expected: ExpectedResult {
                     exit_code: Some(0),
@@ -164,7 +175,6 @@ impl RegressionSuite {
                 setup_commands: None,
                 cleanup_commands: None,
             },
-            
             // LLM integration
             RegressionTest {
                 name: "LLM Provider Loading".to_string(),
@@ -182,14 +192,17 @@ impl RegressionSuite {
                 setup_commands: None,
                 cleanup_commands: None,
             },
-            
             // Safety gates
             RegressionTest {
                 name: "Safety Validation".to_string(),
                 description: "Safety gates prevent dangerous operations".to_string(),
                 command: TestCommand {
                     program: "cargo".to_string(),
-                    args: vec!["test".to_string(), "--".to_string(), "safety::tests::test_gate_validation".to_string()],
+                    args: vec![
+                        "test".to_string(),
+                        "--".to_string(),
+                        "safety::tests::test_gate_validation".to_string(),
+                    ],
                 },
                 expected: ExpectedResult {
                     exit_code: Some(0),
@@ -202,7 +215,7 @@ impl RegressionSuite {
             },
         ]
     }
-    
+
     /// Add a custom regression test
     pub fn add_test(&mut self, test: RegressionTest) {
         self.test_cases.push(test);

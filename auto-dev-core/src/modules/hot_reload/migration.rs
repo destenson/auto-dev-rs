@@ -1,8 +1,8 @@
 #![allow(unused)]
 //! Migration Engine - Handles state transformation between versions
 
-use super::{HotReloadError, HotReloadResult};
 use super::state_manager::StateVersion;
+use super::{HotReloadError, HotReloadResult};
 use crate::modules::ModuleState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -92,10 +92,7 @@ impl MigrationEngine {
         from_version: StateVersion,
         to_version: StateVersion,
     ) -> HotReloadResult<ModuleState> {
-        info!(
-            "Migrating state from version {} to {}",
-            from_version, to_version
-        );
+        info!("Migrating state from version {} to {}", from_version, to_version);
 
         // Check if versions are compatible without migration
         if from_version == to_version {
@@ -129,10 +126,7 @@ impl MigrationEngine {
         let mut changes_made = 0;
 
         for rule in migration_path {
-            debug!(
-                "Applying migration from {} to {}",
-                rule.from_version, rule.to_version
-            );
+            debug!("Applying migration from {} to {}", rule.from_version, rule.to_version);
 
             state = self.apply_migration_rule(state, &rule)?;
             changes_made += rule.field_mappings.len() + rule.new_fields.len();
@@ -176,21 +170,19 @@ impl MigrationEngine {
         let mut current = from.clone();
 
         while current != *to {
-            let rule = rules
-                .iter()
-                .find(|r| r.from_version == current)
-                .ok_or_else(|| HotReloadError::MigrationFailed(
-                    format!("No migration path from {} to {}", from, to),
-                ))?;
+            let rule = rules.iter().find(|r| r.from_version == current).ok_or_else(|| {
+                HotReloadError::MigrationFailed(format!(
+                    "No migration path from {} to {}",
+                    from, to
+                ))
+            })?;
 
             path.push(rule);
             current = rule.to_version.clone();
 
             // Prevent infinite loops
             if path.len() > 10 {
-                return Err(HotReloadError::MigrationFailed(
-                    "Migration path too long".to_string(),
-                ));
+                return Err(HotReloadError::MigrationFailed("Migration path too long".to_string()));
             }
         }
 
@@ -265,7 +257,11 @@ impl MigrationEngine {
     }
 
     /// Apply a value transformation
-    fn apply_transform(&self, value: Value, transform_type: &TransformType) -> HotReloadResult<Value> {
+    fn apply_transform(
+        &self,
+        value: Value,
+        transform_type: &TransformType,
+    ) -> HotReloadResult<Value> {
         match transform_type {
             TransformType::StringToNumber => {
                 if let Value::String(s) = value {
@@ -291,9 +287,7 @@ impl MigrationEngine {
                     Ok(value)
                 }
             }
-            TransformType::ToJson => {
-                Ok(Value::String(value.to_string()))
-            }
+            TransformType::ToJson => Ok(Value::String(value.to_string())),
             TransformType::DefaultIfNull(default) => {
                 if value.is_null() {
                     Ok(default.clone())
@@ -324,7 +318,7 @@ impl MigrationEngine {
     pub async fn register_rule(&self, rule: MigrationRule) {
         let mut rules = self.rules.write().await;
         rules.push(rule);
-        
+
         info!(
             "Registered migration rule from {} to {}",
             rules.last().unwrap().from_version,

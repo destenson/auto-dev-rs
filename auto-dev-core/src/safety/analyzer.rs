@@ -11,27 +11,19 @@ pub struct StaticAnalyzer {
 
 impl StaticAnalyzer {
     pub fn new() -> Self {
-        Self {
-            rules: vec![
-                Box::new(ComplexityRule::new(10)),
-                Box::new(DuplicationRule::new(0.2)),
-            ],
-        }
+        Self { rules: vec![Box::new(ComplexityRule::new(10)), Box::new(DuplicationRule::new(0.2))] }
     }
-    
+
     pub async fn analyze_file(&self, path: &Path, content: &str) -> Result<AnalysisReport> {
         let mut violations = Vec::new();
-        
+
         for rule in &self.rules {
             if let Some(violation) = rule.check(content) {
                 violations.push(violation);
             }
         }
-        
-        Ok(AnalysisReport {
-            file: path.to_path_buf(),
-            violations,
-        })
+
+        Ok(AnalysisReport { file: path.to_path_buf(), violations })
     }
 }
 
@@ -79,7 +71,7 @@ impl AnalysisRule for ComplexityRule {
         // TODO: Implement cyclomatic complexity calculation
         None
     }
-    
+
     fn name(&self) -> &str {
         "Complexity"
     }
@@ -100,7 +92,7 @@ impl AnalysisRule for DuplicationRule {
         // TODO: Implement code duplication detection
         None
     }
-    
+
     fn name(&self) -> &str {
         "Duplication"
     }

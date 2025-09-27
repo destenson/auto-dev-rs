@@ -9,15 +9,13 @@ pub struct ContractVerifier {
 
 impl ContractVerifier {
     pub fn new() -> Self {
-        Self {
-            contracts: Vec::new(),
-        }
+        Self { contracts: Vec::new() }
     }
-    
+
     pub fn add_contract(&mut self, contract: Contract) {
         self.contracts.push(contract);
     }
-    
+
     pub async fn verify_all(&self) -> Result<()> {
         for contract in &self.contracts {
             contract.verify()?;

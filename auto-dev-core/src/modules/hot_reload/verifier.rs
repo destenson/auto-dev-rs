@@ -136,7 +136,7 @@ impl ReloadVerifier {
             Ok(state) => {
                 debug!("Module state retrieved successfully");
                 result.state_valid = true;
-                
+
                 // Verify state has expected structure
                 if state.data.is_empty() {
                     warn!("Module state is empty after reload");
@@ -150,16 +150,9 @@ impl ReloadVerifier {
 
         // Log verification result
         if result.is_healthy {
-            info!(
-                "Module {} verification successful ({}ms)",
-                module_id, result.response_time_ms
-            );
+            info!("Module {} verification successful ({}ms)", module_id, result.response_time_ms);
         } else {
-            warn!(
-                "Module {} verification failed with {} issues",
-                module_id,
-                result.issues.len()
-            );
+            warn!("Module {} verification failed with {} issues", module_id, result.issues.len());
         }
 
         Ok(result)
@@ -181,12 +174,8 @@ impl ReloadVerifier {
             }
             TestType::ExecuteTest(input) => {
                 let context = ExecutionContext::new(input.clone());
-                
-                match tokio::time::timeout(
-                    test.timeout,
-                    runtime.execute(module_id, context),
-                )
-                .await
+
+                match tokio::time::timeout(test.timeout, runtime.execute(module_id, context)).await
                 {
                     Ok(Ok(response)) => {
                         if let Some(expected) = &test.expected_result {
@@ -206,18 +195,16 @@ impl ReloadVerifier {
                     }
                 }
             }
-            TestType::StateCheck(field) => {
-                match runtime.get_module_state(module_id).await {
-                    Ok(state) => {
-                        if !state.data.contains_key(field) {
-                            result.add_issue(format!("State field '{}' is missing", field));
-                        }
-                    }
-                    Err(e) => {
-                        result.add_issue(format!("Cannot check state field '{}': {}", field, e));
+            TestType::StateCheck(field) => match runtime.get_module_state(module_id).await {
+                Ok(state) => {
+                    if !state.data.contains_key(field) {
+                        result.add_issue(format!("State field '{}' is missing", field));
                     }
                 }
-            }
+                Err(e) => {
+                    result.add_issue(format!("Cannot check state field '{}': {}", field, e));
+                }
+            },
             TestType::CapabilityCheck(capability) => {
                 // Would check module capabilities
                 debug!("Capability check for '{}' not yet implemented", capability);
@@ -247,10 +234,7 @@ impl ReloadVerifier {
         runtime: Arc<ModuleRuntime>,
         concurrent_requests: usize,
     ) -> HotReloadResult<bool> {
-        info!(
-            "Testing module {} with {} concurrent requests",
-            module_id, concurrent_requests
-        );
+        info!("Testing module {} with {} concurrent requests", module_id, concurrent_requests);
 
         let mut handles = Vec::new();
         let start = Instant::now();
@@ -258,16 +242,16 @@ impl ReloadVerifier {
         for i in 0..concurrent_requests {
             let runtime_clone = runtime.clone();
             let module_id = module_id.to_string();
-            
+
             let handle = tokio::spawn(async move {
                 let context = ExecutionContext::new(serde_json::json!({
                     "test": true,
                     "request_id": i
                 }));
-                
+
                 runtime_clone.execute(&module_id, context).await
             });
-            
+
             handles.push(handle);
         }
 
@@ -284,7 +268,8 @@ impl ReloadVerifier {
         }
 
         let duration = start.elapsed();
-        let success_rate = ((concurrent_requests - failures) as f64 / concurrent_requests as f64) * 100.0;
+        let success_rate =
+            ((concurrent_requests - failures) as f64 / concurrent_requests as f64) * 100.0;
 
         info!(
             "Concurrency test completed in {:?} with {:.1}% success rate",
@@ -317,16 +302,14 @@ impl ReloadVerifier {
                         return Ok(false);
                     }
                 }
-                
+
                 info!("State preservation verified successfully");
                 Ok(true)
             }
-            Err(e) => {
-                Err(HotReloadError::VerificationFailed(format!(
-                    "Cannot retrieve module state: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(HotReloadError::VerificationFailed(format!(
+                "Cannot retrieve module state: {}",
+                e
+            ))),
         }
     }
 }

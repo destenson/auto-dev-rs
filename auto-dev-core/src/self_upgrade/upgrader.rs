@@ -84,11 +84,12 @@ impl SelfUpgrader {
 
     /// Compile the modified version
     async fn compile_new_version(&self) -> Result<PathBuf> {
-        info!("Building {} version", 
+        info!(
+            "Building {} version",
             match &self.config.build_profile {
                 BuildProfile::Debug => "debug",
                 BuildProfile::Release => "release",
-                BuildProfile::Custom(name) => name.as_str()
+                BuildProfile::Custom(name) => name.as_str(),
             }
         );
 

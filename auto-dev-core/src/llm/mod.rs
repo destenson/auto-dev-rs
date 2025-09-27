@@ -41,13 +41,13 @@ pub use errors::{LLMError, LLMResult};
 pub use openai_async::{AsyncOpenAIConfig, AsyncOpenAIProvider};
 pub use openrouter::{OpenRouterConfig, OpenRouterProvider};
 pub use token_manager::{ConversationManager, TokenManager};
-pub use traits::{CachedProvider, LLMProvider, RetryableProvider};
 #[cfg(test)]
 pub use traits::MockProvider;
+pub use traits::{CachedProvider, LLMProvider, RetryableProvider};
 pub use types::{
     Choice, CompletionOptions, CompletionResponse, Delta, Embedding, EmbeddingRequest,
-    EmbeddingResponse, FinishReason, Function, FunctionCall, FunctionCallMode, Message,
-    ModelInfo, ProviderMetadata, RateLimit, Role, StreamChoice, StreamChunk, Usage,
+    EmbeddingResponse, FinishReason, Function, FunctionCall, FunctionCallMode, Message, ModelInfo,
+    ProviderMetadata, RateLimit, Role, StreamChoice, StreamChunk, Usage,
 };
 
 /// Simple question types that can be handled by tiny models

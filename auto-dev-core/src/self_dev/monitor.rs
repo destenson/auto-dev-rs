@@ -26,7 +26,7 @@ impl SafetyMonitor {
     pub fn new(safety_level: SafetyLevel) -> Self {
         let mut blocked_patterns = HashSet::new();
         let mut allowed_directories = HashSet::new();
-        
+
         match safety_level {
             SafetyLevel::Strict => {
                 blocked_patterns.insert("*.exe".to_string());
@@ -36,7 +36,7 @@ impl SafetyMonitor {
                 blocked_patterns.insert("Cargo.lock".to_string());
                 blocked_patterns.insert(".git/*".to_string());
                 blocked_patterns.insert("target/*".to_string());
-                
+
                 allowed_directories.insert("src".to_string());
                 allowed_directories.insert("tests".to_string());
                 allowed_directories.insert("docs".to_string());
@@ -44,7 +44,7 @@ impl SafetyMonitor {
             SafetyLevel::Standard => {
                 blocked_patterns.insert("*.exe".to_string());
                 blocked_patterns.insert(".git/*".to_string());
-                
+
                 allowed_directories.insert("src".to_string());
                 allowed_directories.insert("tests".to_string());
                 allowed_directories.insert("docs".to_string());
@@ -55,7 +55,7 @@ impl SafetyMonitor {
                 blocked_patterns.insert(".git/*".to_string());
             }
         }
-        
+
         Self {
             safety_level,
             blocked_patterns: Arc::new(RwLock::new(blocked_patterns)),
@@ -63,10 +63,10 @@ impl SafetyMonitor {
             validation_history: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    
+
     pub async fn validate_change(&self, change_id: &str) -> Result<bool> {
         debug!("Validating change: {}", change_id);
-        
+
         let validation_checks = vec![
             self.check_file_patterns(change_id).await,
             self.check_directory_permissions(change_id).await,
@@ -74,10 +74,10 @@ impl SafetyMonitor {
             self.check_resource_limits(change_id).await,
             self.check_dependency_safety(change_id).await,
         ];
-        
+
         let mut all_passed = true;
         let mut failure_reasons: Vec<String> = Vec::new();
-        
+
         for (check_name, result) in validation_checks {
             match result {
                 Ok(true) => {
@@ -95,7 +95,7 @@ impl SafetyMonitor {
                 }
             }
         }
-        
+
         let record = ValidationRecord {
             change_id: change_id.to_string(),
             timestamp: std::time::SystemTime::now(),
@@ -106,59 +106,57 @@ impl SafetyMonitor {
                 Some(failure_reasons.join(", "))
             },
         };
-        
+
         self.validation_history.write().await.push(record);
-        
+
         if all_passed {
             info!("Change {} passed all safety validations", change_id);
         } else {
             warn!("Change {} failed safety validations: {:?}", change_id, failure_reasons);
         }
-        
+
         Ok(all_passed)
     }
-    
+
     async fn check_file_patterns(&self, _change_id: &str) -> (&str, Result<bool>) {
         ("file_patterns", Ok(true))
     }
-    
+
     async fn check_directory_permissions(&self, _change_id: &str) -> (&str, Result<bool>) {
         match self.safety_level {
-            SafetyLevel::Strict => {
-                ("directory_permissions", Ok(true))
-            }
-            _ => ("directory_permissions", Ok(true))
+            SafetyLevel::Strict => ("directory_permissions", Ok(true)),
+            _ => ("directory_permissions", Ok(true)),
         }
     }
-    
+
     async fn check_code_safety(&self, _change_id: &str) -> (&str, Result<bool>) {
         ("code_safety", Ok(true))
     }
-    
+
     async fn check_resource_limits(&self, _change_id: &str) -> (&str, Result<bool>) {
         ("resource_limits", Ok(true))
     }
-    
+
     async fn check_dependency_safety(&self, _change_id: &str) -> (&str, Result<bool>) {
         ("dependency_safety", Ok(true))
     }
-    
+
     pub async fn add_blocked_pattern(&mut self, pattern: String) {
         self.blocked_patterns.write().await.insert(pattern);
     }
-    
+
     pub async fn remove_blocked_pattern(&mut self, pattern: &str) {
         self.blocked_patterns.write().await.remove(pattern);
     }
-    
+
     pub async fn add_allowed_directory(&mut self, directory: String) {
         self.allowed_directories.write().await.insert(directory);
     }
-    
+
     pub async fn remove_allowed_directory(&mut self, directory: &str) {
         self.allowed_directories.write().await.remove(directory);
     }
-    
+
     pub async fn get_validation_history(&self) -> Vec<(String, bool)> {
         self.validation_history
             .read()
@@ -167,11 +165,11 @@ impl SafetyMonitor {
             .map(|r| (r.change_id.clone(), r.passed))
             .collect()
     }
-    
+
     pub async fn clear_validation_history(&self) {
         self.validation_history.write().await.clear();
     }
-    
+
     pub fn safety_level(&self) -> &SafetyLevel {
         &self.safety_level
     }
@@ -180,26 +178,26 @@ impl SafetyMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_safety_monitor_creation() {
         let monitor = SafetyMonitor::new(SafetyLevel::Standard);
         assert!(matches!(monitor.safety_level(), SafetyLevel::Standard));
     }
-    
+
     #[tokio::test]
     async fn test_validation() {
         let monitor = SafetyMonitor::new(SafetyLevel::Standard);
         let result = monitor.validate_change("test_change_123").await;
         assert!(result.is_ok());
         assert!(result.unwrap());
-        
+
         let history = monitor.get_validation_history().await;
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].0, "test_change_123");
         assert!(history[0].1);
     }
-    
+
     #[tokio::test]
     async fn test_strict_safety_level() {
         let monitor = SafetyMonitor::new(SafetyLevel::Strict);

@@ -12,18 +12,12 @@ pub struct DocFormatter {
 impl DocFormatter {
     /// Create new formatter with default settings
     pub fn new() -> Self {
-        Self {
-            line_width: 80,
-            indent_size: 2,
-        }
+        Self { line_width: 80, indent_size: 2 }
     }
 
     /// Create formatter with custom settings
     pub fn with_settings(line_width: usize, indent_size: usize) -> Self {
-        Self {
-            line_width,
-            indent_size,
-        }
+        Self { line_width, indent_size }
     }
 
     /// Format markdown content
@@ -31,7 +25,7 @@ impl DocFormatter {
         let mut formatted = String::new();
         let mut in_code_block = false;
         let mut in_list = false;
-        
+
         for line in content.lines() {
             // Handle code blocks
             if line.starts_with("```") {
@@ -40,14 +34,14 @@ impl DocFormatter {
                 formatted.push('\n');
                 continue;
             }
-            
+
             // Don't format inside code blocks
             if in_code_block {
                 formatted.push_str(line);
                 formatted.push('\n');
                 continue;
             }
-            
+
             // Handle lists
             if line.trim_start().starts_with("- ") || line.trim_start().starts_with("* ") {
                 if !in_list {
@@ -77,7 +71,7 @@ impl DocFormatter {
                 formatted.push('\n');
             }
         }
-        
+
         // Clean up multiple empty lines
         self.clean_empty_lines(&formatted)
     }
@@ -87,7 +81,7 @@ impl DocFormatter {
         let trimmed = line.trim_start();
         let indent_level = (line.len() - trimmed.len()) / self.indent_size;
         let indent = " ".repeat(indent_level * self.indent_size);
-        
+
         format!("{}{}\n", indent, trimmed)
     }
 
@@ -96,10 +90,10 @@ impl DocFormatter {
         if text.len() <= self.line_width {
             return text.to_string();
         }
-        
+
         let mut wrapped = String::new();
         let mut current_line = String::new();
-        
+
         for word in text.split_whitespace() {
             if current_line.is_empty() {
                 current_line.push_str(word);
@@ -112,11 +106,11 @@ impl DocFormatter {
                 current_line = word.to_string();
             }
         }
-        
+
         if !current_line.is_empty() {
             wrapped.push_str(&current_line);
         }
-        
+
         wrapped
     }
 
@@ -124,7 +118,7 @@ impl DocFormatter {
     fn clean_empty_lines(&self, content: &str) -> String {
         let mut cleaned = String::new();
         let mut prev_empty = false;
-        
+
         for line in content.lines() {
             if line.trim().is_empty() {
                 if !prev_empty {
@@ -137,14 +131,14 @@ impl DocFormatter {
                 prev_empty = false;
             }
         }
-        
+
         cleaned.trim().to_string()
     }
 
     /// Format a table in markdown
     pub fn format_table(&self, headers: &[String], rows: &[Vec<String>]) -> String {
         let mut table = String::new();
-        
+
         // Calculate column widths
         let mut col_widths = vec![0; headers.len()];
         for (i, header) in headers.iter().enumerate() {
@@ -157,21 +151,21 @@ impl DocFormatter {
                 }
             }
         }
-        
+
         // Format headers
         table.push('|');
         for (i, header) in headers.iter().enumerate() {
             table.push_str(&format!(" {:<width$} |", header, width = col_widths[i]));
         }
         table.push('\n');
-        
+
         // Format separator
         table.push('|');
         for width in &col_widths {
             table.push_str(&format!(" {} |", "-".repeat(*width)));
         }
         table.push('\n');
-        
+
         // Format rows
         for row in rows {
             table.push('|');
@@ -182,7 +176,7 @@ impl DocFormatter {
             }
             table.push('\n');
         }
-        
+
         table
     }
 
@@ -195,18 +189,18 @@ impl DocFormatter {
     pub fn generate_toc(&self, content: &str) -> String {
         let mut toc = String::new();
         toc.push_str("## Table of Contents\n\n");
-        
+
         for line in content.lines() {
             if line.starts_with("##") && !line.starts_with("## Table of Contents") {
                 let level = line.chars().take_while(|&c| c == '#').count();
                 let indent = "  ".repeat(level.saturating_sub(2));
                 let title = line.trim_start_matches('#').trim();
                 let anchor = self.title_to_anchor(title);
-                
+
                 toc.push_str(&format!("{}* [{}](#{})\n", indent, title, anchor));
             }
         }
-        
+
         toc
     }
 
@@ -250,7 +244,7 @@ mod tests {
             vec!["foo".to_string(), "String".to_string()],
             vec!["bar".to_string(), "Integer".to_string()],
         ];
-        
+
         let table = formatter.format_table(&headers, &rows);
         assert!(table.contains("| Name | Type    |"));
         assert!(table.contains("| foo  | String  |"));

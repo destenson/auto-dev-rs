@@ -1,43 +1,43 @@
 #![allow(unused)]
 //! Self-improvement metrics collection and monitoring
-//! 
-//! This module provides comprehensive metrics tracking for auto-dev-rs's 
+//!
+//! This module provides comprehensive metrics tracking for auto-dev-rs's
 //! self-development activities, enabling data-driven improvement decisions.
 
-pub mod collector;
-pub mod storage;
 pub mod analyzer;
-pub mod exporter;
+pub mod collector;
 pub mod dashboard;
+pub mod exporter;
+pub mod storage;
 
-pub use collector::{MetricsCollector, MetricEvent};
-pub use storage::{TimeSeriesStore, MetricPoint};
 pub use analyzer::{TrendAnalyzer, TrendDirection};
-pub use exporter::{MetricsExporter, ExportFormat};
-pub use dashboard::{MetricsDashboard, DashboardConfig};
+pub use collector::{MetricEvent, MetricsCollector};
+pub use dashboard::{DashboardConfig, MetricsDashboard};
+pub use exporter::{ExportFormat, MetricsExporter};
+pub use storage::{MetricPoint, TimeSeriesStore};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MetricsError {
     #[error("Storage error: {0}")]
     Storage(String),
-    
+
     #[error("Collection error: {0}")]
     Collection(String),
-    
+
     #[error("Analysis error: {0}")]
     Analysis(String),
-    
+
     #[error("Export error: {0}")]
     Export(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 }
@@ -123,9 +123,9 @@ impl ImprovementScore {
             let qual_score = Self::calc_quality_score(&current.quality, &prev.quality);
             let perf_score = Self::calc_performance_score(&current.performance, &prev.performance);
             let cap_score = Self::calc_capability_score(&current.capability, &prev.capability);
-            
+
             let overall = (dev_score + qual_score + perf_score + cap_score) / 4.0;
-            
+
             let trend = if overall > 0.05 {
                 TrendDirection::Improving
             } else if overall < -0.05 {
@@ -133,7 +133,7 @@ impl ImprovementScore {
             } else {
                 TrendDirection::Stable
             };
-            
+
             Self {
                 overall_score: overall,
                 development_score: dev_score,
@@ -155,105 +155,129 @@ impl ImprovementScore {
             }
         }
     }
-    
+
     fn calc_development_score(current: &DevelopmentMetrics, previous: &DevelopmentMetrics) -> f64 {
         let mut score = 0.0;
-        
+
         // Higher success rate is better
         score += (current.success_rate - previous.success_rate) * 0.3;
-        
+
         // More modifications is better (productivity)
-        score += ((current.modifications_per_day - previous.modifications_per_day) / previous.modifications_per_day.max(1.0)) * 0.2;
-        
+        score += ((current.modifications_per_day - previous.modifications_per_day)
+            / previous.modifications_per_day.max(1.0))
+            * 0.2;
+
         // Faster implementation is better
         if previous.implementation_time_avg_ms > 0 {
-            score += ((previous.implementation_time_avg_ms as f64 - current.implementation_time_avg_ms as f64) / previous.implementation_time_avg_ms as f64) * 0.2;
+            score += ((previous.implementation_time_avg_ms as f64
+                - current.implementation_time_avg_ms as f64)
+                / previous.implementation_time_avg_ms as f64)
+                * 0.2;
         }
-        
+
         // Lower rollback frequency is better
         score += (previous.rollback_frequency - current.rollback_frequency) * 0.15;
-        
+
         // Higher test coverage is better
         score += ((current.test_coverage_percent - previous.test_coverage_percent) / 100.0) * 0.15;
-        
+
         score
     }
-    
+
     fn calc_quality_score(current: &QualityMetrics, previous: &QualityMetrics) -> f64 {
         let mut score = 0.0;
-        
+
         // Lower complexity is better
         if previous.cyclomatic_complexity > 0.0 {
-            score += ((previous.cyclomatic_complexity - current.cyclomatic_complexity) / previous.cyclomatic_complexity) * 0.25;
+            score += ((previous.cyclomatic_complexity - current.cyclomatic_complexity)
+                / previous.cyclomatic_complexity)
+                * 0.25;
         }
-        
+
         // Higher documentation coverage is better
         score += ((current.documentation_coverage - previous.documentation_coverage) / 100.0) * 0.2;
-        
+
         // Fewer warnings/errors is better
-        score += ((previous.lint_warnings as f64 - current.lint_warnings as f64) / previous.lint_warnings.max(1) as f64) * 0.15;
-        score += ((previous.lint_errors as f64 - current.lint_errors as f64) / previous.lint_errors.max(1) as f64) * 0.2;
-        
+        score += ((previous.lint_warnings as f64 - current.lint_warnings as f64)
+            / previous.lint_warnings.max(1) as f64)
+            * 0.15;
+        score += ((previous.lint_errors as f64 - current.lint_errors as f64)
+            / previous.lint_errors.max(1) as f64)
+            * 0.2;
+
         // Less duplicate code is better
         score += ((previous.duplicate_code_percent - current.duplicate_code_percent) / 100.0) * 0.1;
-        
+
         // Lower technical debt is better
         if previous.technical_debt_score > 0.0 {
-            score += ((previous.technical_debt_score - current.technical_debt_score) / previous.technical_debt_score) * 0.1;
+            score += ((previous.technical_debt_score - current.technical_debt_score)
+                / previous.technical_debt_score)
+                * 0.1;
         }
-        
+
         score
     }
-    
+
     fn calc_performance_score(current: &PerformanceMetrics, previous: &PerformanceMetrics) -> f64 {
         let mut score = 0.0;
-        
+
         // Faster compilation is better
         if previous.compilation_time_ms > 0 {
-            score += ((previous.compilation_time_ms as f64 - current.compilation_time_ms as f64) / previous.compilation_time_ms as f64) * 0.25;
+            score += ((previous.compilation_time_ms as f64 - current.compilation_time_ms as f64)
+                / previous.compilation_time_ms as f64)
+                * 0.25;
         }
-        
+
         // Faster tests are better
         if previous.test_execution_time_ms > 0 {
-            score += ((previous.test_execution_time_ms as f64 - current.test_execution_time_ms as f64) / previous.test_execution_time_ms as f64) * 0.2;
+            score += ((previous.test_execution_time_ms as f64
+                - current.test_execution_time_ms as f64)
+                / previous.test_execution_time_ms as f64)
+                * 0.2;
         }
-        
+
         // Smaller binary is better (within reason)
         if previous.binary_size_bytes > 0 {
-            score += ((previous.binary_size_bytes as f64 - current.binary_size_bytes as f64) / previous.binary_size_bytes as f64) * 0.15;
+            score += ((previous.binary_size_bytes as f64 - current.binary_size_bytes as f64)
+                / previous.binary_size_bytes as f64)
+                * 0.15;
         }
-        
+
         // Lower memory usage is better
         if previous.memory_usage_mb > 0.0 {
-            score += ((previous.memory_usage_mb - current.memory_usage_mb) / previous.memory_usage_mb) * 0.2;
+            score += ((previous.memory_usage_mb - current.memory_usage_mb)
+                / previous.memory_usage_mb)
+                * 0.2;
         }
-        
+
         // Faster module loading is better
         if previous.module_load_time_ms > 0 {
-            score += ((previous.module_load_time_ms as f64 - current.module_load_time_ms as f64) / previous.module_load_time_ms as f64) * 0.2;
+            score += ((previous.module_load_time_ms as f64 - current.module_load_time_ms as f64)
+                / previous.module_load_time_ms as f64)
+                * 0.2;
         }
-        
+
         score
     }
-    
+
     fn calc_capability_score(current: &CapabilityMetrics, previous: &CapabilityMetrics) -> f64 {
         let mut score = 0.0;
-        
+
         // More features is better
         score += ((current.features_added - previous.features_added) as f64) * 0.01;
-        
+
         // More APIs is better
         score += ((current.apis_created - previous.apis_created) as f64) * 0.01;
-        
+
         // More modules is better
         score += ((current.modules_loaded - previous.modules_loaded) as f64) * 0.005;
-        
+
         // More patterns learned is better
         score += ((current.patterns_learned - previous.patterns_learned) as f64) * 0.02;
-        
+
         // More LLM calls saved is better (efficiency)
         score += ((current.llm_calls_saved - previous.llm_calls_saved) as f64) * 0.001;
-        
+
         score.min(1.0) // Cap at 1.0
     }
 }

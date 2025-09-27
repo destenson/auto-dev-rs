@@ -107,7 +107,7 @@ pub struct ReloadScheduler {
 impl ReloadScheduler {
     pub fn new(config: SchedulerConfig, hot_reload_config: HotReloadConfig) -> Self {
         let max_concurrent = config.max_concurrent_reloads;
-        
+
         Self {
             config: config.clone(),
             coordinator: Arc::new(ReloadCoordinator::new(hot_reload_config)),
@@ -213,8 +213,13 @@ impl ReloadScheduler {
             // Process pending reloads based on strategy
             match self.config.strategy {
                 SchedulingStrategy::Batched { window_ms } => {
-                    self.process_batched_reloads(registry.clone(), loader.clone(), runtime.clone(), window_ms)
-                        .await;
+                    self.process_batched_reloads(
+                        registry.clone(),
+                        loader.clone(),
+                        runtime.clone(),
+                        window_ms,
+                    )
+                    .await;
                 }
                 SchedulingStrategy::RateLimited { max_per_second } => {
                     self.process_rate_limited_reloads(
@@ -226,12 +231,15 @@ impl ReloadScheduler {
                     .await;
                 }
                 SchedulingStrategy::Scheduled => {
-                    self.process_scheduled_reloads(registry.clone(), loader.clone(), runtime.clone())
-                        .await;
+                    self.process_scheduled_reloads(
+                        registry.clone(),
+                        loader.clone(),
+                        runtime.clone(),
+                    )
+                    .await;
                 }
                 _ => {
-                    self.process_queue(registry.clone(), loader.clone(), runtime.clone())
-                        .await;
+                    self.process_queue(registry.clone(), loader.clone(), runtime.clone()).await;
                 }
             }
 
@@ -262,8 +270,7 @@ impl ReloadScheduler {
 
         // Execute batch
         for request in batch {
-            self.execute_reload(request, registry.clone(), loader.clone(), runtime.clone())
-                .await;
+            self.execute_reload(request, registry.clone(), loader.clone(), runtime.clone()).await;
         }
     }
 
@@ -320,8 +327,7 @@ impl ReloadScheduler {
 
         // Execute ready requests
         for request in ready {
-            self.execute_reload(request, registry.clone(), loader.clone(), runtime.clone())
-                .await;
+            self.execute_reload(request, registry.clone(), loader.clone(), runtime.clone()).await;
         }
     }
 
@@ -356,40 +362,25 @@ impl ReloadScheduler {
         let _permit = self.semaphore.acquire().await.unwrap();
 
         // Mark as active
-        self.active_reloads
-            .write()
-            .await
-            .insert(request.module_id.clone(), request.clone());
+        self.active_reloads.write().await.insert(request.module_id.clone(), request.clone());
 
         info!("Executing reload for module: {}", request.module_id);
 
         // Execute reload
         let result = self
             .coordinator
-            .reload_module(
-                &request.module_id,
-                request.new_path.clone(),
-                registry,
-                loader,
-                runtime,
-            )
+            .reload_module(&request.module_id, request.new_path.clone(), registry, loader, runtime)
             .await;
 
         // Handle result
         match result {
             Ok(reload_result) => {
-                info!(
-                    "Reload completed successfully for module: {}",
-                    request.module_id
-                );
-                self.completed_reloads
-                    .write()
-                    .await
-                    .push((request.clone(), reload_result));
+                info!("Reload completed successfully for module: {}", request.module_id);
+                self.completed_reloads.write().await.push((request.clone(), reload_result));
             }
             Err(e) => {
                 error!("Reload failed for module {}: {}", request.module_id, e);
-                
+
                 // Retry if applicable
                 if request.retry_count < request.max_retries {
                     request.retry_count += 1;
@@ -397,7 +388,7 @@ impl ReloadScheduler {
                         "Retrying reload for module {} (attempt {}/{})",
                         request.module_id, request.retry_count, request.max_retries
                     );
-                    
+
                     // Re-queue with delay
                     tokio::time::sleep(self.config.retry_delay).await;
                     self.add_to_queue(request.clone()).await;
@@ -412,13 +403,11 @@ impl ReloadScheduler {
     /// Add request to queue
     async fn add_to_queue(&self, request: ReloadRequest) {
         let mut queue = self.pending_queue.write().await;
-        
+
         // Insert based on priority
-        let position = queue
-            .iter()
-            .position(|r| r.priority < request.priority)
-            .unwrap_or(queue.len());
-        
+        let position =
+            queue.iter().position(|r| r.priority < request.priority).unwrap_or(queue.len());
+
         queue.insert(position, request);
     }
 
@@ -453,7 +442,7 @@ impl ReloadScheduler {
     /// Clean up old completed reloads
     async fn cleanup_completed(&self) {
         let mut completed = self.completed_reloads.write().await;
-        
+
         // Keep only last 100 completed reloads
         if completed.len() > 100 {
             let drain_count = completed.len() - 100;
@@ -474,7 +463,7 @@ impl ReloadScheduler {
     /// Cancel a pending reload
     pub async fn cancel_reload(&self, module_id: &str) -> bool {
         let mut queue = self.pending_queue.write().await;
-        
+
         if let Some(pos) = queue.iter().position(|r| r.module_id == module_id) {
             queue.remove(pos);
             true
@@ -522,7 +511,7 @@ mod tests {
         let config = SchedulerConfig::default();
         let hot_reload_config = HotReloadConfig::default();
         let scheduler = ReloadScheduler::new(config, hot_reload_config);
-        
+
         let stats = scheduler.get_stats().await;
         assert_eq!(stats.pending_count, 0);
         assert_eq!(stats.active_count, 0);
@@ -534,13 +523,10 @@ mod tests {
         let config = SchedulerConfig::default();
         let hot_reload_config = HotReloadConfig::default();
         let scheduler = ReloadScheduler::new(config, hot_reload_config);
-        
+
         // Add requests with different priorities
-        let low = ReloadRequest::new(
-            "low".to_string(),
-            PathBuf::from("low.wasm"),
-            ReloadPriority::Low,
-        );
+        let low =
+            ReloadRequest::new("low".to_string(), PathBuf::from("low.wasm"), ReloadPriority::Low);
         let high = ReloadRequest::new(
             "high".to_string(),
             PathBuf::from("high.wasm"),
@@ -551,18 +537,18 @@ mod tests {
             PathBuf::from("normal.wasm"),
             ReloadPriority::Normal,
         );
-        
+
         scheduler.add_to_queue(low).await;
         scheduler.add_to_queue(normal).await;
         scheduler.add_to_queue(high).await;
-        
+
         // High priority should come first
         let first = scheduler.get_next_request().await.unwrap();
         assert_eq!(first.module_id, "high");
-        
+
         let second = scheduler.get_next_request().await.unwrap();
         assert_eq!(second.module_id, "normal");
-        
+
         let third = scheduler.get_next_request().await.unwrap();
         assert_eq!(third.module_id, "low");
     }
@@ -571,10 +557,10 @@ mod tests {
     async fn test_quiet_hours() {
         let mut config = SchedulerConfig::default();
         config.quiet_hours = Some((22, 6)); // 10pm to 6am
-        
+
         let hot_reload_config = HotReloadConfig::default();
         let scheduler = ReloadScheduler::new(config, hot_reload_config);
-        
+
         // Test would need time mocking for full coverage
         // This just tests the structure
         assert!(!scheduler.is_quiet_hours() || scheduler.is_quiet_hours());
@@ -585,16 +571,16 @@ mod tests {
         let config = SchedulerConfig::default();
         let hot_reload_config = HotReloadConfig::default();
         let scheduler = ReloadScheduler::new(config, hot_reload_config);
-        
+
         let request = ReloadRequest::new(
             "test".to_string(),
             PathBuf::from("test.wasm"),
             ReloadPriority::Normal,
         );
-        
+
         scheduler.add_to_queue(request).await;
         assert_eq!(scheduler.get_stats().await.pending_count, 1);
-        
+
         let cancelled = scheduler.cancel_reload("test").await;
         assert!(cancelled);
         assert_eq!(scheduler.get_stats().await.pending_count, 0);

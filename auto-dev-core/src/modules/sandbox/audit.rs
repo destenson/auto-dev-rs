@@ -1,6 +1,7 @@
 //! Security audit logging for sandboxed modules
 
 use crate::modules::sandbox::capabilities::Capability;
+use crate::{debug, error, info, warn};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,6 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::{debug, error, info, warn};
 
 /// Represents a security event that should be logged
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,7 +137,7 @@ impl AuditLogger {
             severity: Severity::Debug,
             details: format!("Module {} requested capability: {:?}", module_id, capability),
         };
-        
+
         // Fire and forget - don't block on logging
         let logger = self.clone();
         tokio::spawn(async move {
@@ -154,7 +154,7 @@ impl AuditLogger {
             severity: Severity::Info,
             details: format!("Capability granted to {}: {:?}", module_id, capability),
         };
-        
+
         let logger = self.clone();
         tokio::spawn(async move {
             let _ = logger.log_event(event).await;
@@ -170,7 +170,7 @@ impl AuditLogger {
             severity: Severity::Warning,
             details: format!("Capability denied to {}: {:?}", module_id, capability),
         };
-        
+
         let logger = self.clone();
         tokio::spawn(async move {
             let _ = logger.log_event(event).await;
@@ -188,7 +188,7 @@ impl AuditLogger {
             severity,
             details: format!("Violation detected in {}: {}", module_id, violation_type),
         };
-        
+
         let logger = self.clone();
         tokio::spawn(async move {
             let _ = logger.log_event(event).await;
@@ -198,29 +198,19 @@ impl AuditLogger {
     /// Get recent events
     pub async fn get_recent_events(&self, count: usize) -> Vec<SecurityEvent> {
         let events = self.events.read().await;
-        events.iter()
-            .rev()
-            .take(count)
-            .cloned()
-            .collect()
+        events.iter().rev().take(count).cloned().collect()
     }
 
     /// Get events for a specific module
     pub async fn get_module_events(&self, module_id: &str) -> Vec<SecurityEvent> {
         let events = self.events.read().await;
-        events.iter()
-            .filter(|e| e.module_id == module_id)
-            .cloned()
-            .collect()
+        events.iter().filter(|e| e.module_id == module_id).cloned().collect()
     }
 
     /// Get events by severity
     pub async fn get_events_by_severity(&self, min_severity: Severity) -> Vec<SecurityEvent> {
         let events = self.events.read().await;
-        events.iter()
-            .filter(|e| e.severity >= min_severity)
-            .cloned()
-            .collect()
+        events.iter().filter(|e| e.severity >= min_severity).cloned().collect()
     }
 
     /// Clear all events
@@ -232,17 +222,13 @@ impl AuditLogger {
     /// Write event to file
     async fn write_to_file(&self, path: &PathBuf, event: &SecurityEvent) -> Result<()> {
         use tokio::io::AsyncWriteExt;
-        
+
         let json = serde_json::to_string(event)?;
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .await?;
-        
+        let mut file = tokio::fs::OpenOptions::new().create(true).append(true).open(path).await?;
+
         file.write_all(format!("{}\n", json).as_bytes()).await?;
         file.flush().await?;
-        
+
         Ok(())
     }
 
@@ -253,31 +239,29 @@ impl AuditLogger {
         // - Trigger emergency shutdown
         // - Alert administrators
         // - Create incident tickets
-        
+
         error!(
             "🚨 CRITICAL SECURITY ALERT 🚨\nModule: {}\nEvent: {:?}\nDetails: {}",
-            event.module_id,
-            event.event_type,
-            event.details
+            event.module_id, event.event_type, event.details
         );
-        
+
         Ok(())
     }
 
     /// Generate audit report
     pub async fn generate_report(&self) -> AuditReport {
         let events = self.events.read().await;
-        
+
         let total_events = events.len();
         let critical_events = events.iter().filter(|e| e.severity == Severity::Critical).count();
         let error_events = events.iter().filter(|e| e.severity == Severity::Error).count();
         let warning_events = events.iter().filter(|e| e.severity == Severity::Warning).count();
-        
+
         let mut module_stats = std::collections::HashMap::new();
         for event in events.iter() {
             *module_stats.entry(event.module_id.clone()).or_insert(0) += 1;
         }
-        
+
         AuditReport {
             total_events,
             critical_events,
@@ -287,10 +271,7 @@ impl AuditLogger {
             time_range: if events.is_empty() {
                 None
             } else {
-                Some((
-                    events.front().unwrap().timestamp,
-                    events.back().unwrap().timestamp,
-                ))
+                Some((events.front().unwrap().timestamp, events.back().unwrap().timestamp))
             },
         }
     }
@@ -298,10 +279,7 @@ impl AuditLogger {
 
 impl Clone for AuditLogger {
     fn clone(&self) -> Self {
-        Self {
-            events: self.events.clone(),
-            config: self.config.clone(),
-        }
+        Self { events: self.events.clone(), config: self.config.clone() }
     }
 }
 
@@ -323,7 +301,7 @@ mod tests {
     #[tokio::test]
     async fn test_audit_logger() {
         let logger = AuditLogger::new();
-        
+
         let event = SecurityEvent {
             timestamp: Utc::now(),
             module_id: "test_module".to_string(),
@@ -331,22 +309,19 @@ mod tests {
             severity: Severity::Info,
             details: "Test module started".to_string(),
         };
-        
+
         logger.log_event(event).await.unwrap();
-        
+
         let recent = logger.get_recent_events(10).await;
         assert_eq!(recent.len(), 1);
     }
 
     #[tokio::test]
     async fn test_severity_filtering() {
-        let config = AuditConfig {
-            min_severity: Severity::Warning,
-            ..Default::default()
-        };
-        
+        let config = AuditConfig { min_severity: Severity::Warning, ..Default::default() };
+
         let logger = AuditLogger::with_config(config);
-        
+
         // Info event should be filtered out
         let info_event = SecurityEvent {
             timestamp: Utc::now(),
@@ -355,22 +330,20 @@ mod tests {
             severity: Severity::Info,
             details: "Info event".to_string(),
         };
-        
+
         logger.log_event(info_event).await.unwrap();
-        
+
         // Warning event should be logged
         let warning_event = SecurityEvent {
             timestamp: Utc::now(),
             module_id: "test".to_string(),
-            event_type: SecurityEventType::ViolationDetected {
-                violation_type: "test".to_string(),
-            },
+            event_type: SecurityEventType::ViolationDetected { violation_type: "test".to_string() },
             severity: Severity::Warning,
             details: "Warning event".to_string(),
         };
-        
+
         logger.log_event(warning_event).await.unwrap();
-        
+
         let events = logger.get_recent_events(10).await;
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].severity, Severity::Warning);

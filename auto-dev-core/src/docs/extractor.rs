@@ -1,14 +1,14 @@
 //! Documentation extraction from Rust source code
 
 use anyhow::{Context, Result};
+use chrono::Local;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use syn::{parse_file, Item, ItemFn, ItemStruct, ItemEnum, ItemTrait, ItemMod, Visibility};
-use regex::Regex;
-use chrono::Local;
+use syn::{Item, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemTrait, Visibility, parse_file};
 
-use super::{DocEntry, DocMetadata, DocSection, ApiDoc, ApiItemKind, Parameter, Example};
+use super::{ApiDoc, ApiItemKind, DocEntry, DocMetadata, DocSection, Example, Parameter};
 
 /// Extracts documentation from Rust source code
 pub struct DocExtractor {
@@ -36,20 +36,16 @@ impl DocExtractor {
 
     /// Extract documentation from a specific module
     pub fn extract_module(&self, module_path: &Path) -> Result<DocEntry> {
-        let content = fs::read_to_string(module_path)
-            .context("Failed to read module file")?;
-        
+        let content = fs::read_to_string(module_path).context("Failed to read module file")?;
+
         let ast = parse_file(&content)
             .map_err(|e| anyhow::anyhow!("Failed to parse Rust file: {}", e))?;
-        
-        let module_name = module_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        
+
+        let module_name = module_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+
         let mut api_docs = Vec::new();
         let mut examples = Vec::new();
-        
+
         // Extract documentation from AST items
         for item in ast.items {
             match item {
@@ -81,13 +77,13 @@ impl DocExtractor {
                 _ => {}
             }
         }
-        
+
         // Extract module-level documentation
         let (description, sections) = self.extract_module_docs(&content);
-        
+
         // Extract examples from documentation
         examples.extend(self.extract_examples(&content));
-        
+
         Ok(DocEntry {
             metadata: DocMetadata {
                 name: module_name.to_string(),
@@ -123,11 +119,11 @@ impl DocExtractor {
         let mut total = 0;
         let mut documented = 0;
         self.count_documentation(path, &mut total, &mut documented)?;
-        
+
         if total == 0 {
             return Ok(100.0);
         }
-        
+
         Ok((documented as f64 / total as f64) * 100.0)
     }
 
@@ -164,12 +160,15 @@ impl DocExtractor {
         if !matches!(item_fn.vis, Visibility::Public(_)) {
             return None;
         }
-        
+
         let name = item_fn.sig.ident.to_string();
         let signature = self.format_fn_signature(item_fn);
-        
+
         // Extract parameters
-        let parameters = item_fn.sig.inputs.iter()
+        let parameters = item_fn
+            .sig
+            .inputs
+            .iter()
             .filter_map(|arg| {
                 if let syn::FnArg::Typed(pat_type) = arg {
                     if let syn::Pat::Ident(ident) = &*pat_type.pat {
@@ -184,13 +183,13 @@ impl DocExtractor {
                 None
             })
             .collect();
-        
+
         // Extract return type
         let returns = match &item_fn.sig.output {
             syn::ReturnType::Default => None,
             syn::ReturnType::Type(_, ty) => Some(quote::quote!(#ty).to_string()),
         };
-        
+
         Some(ApiDoc {
             name,
             kind: ApiItemKind::Function,
@@ -207,10 +206,10 @@ impl DocExtractor {
         if !matches!(item_struct.vis, Visibility::Public(_)) {
             return None;
         }
-        
+
         let name = item_struct.ident.to_string();
         let signature = format!("pub struct {}", name);
-        
+
         Some(ApiDoc {
             name,
             kind: ApiItemKind::Struct,
@@ -227,10 +226,10 @@ impl DocExtractor {
         if !matches!(item_enum.vis, Visibility::Public(_)) {
             return None;
         }
-        
+
         let name = item_enum.ident.to_string();
         let signature = format!("pub enum {}", name);
-        
+
         Some(ApiDoc {
             name,
             kind: ApiItemKind::Enum,
@@ -247,10 +246,10 @@ impl DocExtractor {
         if !matches!(item_trait.vis, Visibility::Public(_)) {
             return None;
         }
-        
+
         let name = item_trait.ident.to_string();
         let signature = format!("pub trait {}", name);
-        
+
         Some(ApiDoc {
             name,
             kind: ApiItemKind::Trait,
@@ -267,10 +266,10 @@ impl DocExtractor {
         if !matches!(item_mod.vis, Visibility::Public(_)) {
             return None;
         }
-        
+
         let name = item_mod.ident.to_string();
         let signature = format!("pub mod {}", name);
-        
+
         Some(ApiDoc {
             name,
             kind: ApiItemKind::Module,
@@ -287,12 +286,12 @@ impl DocExtractor {
         let mut description = String::new();
         let mut sections = Vec::new();
         let mut current_section: Option<DocSection> = None;
-        
+
         for line in content.lines() {
             if let Some(captures) = self.doc_pattern.captures(line) {
                 if let Some(doc_line) = captures.get(1) {
                     let doc_text = doc_line.as_str();
-                    
+
                     // Check if this is a section header
                     if doc_text.starts_with("# ") {
                         if let Some(section) = current_section.take() {
@@ -316,17 +315,17 @@ impl DocExtractor {
                 break;
             }
         }
-        
+
         if let Some(section) = current_section {
             sections.push(section);
         }
-        
+
         (description.trim().to_string(), sections)
     }
 
     fn extract_examples(&self, content: &str) -> Vec<Example> {
         let mut examples = Vec::new();
-        
+
         for captures in self.example_pattern.captures_iter(content) {
             if let Some(code_match) = captures.get(1) {
                 examples.push(Example {
@@ -338,7 +337,7 @@ impl DocExtractor {
                 });
             }
         }
-        
+
         examples
     }
 
@@ -363,7 +362,9 @@ impl DocExtractor {
                                 ));
                             }
                         }
-                        Item::Struct(item_struct) if matches!(item_struct.vis, Visibility::Public(_)) => {
+                        Item::Struct(item_struct)
+                            if matches!(item_struct.vis, Visibility::Public(_)) =>
+                        {
                             let struct_name = item_struct.ident.to_string();
                             if !self.has_doc_comment(&content, &struct_name) {
                                 issues.push(format!(
@@ -386,7 +387,12 @@ impl DocExtractor {
         Ok(())
     }
 
-    fn count_documentation(&self, path: &Path, total: &mut usize, documented: &mut usize) -> Result<()> {
+    fn count_documentation(
+        &self,
+        path: &Path,
+        total: &mut usize,
+        documented: &mut usize,
+    ) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("rs") {
             let content = fs::read_to_string(path)?;
             if let Ok(ast) = parse_file(&content) {
@@ -399,7 +405,9 @@ impl DocExtractor {
                                 *documented += 1;
                             }
                         }
-                        Item::Struct(item_struct) if matches!(item_struct.vis, Visibility::Public(_)) => {
+                        Item::Struct(item_struct)
+                            if matches!(item_struct.vis, Visibility::Public(_)) =>
+                        {
                             *total += 1;
                             let struct_name = item_struct.ident.to_string();
                             if self.has_doc_comment(&content, &struct_name) {
@@ -421,7 +429,8 @@ impl DocExtractor {
 
     fn has_doc_comment(&self, content: &str, item_name: &str) -> bool {
         // Simple heuristic: check if there's a doc comment before the item
-        let pattern = format!(r"///.*\n.*(?:fn|struct|enum|trait|impl).*{}", regex::escape(item_name));
+        let pattern =
+            format!(r"///.*\n.*(?:fn|struct|enum|trait|impl).*{}", regex::escape(item_name));
         Regex::new(&pattern).map(|re| re.is_match(content)).unwrap_or(false)
     }
 }

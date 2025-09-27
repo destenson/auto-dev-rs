@@ -4,20 +4,20 @@
 //! all self-modifications before they're applied, ensuring system
 //! stability during autonomous development.
 
-pub mod gates;
-pub mod validators;
-pub mod invariants;
-pub mod contracts;
 pub mod analyzer;
+pub mod contracts;
+pub mod gates;
+pub mod invariants;
+pub mod validators;
 
-pub use gates::{SafetyGatekeeper, ValidationGate, GateResult};
-pub use validators::{
-    StaticValidator, SemanticValidator, SecurityValidator, 
-    PerformanceValidator, ReversibilityValidator
-};
-pub use invariants::InvariantChecker;
-pub use contracts::ContractVerifier;
 pub use analyzer::StaticAnalyzer;
+pub use contracts::ContractVerifier;
+pub use gates::{GateResult, SafetyGatekeeper, ValidationGate};
+pub use invariants::InvariantChecker;
+pub use validators::{
+    PerformanceValidator, ReversibilityValidator, SecurityValidator, SemanticValidator,
+    StaticValidator,
+};
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -27,28 +27,28 @@ use thiserror::Error;
 pub enum SafetyError {
     #[error("Static analysis failed: {0}")]
     StaticAnalysis(String),
-    
+
     #[error("Semantic validation failed: {0}")]
     SemanticValidation(String),
-    
+
     #[error("Security gate blocked: {0}")]
     SecurityViolation(String),
-    
+
     #[error("Performance issue detected: {0}")]
     PerformanceViolation(String),
-    
+
     #[error("Change is not reversible: {0}")]
     IrreversibleChange(String),
-    
+
     #[error("Invariant violation: {0}")]
     InvariantViolation(String),
-    
+
     #[error("Contract violation: {0}")]
     ContractViolation(String),
-    
+
     #[error("Critical file modification attempted: {0}")]
     CriticalFileViolation(PathBuf),
-    
+
     #[error("Multiple gate failures: {0:?}")]
     MultipleFailures(Vec<String>),
 }
@@ -60,31 +60,31 @@ pub type Result<T> = std::result::Result<T, SafetyError>;
 pub struct SafetyConfig {
     /// Enable static analysis checks
     pub static_analysis: bool,
-    
+
     /// Enable semantic validation
     pub semantic_validation: bool,
-    
+
     /// Enable security gates
     pub security_gates: bool,
-    
+
     /// Enable performance validation
     pub performance_validation: bool,
-    
+
     /// Require reversibility for all changes
     pub require_reversibility: bool,
-    
+
     /// Fail on first gate failure
     pub fail_fast: bool,
-    
+
     /// Require all gates to pass
     pub require_all_gates: bool,
-    
+
     /// Maximum validation time in seconds
     pub max_validation_time: u64,
-    
+
     /// Critical files that must never be modified
     pub critical_files: Vec<PathBuf>,
-    
+
     /// Allowed modification paths
     pub allowed_paths: Vec<PathBuf>,
 }
@@ -120,19 +120,19 @@ impl Default for SafetyConfig {
 pub struct CodeModification {
     /// File being modified
     pub file_path: PathBuf,
-    
+
     /// Original content
     pub original: String,
-    
+
     /// Modified content
     pub modified: String,
-    
+
     /// Type of modification
     pub modification_type: ModificationType,
-    
+
     /// Reason for modification
     pub reason: String,
-    
+
     /// Associated PRP if any
     pub prp_reference: Option<String>,
 }
@@ -152,16 +152,16 @@ pub enum ModificationType {
 pub struct ValidationReport {
     /// Overall validation result
     pub passed: bool,
-    
+
     /// Individual gate results
     pub gate_results: Vec<GateResult>,
-    
+
     /// Validation duration
     pub duration_ms: u64,
-    
+
     /// Risk assessment
     pub risk_level: RiskLevel,
-    
+
     /// Recommendations if validation failed
     pub recommendations: Vec<String>,
 }
@@ -188,15 +188,7 @@ pub async fn validate_file(path: &Path, content: &str) -> Result<bool> {
 
 /// Check if a path is critical and should not be modified
 pub fn is_critical_path(path: &Path) -> bool {
-    let critical_paths = [
-        "src/main.rs",
-        "src/safety",
-        "Cargo.lock",
-        ".git",
-        "target",
-    ];
-    
-    critical_paths.iter().any(|critical| {
-        path.starts_with(critical) || path.ends_with(critical)
-    })
+    let critical_paths = ["src/main.rs", "src/safety", "Cargo.lock", ".git", "target"];
+
+    critical_paths.iter().any(|critical| path.starts_with(critical) || path.ends_with(critical))
 }

@@ -12,51 +12,49 @@ pub struct SafetyValidator {
 
 impl SafetyValidator {
     pub fn new() -> Self {
-        Self {
-            safety_checks: Self::default_checks(),
-        }
+        Self { safety_checks: Self::default_checks() }
     }
-    
+
     /// Validate all safety constraints
     pub async fn validate(&self, sandbox: &TestSandbox) -> Result<Vec<SafetyCheck>, SelfTestError> {
         info!("Validating safety constraints");
-        
+
         let mut results = Vec::new();
-        
+
         // Check for dangerous patterns
         results.push(self.check_dangerous_patterns(sandbox).await?);
-        
+
         // Check resource usage
         results.push(self.check_resource_limits(sandbox).await?);
-        
+
         // Check permission boundaries
         results.push(self.check_permissions(sandbox).await?);
-        
+
         // Check rollback capability
         results.push(self.check_rollback_capability(sandbox).await?);
-        
+
         // Check state preservation
         results.push(self.check_state_preservation(sandbox).await?);
-        
+
         Ok(results)
     }
-    
+
     /// Check for dangerous code patterns
-    async fn check_dangerous_patterns(&self, sandbox: &TestSandbox) -> Result<SafetyCheck, SelfTestError> {
+    async fn check_dangerous_patterns(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<SafetyCheck, SelfTestError> {
         debug!("Checking for dangerous patterns");
-        
-        let result = sandbox.run_command(
-            "cargo",
-            &["clippy", "--", "-D", "warnings"]
-        ).await?;
-        
+
+        let result = sandbox.run_command("cargo", &["clippy", "--", "-D", "warnings"]).await?;
+
         // Look for specific dangerous patterns
         let has_unsafe = result.stdout.contains("unsafe") || result.stderr.contains("unsafe");
         let has_panic = result.stdout.contains("panic!") || result.stderr.contains("panic!");
         let has_unwrap = result.stdout.contains(".unwrap()") || result.stderr.contains(".unwrap()");
-        
+
         let passed = !has_unsafe && !has_panic && result.success;
-        
+
         Ok(SafetyCheck {
             name: "Dangerous Patterns".to_string(),
             category: SafetyCategory::CodeQuality,
@@ -69,24 +67,25 @@ impl SafetyValidator {
             },
         })
     }
-    
+
     /// Check resource usage limits
-    async fn check_resource_limits(&self, sandbox: &TestSandbox) -> Result<SafetyCheck, SelfTestError> {
+    async fn check_resource_limits(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<SafetyCheck, SelfTestError> {
         debug!("Checking resource limits");
-        
+
         // Check binary size
-        let size_result = sandbox.run_command(
-            "cargo",
-            &["size", "--release"]
-        ).await;
-        
+        let size_result = sandbox.run_command("cargo", &["size", "--release"]).await;
+
         let mut passed = true;
         let mut message = String::new();
-        
+
         if let Ok(result) = size_result {
             // Parse size from output
             if let Some(size) = self.parse_binary_size(&result.stdout) {
-                if size > 100 * 1024 * 1024 { // 100MB limit
+                if size > 100 * 1024 * 1024 {
+                    // 100MB limit
                     passed = false;
                     message = format!("Binary size {} exceeds 100MB limit", size);
                 } else {
@@ -94,7 +93,7 @@ impl SafetyValidator {
                 }
             }
         }
-        
+
         Ok(SafetyCheck {
             name: "Resource Limits".to_string(),
             category: SafetyCategory::Resources,
@@ -103,26 +102,23 @@ impl SafetyValidator {
             message,
         })
     }
-    
+
     /// Check permission boundaries
     async fn check_permissions(&self, sandbox: &TestSandbox) -> Result<SafetyCheck, SelfTestError> {
         debug!("Checking permission boundaries");
-        
+
         // Check for filesystem access outside allowed paths
-        let fs_check = sandbox.run_command(
-            "cargo",
-            &["test", "--", "safety::tests::filesystem_boundaries"]
-        ).await;
-        
+        let fs_check = sandbox
+            .run_command("cargo", &["test", "--", "safety::tests::filesystem_boundaries"])
+            .await;
+
         // Check for network access
-        let net_check = sandbox.run_command(
-            "cargo",
-            &["test", "--", "safety::tests::network_isolation"]
-        ).await;
-        
-        let passed = fs_check.map(|r| r.success).unwrap_or(false) &&
-                    net_check.map(|r| r.success).unwrap_or(false);
-        
+        let net_check =
+            sandbox.run_command("cargo", &["test", "--", "safety::tests::network_isolation"]).await;
+
+        let passed = fs_check.map(|r| r.success).unwrap_or(false)
+            && net_check.map(|r| r.success).unwrap_or(false);
+
         Ok(SafetyCheck {
             name: "Permission Boundaries".to_string(),
             category: SafetyCategory::Security,
@@ -135,18 +131,20 @@ impl SafetyValidator {
             },
         })
     }
-    
+
     /// Check rollback capability
-    async fn check_rollback_capability(&self, sandbox: &TestSandbox) -> Result<SafetyCheck, SelfTestError> {
+    async fn check_rollback_capability(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<SafetyCheck, SelfTestError> {
         debug!("Checking rollback capability");
-        
-        let result = sandbox.run_command(
-            "cargo",
-            &["test", "--", "safety::tests::rollback_mechanism"]
-        ).await;
-        
+
+        let result = sandbox
+            .run_command("cargo", &["test", "--", "safety::tests::rollback_mechanism"])
+            .await;
+
         let passed = result.map(|r| r.success).unwrap_or(false);
-        
+
         Ok(SafetyCheck {
             name: "Rollback Capability".to_string(),
             category: SafetyCategory::Recovery,
@@ -159,18 +157,20 @@ impl SafetyValidator {
             },
         })
     }
-    
+
     /// Check state preservation
-    async fn check_state_preservation(&self, sandbox: &TestSandbox) -> Result<SafetyCheck, SelfTestError> {
+    async fn check_state_preservation(
+        &self,
+        sandbox: &TestSandbox,
+    ) -> Result<SafetyCheck, SelfTestError> {
         debug!("Checking state preservation");
-        
-        let result = sandbox.run_command(
-            "cargo",
-            &["test", "--", "safety::tests::state_preservation"]
-        ).await;
-        
+
+        let result = sandbox
+            .run_command("cargo", &["test", "--", "safety::tests::state_preservation"])
+            .await;
+
         let passed = result.map(|r| r.success).unwrap_or(false);
-        
+
         Ok(SafetyCheck {
             name: "State Preservation".to_string(),
             category: SafetyCategory::Stability,
@@ -183,7 +183,7 @@ impl SafetyValidator {
             },
         })
     }
-    
+
     /// Parse binary size from cargo size output
     fn parse_binary_size(&self, output: &str) -> Option<usize> {
         for line in output.lines() {
@@ -199,7 +199,7 @@ impl SafetyValidator {
         }
         None
     }
-    
+
     /// Get default safety checks
     fn default_checks() -> Vec<Box<dyn SafetyCheckTrait>> {
         vec![
@@ -254,7 +254,7 @@ impl SafetyCheckTrait for NoUnsafeCode {
         // Implementation would scan for unsafe blocks
         Ok(true)
     }
-    
+
     fn name(&self) -> &str {
         "No Unsafe Code"
     }
@@ -268,7 +268,7 @@ impl SafetyCheckTrait for NoUnwrap {
         // Implementation would scan for .unwrap() calls
         Ok(true)
     }
-    
+
     fn name(&self) -> &str {
         "No Unwrap"
     }
@@ -282,7 +282,7 @@ impl SafetyCheckTrait for NoPanic {
         // Implementation would scan for panic! macros
         Ok(true)
     }
-    
+
     fn name(&self) -> &str {
         "No Panic"
     }
@@ -296,7 +296,7 @@ impl SafetyCheckTrait for BoundedRecursion {
         // Implementation would analyze recursion depth
         Ok(true)
     }
-    
+
     fn name(&self) -> &str {
         "Bounded Recursion"
     }
@@ -310,7 +310,7 @@ impl SafetyCheckTrait for MemorySafety {
         // Implementation would run memory safety checks
         Ok(true)
     }
-    
+
     fn name(&self) -> &str {
         "Memory Safety"
     }

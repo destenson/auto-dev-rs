@@ -1,26 +1,26 @@
 //! Version Control System integration for self-development
-//! 
+//!
 //! Provides git operations to track and manage self-modifications
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-pub mod git_ops;
+pub mod bisect;
 pub mod branch_manager;
 pub mod commit_builder;
 pub mod conflict_resolver;
-pub mod pr_creator;
-pub mod bisect;
+pub mod git_ops;
 pub mod history;
+pub mod pr_creator;
 
-pub use git_ops::GitOperations;
+pub use bisect::{BisectHelper, BisectManager};
 pub use branch_manager::BranchManager;
 pub use commit_builder::{CommitBuilder, CommitType};
 pub use conflict_resolver::ConflictResolver;
-pub use pr_creator::PullRequestCreator;
-pub use bisect::{BisectManager, BisectHelper};
+pub use git_ops::GitOperations;
 pub use history::{HistorySearcher, SearchBuilder};
+pub use pr_creator::PullRequestCreator;
 
 /// Main VCS integration interface
 pub struct VcsIntegration {
@@ -78,23 +78,18 @@ impl VcsIntegration {
         let branch_manager = BranchManager::new(&repo_path)?;
         let commit_builder = CommitBuilder::new(config.commit_style.clone());
 
-        Ok(Self {
-            repo_path,
-            config,
-            git_ops,
-            branch_manager,
-            commit_builder,
-        })
+        Ok(Self { repo_path, config, git_ops, branch_manager, commit_builder })
     }
 
     /// Start a new feature branch for self-development
     pub async fn start_feature(&self, feature_name: &str) -> Result<String> {
-        let branch_name = format!("{}/{}-{}", 
+        let branch_name = format!(
+            "{}/{}-{}",
             self.config.branch_prefix,
             feature_name,
             chrono::Utc::now().timestamp()
         );
-        
+
         self.branch_manager.create_and_switch(&branch_name)?;
         Ok(branch_name)
     }
@@ -108,17 +103,13 @@ impl VcsIntegration {
     ) -> Result<String> {
         // Stage all changes
         self.git_ops.stage_all()?;
-        
+
         // Generate commit message
-        let message = self.commit_builder.build_message(
-            commit_type,
-            scope,
-            description,
-        );
-        
+        let message = self.commit_builder.build_message(commit_type, scope, description);
+
         // Create commit
         let commit_id = self.git_ops.commit(&message, self.config.sign_commits)?;
-        
+
         Ok(commit_id)
     }
 
@@ -128,16 +119,16 @@ impl VcsIntegration {
             // Run tests before merge
             self.run_tests().await?;
         }
-        
+
         // Switch to main branch
         self.branch_manager.switch_to_main()?;
-        
+
         // Merge feature branch
         self.git_ops.merge(branch_name)?;
-        
+
         // Clean up feature branch
         self.branch_manager.delete_branch(branch_name)?;
-        
+
         Ok(())
     }
 
@@ -148,11 +139,7 @@ impl VcsIntegration {
     }
 
     /// Create pull request for review
-    pub async fn create_pr(
-        &self,
-        title: &str,
-        description: &str,
-    ) -> Result<PullRequestInfo> {
+    pub async fn create_pr(&self, title: &str, description: &str) -> Result<PullRequestInfo> {
         let creator = PullRequestCreator::new(&self.repo_path)?;
         creator.create(title, description).await
     }
@@ -164,11 +151,11 @@ impl VcsIntegration {
             .arg("test")
             .current_dir(&self.repo_path)
             .output()?;
-        
+
         if !output.status.success() {
             anyhow::bail!("Tests failed");
         }
-        
+
         Ok(())
     }
 

@@ -15,10 +15,7 @@ pub enum LLMError {
 
     /// Rate limit has been exceeded
     #[error("Rate limit exceeded: {message}. Retry after {retry_after:?}")]
-    RateLimitExceeded {
-        message: String,
-        retry_after: Option<Duration>,
-    },
+    RateLimitExceeded { message: String, retry_after: Option<Duration> },
 
     /// Request timed out
     #[error("Request timed out after {duration:?}")]
@@ -88,17 +85,12 @@ pub enum LLMError {
 impl LLMError {
     /// Create an authentication error
     pub fn auth(message: impl Into<String>) -> Self {
-        Self::AuthenticationError {
-            message: message.into(),
-        }
+        Self::AuthenticationError { message: message.into() }
     }
 
     /// Create a rate limit error
     pub fn rate_limit(message: impl Into<String>, retry_after: Option<Duration>) -> Self {
-        Self::RateLimitExceeded {
-            message: message.into(),
-            retry_after,
-        }
+        Self::RateLimitExceeded { message: message.into(), retry_after }
     }
 
     /// Create a timeout error
@@ -108,31 +100,22 @@ impl LLMError {
 
     /// Create a network error
     pub fn network(message: impl Into<String>) -> Self {
-        Self::NetworkError {
-            message: message.into(),
-        }
+        Self::NetworkError { message: message.into() }
     }
 
     /// Create an API error
     pub fn api(status: u16, message: impl Into<String>) -> Self {
-        Self::ApiError {
-            status,
-            message: message.into(),
-        }
+        Self::ApiError { status, message: message.into() }
     }
 
     /// Create an invalid request error
     pub fn invalid_request(message: impl Into<String>) -> Self {
-        Self::InvalidRequest {
-            message: message.into(),
-        }
+        Self::InvalidRequest { message: message.into() }
     }
 
     /// Create a model not found error
     pub fn model_not_found(model: impl Into<String>) -> Self {
-        Self::ModelNotFound {
-            model: model.into(),
-        }
+        Self::ModelNotFound { model: model.into() }
     }
 
     /// Create a token limit error
@@ -142,75 +125,52 @@ impl LLMError {
 
     /// Create a content filtered error
     pub fn content_filtered(reason: impl Into<String>) -> Self {
-        Self::ContentFiltered {
-            reason: reason.into(),
-        }
+        Self::ContentFiltered { reason: reason.into() }
     }
 
     /// Create a not supported error
     pub fn not_supported(feature: impl Into<String>, provider: impl Into<String>) -> Self {
-        Self::NotSupported {
-            feature: feature.into(),
-            provider: provider.into(),
-        }
+        Self::NotSupported { feature: feature.into(), provider: provider.into() }
     }
 
     /// Create a configuration error
     pub fn config(message: impl Into<String>) -> Self {
-        Self::ConfigurationError {
-            message: message.into(),
-        }
+        Self::ConfigurationError { message: message.into() }
     }
 
     /// Create a parse error
     pub fn parse(message: impl Into<String>) -> Self {
-        Self::ParseError {
-            message: message.into(),
-        }
+        Self::ParseError { message: message.into() }
     }
 
     /// Create a provider-specific error
     pub fn provider(provider: impl Into<String>, message: impl Into<String>) -> Self {
-        Self::ProviderError {
-            provider: provider.into(),
-            message: message.into(),
-        }
+        Self::ProviderError { provider: provider.into(), message: message.into() }
     }
 
     /// Create a cache error
     pub fn cache(message: impl Into<String>) -> Self {
-        Self::CacheError {
-            message: message.into(),
-        }
+        Self::CacheError { message: message.into() }
     }
 
     /// Create a streaming error
     pub fn streaming(message: impl Into<String>) -> Self {
-        Self::StreamingError {
-            message: message.into(),
-        }
+        Self::StreamingError { message: message.into() }
     }
 
     /// Create a function calling error
     pub fn function_calling(message: impl Into<String>) -> Self {
-        Self::FunctionCallingError {
-            message: message.into(),
-        }
+        Self::FunctionCallingError { message: message.into() }
     }
 
     /// Create a fine-tuning error
     pub fn fine_tuning(message: impl Into<String>) -> Self {
-        Self::FineTuningError {
-            message: message.into(),
-        }
+        Self::FineTuningError { message: message.into() }
     }
 
     /// Create a generic error with context
     pub fn other(context: impl Into<String>, message: impl Into<String>) -> Self {
-        Self::Other {
-            context: context.into(),
-            message: message.into(),
-        }
+        Self::Other { context: context.into(), message: message.into() }
     }
 }
 
@@ -220,18 +180,14 @@ pub type LLMResult<T> = Result<T, LLMError>;
 /// Convert from standard IO errors
 impl From<std::io::Error> for LLMError {
     fn from(err: std::io::Error) -> Self {
-        Self::NetworkError {
-            message: err.to_string(),
-        }
+        Self::NetworkError { message: err.to_string() }
     }
 }
 
 /// Convert from JSON errors
 impl From<serde_json::Error> for LLMError {
     fn from(err: serde_json::Error) -> Self {
-        Self::ParseError {
-            message: err.to_string(),
-        }
+        Self::ParseError { message: err.to_string() }
     }
 }
 
@@ -251,15 +207,13 @@ mod tests {
         assert!(err.to_string().contains("Rate limit exceeded"));
 
         let err = LLMError::model_not_found("gpt-5");
-        assert_eq!(
-            err.to_string(),
-            "Model 'gpt-5' not found or not available"
-        );
+        assert_eq!(err.to_string(), "Model 'gpt-5' not found or not available");
     }
 
     #[test]
     fn test_error_conversion() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "Connection failed");
+        let io_err =
+            std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "Connection failed");
         let llm_err: LLMError = io_err.into();
         assert!(matches!(llm_err, LLMError::NetworkError { .. }));
 
@@ -267,5 +221,4 @@ mod tests {
         let llm_err: LLMError = json_err.into();
         assert!(matches!(llm_err, LLMError::ParseError { .. }));
     }
-
 }

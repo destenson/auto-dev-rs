@@ -38,10 +38,12 @@ impl ResourceUsage {
     /// Check if usage exceeds configured limits
     pub fn exceeds_limits(&self) -> bool {
         // Check against default limits (can be made configurable)
-        if self.memory_bytes > 100 * 1024 * 1024 {  // 100MB
+        if self.memory_bytes > 100 * 1024 * 1024 {
+            // 100MB
             return true;
         }
-        if self.cpu_time_ms > 60 * 1000 {  // 60 seconds
+        if self.cpu_time_ms > 60 * 1000 {
+            // 60 seconds
             return true;
         }
         if self.thread_count > 10 {
@@ -78,11 +80,11 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_bytes: Some(100 * 1024 * 1024),  // 100MB
-            max_cpu_time_ms: Some(60 * 1000),           // 60 seconds
+            max_memory_bytes: Some(100 * 1024 * 1024), // 100MB
+            max_cpu_time_ms: Some(60 * 1000),          // 60 seconds
             max_threads: Some(10),
             max_file_handles: Some(50),
-            max_network_bandwidth_bps: Some(10 * 1024 * 1024),  // 10MB/s
+            max_network_bandwidth_bps: Some(10 * 1024 * 1024), // 10MB/s
         }
     }
 }
@@ -115,7 +117,7 @@ impl ResourceMonitor {
     pub fn start_monitoring(&self) {
         let mut active = self.monitoring_active.blocking_write();
         *active = true;
-        
+
         let mut instant = self.start_instant.blocking_write();
         *instant = Some(Instant::now());
     }
@@ -137,17 +139,13 @@ impl ResourceMonitor {
         let mut usage = self.usage.write().await;
         usage.memory_bytes = bytes;
         usage.last_update = chrono::Utc::now();
-        
+
         if let Some(limit) = self.limits.max_memory_bytes {
             if bytes > limit {
-                return Err(anyhow::anyhow!(
-                    "Memory limit exceeded: {} > {} bytes",
-                    bytes,
-                    limit
-                ));
+                return Err(anyhow::anyhow!("Memory limit exceeded: {} > {} bytes", bytes, limit));
             }
         }
-        
+
         Ok(())
     }
 
@@ -159,7 +157,7 @@ impl ResourceMonitor {
             let mut usage = self.usage.write().await;
             usage.cpu_time_ms = elapsed.as_millis() as u64;
             usage.last_update = chrono::Utc::now();
-            
+
             if let Some(limit) = self.limits.max_cpu_time_ms {
                 if usage.cpu_time_ms > limit {
                     return Err(anyhow::anyhow!(
@@ -170,7 +168,7 @@ impl ResourceMonitor {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -179,17 +177,13 @@ impl ResourceMonitor {
         let mut usage = self.usage.write().await;
         usage.thread_count = count;
         usage.last_update = chrono::Utc::now();
-        
+
         if let Some(limit) = self.limits.max_threads {
             if count > limit {
-                return Err(anyhow::anyhow!(
-                    "Thread limit exceeded: {} > {}",
-                    count,
-                    limit
-                ));
+                return Err(anyhow::anyhow!("Thread limit exceeded: {} > {}", count, limit));
             }
         }
-        
+
         Ok(())
     }
 
@@ -198,17 +192,13 @@ impl ResourceMonitor {
         let mut usage = self.usage.write().await;
         usage.file_handle_count = count;
         usage.last_update = chrono::Utc::now();
-        
+
         if let Some(limit) = self.limits.max_file_handles {
             if count > limit {
-                return Err(anyhow::anyhow!(
-                    "File handle limit exceeded: {} > {}",
-                    count,
-                    limit
-                ));
+                return Err(anyhow::anyhow!("File handle limit exceeded: {} > {}", count, limit));
             }
         }
-        
+
         Ok(())
     }
 
@@ -221,7 +211,7 @@ impl ResourceMonitor {
     /// Enforce resource limits
     pub async fn enforce_limits(&self) -> Result<()> {
         let usage = self.usage.read().await;
-        
+
         if let Some(limit) = self.limits.max_memory_bytes {
             if usage.memory_bytes > limit {
                 return Err(anyhow::anyhow!(
@@ -231,7 +221,7 @@ impl ResourceMonitor {
                 ));
             }
         }
-        
+
         if let Some(limit) = self.limits.max_cpu_time_ms {
             if usage.cpu_time_ms > limit {
                 return Err(anyhow::anyhow!(
@@ -241,7 +231,7 @@ impl ResourceMonitor {
                 ));
             }
         }
-        
+
         if let Some(limit) = self.limits.max_threads {
             if usage.thread_count > limit {
                 return Err(anyhow::anyhow!(
@@ -251,7 +241,7 @@ impl ResourceMonitor {
                 ));
             }
         }
-        
+
         if let Some(limit) = self.limits.max_file_handles {
             if usage.file_handle_count > limit {
                 return Err(anyhow::anyhow!(
@@ -261,7 +251,7 @@ impl ResourceMonitor {
                 ));
             }
         }
-        
+
         Ok(())
     }
 
@@ -279,13 +269,13 @@ mod tests {
     async fn test_resource_monitor() {
         let monitor = ResourceMonitor::new();
         monitor.start_monitoring();
-        
+
         // Update memory usage
         assert!(monitor.update_memory(50 * 1024 * 1024).await.is_ok());
-        
+
         // Exceed memory limit
         assert!(monitor.update_memory(200 * 1024 * 1024).await.is_err());
-        
+
         let usage = monitor.get_usage().await.unwrap();
         assert!(usage.memory_bytes > 0);
     }
@@ -297,13 +287,13 @@ mod tests {
             max_threads: Some(5),
             ..Default::default()
         };
-        
+
         let monitor = ResourceMonitor::with_limits(limits);
-        
+
         // Within limits
         assert!(monitor.update_memory(5 * 1024 * 1024).await.is_ok());
         assert!(monitor.update_threads(3).await.is_ok());
-        
+
         // Exceed limits
         assert!(monitor.update_memory(20 * 1024 * 1024).await.is_err());
         assert!(monitor.update_threads(10).await.is_err());

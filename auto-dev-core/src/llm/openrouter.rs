@@ -3,10 +3,7 @@
 //! This module provides access to 400+ LLM models from 60+ providers through
 //! the OpenRouter unified API, with automatic failover and cost optimization.
 
-use super::{
-    provider::*,
-    ClassificationResult,
-};
+use super::{ClassificationResult, provider::*};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use openrouter_rs::{
@@ -65,13 +62,7 @@ impl OpenRouterProvider {
             }
         });
 
-        Ok(Self {
-            client,
-            config,
-            model_tier,
-            model_catalog,
-            usage_tracker,
-        })
+        Ok(Self { client, config, model_tier, model_catalog, usage_tracker })
     }
 
     /// Determine model tier from model ID
@@ -79,8 +70,12 @@ impl OpenRouterProvider {
         // Check for opus first, as it's a more specific match
         match model_id {
             id if id.contains("opus") || id.contains("o1") => ModelTier::Large,
-            id if id.contains("haiku") || id.contains("gpt-3.5") || id.contains("llama-3.2") => ModelTier::Small,
-            id if id.contains("gpt-4") || id.contains("claude-3") || id.contains("sonnet") => ModelTier::Medium,
+            id if id.contains("haiku") || id.contains("gpt-3.5") || id.contains("llama-3.2") => {
+                ModelTier::Small
+            }
+            id if id.contains("gpt-4") || id.contains("claude-3") || id.contains("sonnet") => {
+                ModelTier::Medium
+            }
             _ => ModelTier::Medium,
         }
     }
@@ -90,29 +85,29 @@ impl OpenRouterProvider {
         // In a real implementation, this would fetch from OpenRouter API
         // For now, we'll populate with known models
         let mut catalog = catalog.lock().await;
-        
+
         // OpenAI models
         catalog.add_model("openai/gpt-4", 0.03, 0.06, ModelCategory::General);
         catalog.add_model("openai/gpt-3.5-turbo", 0.001, 0.002, ModelCategory::General);
         catalog.add_model("openai/o1-preview", 0.015, 0.06, ModelCategory::Reasoning);
-        
+
         // Anthropic models
         catalog.add_model("anthropic/claude-3-opus", 0.015, 0.075, ModelCategory::General);
         catalog.add_model("anthropic/claude-3-sonnet", 0.003, 0.015, ModelCategory::General);
         catalog.add_model("anthropic/claude-3-haiku", 0.00025, 0.00125, ModelCategory::Fast);
-        
+
         // Meta models
         catalog.add_model("meta-llama/llama-3.2-70b", 0.0, 0.0, ModelCategory::Free);
         catalog.add_model("meta-llama/codellama-70b", 0.0, 0.0, ModelCategory::Code);
-        
+
         // Mistral models
         catalog.add_model("mistralai/mistral-7b", 0.0, 0.0, ModelCategory::Free);
         catalog.add_model("mistralai/mixtral-8x7b", 0.0003, 0.0006, ModelCategory::General);
-        
+
         // DeepSeek models
         catalog.add_model("deepseek/deepseek-r1", 0.0, 0.0, ModelCategory::Reasoning);
         catalog.add_model("deepseek/deepseek-coder", 0.0, 0.0, ModelCategory::Code);
-        
+
         info!("Loaded {} models into catalog", catalog.models.len());
         Ok(())
     }
@@ -120,19 +115,24 @@ impl OpenRouterProvider {
     /// Select the best model based on task and optimization mode
     async fn select_model(&self, task_type: TaskType) -> Result<String> {
         let catalog = self.model_catalog.lock().await;
-        
+
         match self.config.optimization_mode {
-            OptimizationMode::Cheapest => {
-                catalog.find_cheapest_model(task_type)
-                    .ok_or_else(|| anyhow::anyhow!("No suitable model found"))
-            }
+            OptimizationMode::Cheapest => catalog
+                .find_cheapest_model(task_type)
+                .ok_or_else(|| anyhow::anyhow!("No suitable model found")),
             OptimizationMode::Balanced => {
                 // Balance between cost and capability
                 match task_type {
-                    TaskType::Code => Ok(self.config.code_models.first()
+                    TaskType::Code => Ok(self
+                        .config
+                        .code_models
+                        .first()
                         .cloned()
                         .unwrap_or_else(|| "anthropic/claude-3-sonnet".to_string())),
-                    TaskType::Reasoning => Ok(self.config.reasoning_models.first()
+                    TaskType::Reasoning => Ok(self
+                        .config
+                        .reasoning_models
+                        .first()
                         .cloned()
                         .unwrap_or_else(|| "openai/o1-preview".to_string())),
                     _ => Ok(self.config.default_model.clone()),
@@ -150,21 +150,19 @@ impl OpenRouterProvider {
     }
 
     /// Convert messages to OpenRouter format
-    fn convert_messages(&self, prompt: &str, system_prompt: Option<&str>) -> Vec<OpenRouterMessage> {
+    fn convert_messages(
+        &self,
+        prompt: &str,
+        system_prompt: Option<&str>,
+    ) -> Vec<OpenRouterMessage> {
         let mut messages = Vec::new();
-        
+
         if let Some(system) = system_prompt.or(self.config.system_prompt.as_deref()) {
-            messages.push(OpenRouterMessage {
-                role: Role::System,
-                content: system.to_string(),
-            });
+            messages.push(OpenRouterMessage { role: Role::System, content: system.to_string() });
         }
-        
-        messages.push(OpenRouterMessage {
-            role: Role::User,
-            content: prompt.to_string(),
-        });
-        
+
+        messages.push(OpenRouterMessage { role: Role::User, content: prompt.to_string() });
+
         messages
     }
 
@@ -172,7 +170,7 @@ impl OpenRouterProvider {
     async fn track_usage(&self, model: &str, tokens: usize, cost: f32) {
         let mut tracker = self.usage_tracker.lock().await;
         tracker.add_usage(model, tokens, cost);
-        
+
         // Log if approaching cost limit
         if let Some(max_cost) = self.config.max_cost_per_request {
             if cost > max_cost * 0.8 {
@@ -238,7 +236,7 @@ impl LLMProvider for OpenRouterProvider {
         );
 
         let messages = self.convert_messages(&prompt, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model.clone())
             .messages(messages)
@@ -246,22 +244,26 @@ impl LLMProvider for OpenRouterProvider {
             .max_tokens(options.max_tokens as u32)
             .build()?;
 
-        let response = self.client.send_chat_completion(&request).await
+        let response = self
+            .client
+            .send_chat_completion(&request)
+            .await
             .context("Failed to generate code via OpenRouter")?;
 
         // OpenRouter returns CompletionsResponse with content directly
-        let content = response.choices.first()
+        let content = response
+            .choices
+            .first()
             .and_then(|c| c.content())
             .ok_or_else(|| anyhow::anyhow!("No response from model"))?;
 
         // Extract code files from response
         let files = extract_code_files(&content);
-        
+
         // Track usage
-        let tokens_used = response.usage.as_ref()
-            .map(|u| u.total_tokens as usize)
-            .unwrap_or(content.len() / 4);
-        
+        let tokens_used =
+            response.usage.as_ref().map(|u| u.total_tokens as usize).unwrap_or(content.len() / 4);
+
         let cost = self.calculate_cost(&model, tokens_used);
         self.track_usage(&model, tokens_used, cost).await;
 
@@ -281,7 +283,7 @@ impl LLMProvider for OpenRouterProvider {
         spec: &Specification,
     ) -> Result<Explanation> {
         let model = self.select_model(TaskType::General).await?;
-        
+
         let prompt = format!(
             "Explain how this code implements the given specification:\n\n\
             Code:\n```\n{}\n```\n\n\
@@ -295,7 +297,7 @@ impl LLMProvider for OpenRouterProvider {
         );
 
         let messages = self.convert_messages(&prompt, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model.clone())
             .messages(messages)
@@ -304,13 +306,11 @@ impl LLMProvider for OpenRouterProvider {
             .build()?;
 
         let response = self.client.send_chat_completion(&request).await?;
-        let content = response.choices.first()
-            .and_then(|c| c.content())
-            .unwrap_or_default();
+        let content = response.choices.first().and_then(|c| c.content()).unwrap_or_default();
 
         // Parse explanation from response
         let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-        
+
         Ok(Explanation {
             summary: lines.first().cloned().unwrap_or_default(),
             details: lines.iter().skip(1).take(3).cloned().collect(),
@@ -319,14 +319,11 @@ impl LLMProvider for OpenRouterProvider {
         })
     }
 
-    async fn review_code(
-        &self,
-        code: &str,
-        requirements: &[Requirement],
-    ) -> Result<ReviewResult> {
+    async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
         let model = self.select_model(TaskType::Code).await?;
-        
-        let req_list = requirements.iter()
+
+        let req_list = requirements
+            .iter()
             .map(|r| format!("- {}: {}", r.id, r.description))
             .collect::<Vec<_>>()
             .join("\n");
@@ -341,7 +338,7 @@ impl LLMProvider for OpenRouterProvider {
         );
 
         let messages = self.convert_messages(&prompt, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model)
             .messages(messages)
@@ -350,9 +347,7 @@ impl LLMProvider for OpenRouterProvider {
             .build()?;
 
         let response = self.client.send_chat_completion(&request).await?;
-        let content = response.choices.first()
-            .and_then(|c| c.content())
-            .unwrap_or_default();
+        let content = response.choices.first().and_then(|c| c.content()).unwrap_or_default();
 
         // Parse review results
         let mut issues = Vec::new();
@@ -375,21 +370,19 @@ impl LLMProvider for OpenRouterProvider {
             }
         }
 
-        Ok(ReviewResult {
-            issues,
-            suggestions,
-            meets_requirements,
-            confidence: 0.85,
-        })
+        Ok(ReviewResult { issues, suggestions, meets_requirements, confidence: 0.85 })
     }
 
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
-        let model = self.config.chat_models.first()
+        let model = self
+            .config
+            .chat_models
+            .first()
             .cloned()
             .unwrap_or_else(|| self.config.default_model.clone());
 
         let messages = self.convert_messages(question, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model)
             .messages(messages)
@@ -398,15 +391,16 @@ impl LLMProvider for OpenRouterProvider {
             .build()?;
 
         let response = self.client.send_chat_completion(&request).await?;
-        
-        Ok(response.choices.first()
-            .and_then(|c| c.content())
-            .map(|s| s.to_string()))
+
+        Ok(response.choices.first().and_then(|c| c.content()).map(|s| s.to_string()))
     }
 
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         // Use a cheap model for classification
-        let model = self.config.chat_models.first()
+        let model = self
+            .config
+            .chat_models
+            .first()
             .cloned()
             .unwrap_or_else(|| "mistralai/mistral-7b".to_string());
 
@@ -418,7 +412,7 @@ impl LLMProvider for OpenRouterProvider {
         );
 
         let messages = self.convert_messages(&prompt, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model)
             .messages(messages)
@@ -427,9 +421,7 @@ impl LLMProvider for OpenRouterProvider {
             .build()?;
 
         let response = self.client.send_chat_completion(&request).await?;
-        let content = response.choices.first()
-            .and_then(|c| c.content())
-            .unwrap_or_default();
+        let content = response.choices.first().and_then(|c| c.content()).unwrap_or_default();
 
         // Parse JSON response
         if let Some(json_start) = content.find('{') {
@@ -441,7 +433,8 @@ impl LLMProvider for OpenRouterProvider {
                         is_documentation: parsed["is_doc"].as_bool().unwrap_or(false),
                         is_test: parsed["is_test"].as_bool().unwrap_or(false),
                         is_config: parsed["is_config"].as_bool().unwrap_or(false),
-                        language: parsed["language"].as_str()
+                        language: parsed["language"]
+                            .as_str()
                             .filter(|s| *s != "null")
                             .map(String::from),
                         confidence: 0.8,
@@ -462,7 +455,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         let model = self.config.default_model.clone();
-        
+
         let prompt = format!(
             "Assess the complexity of this task:\n{}\n\n\
             Respond with: trivial/simple/moderate/complex/very complex",
@@ -470,7 +463,7 @@ impl LLMProvider for OpenRouterProvider {
         );
 
         let messages = self.convert_messages(&prompt, None);
-        
+
         let request = ChatCompletionRequest::builder()
             .model(model)
             .messages(messages)
@@ -479,7 +472,9 @@ impl LLMProvider for OpenRouterProvider {
             .build()?;
 
         let response = self.client.send_chat_completion(&request).await?;
-        let content = response.choices.first()
+        let content = response
+            .choices
+            .first()
             .and_then(|c| c.content())
             .map(|s| s.to_lowercase())
             .unwrap_or_default();
@@ -511,11 +506,11 @@ impl OpenRouterProvider {
         let catalog = self.model_catalog.try_lock();
         if let Ok(catalog) = catalog {
             if let Some(info) = catalog.models.get(model) {
-                return (info.cost_per_1k_prompt + info.cost_per_1k_completion) / 2.0 
+                return (info.cost_per_1k_prompt + info.cost_per_1k_completion) / 2.0
                     * (tokens as f32 / 1000.0);
             }
         }
-        
+
         // Fallback to estimated cost
         self.cost_per_1k_tokens() * (tokens as f32 / 1000.0)
     }
@@ -572,9 +567,9 @@ impl Default for OpenRouterConfig {
 /// Optimization mode for model selection
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OptimizationMode {
-    Cheapest,  // Always use cheapest suitable model
-    Balanced,  // Balance cost and quality
-    Quality,   // Always use best model regardless of cost
+    Cheapest, // Always use cheapest suitable model
+    Balanced, // Balance cost and quality
+    Quality,  // Always use best model regardless of cost
 }
 
 /// Task type for model selection
@@ -626,7 +621,10 @@ impl ModelCatalog {
 
         self.models
             .values()
-            .filter(|m| m.available && (m.category == category_filter || m.category == ModelCategory::General))
+            .filter(|m| {
+                m.available
+                    && (m.category == category_filter || m.category == ModelCategory::General)
+            })
             .min_by(|a, b| {
                 let a_cost = a.cost_per_1k_prompt + a.cost_per_1k_completion;
                 let b_cost = b.cost_per_1k_prompt + b.cost_per_1k_completion;
@@ -672,11 +670,9 @@ impl UsageTracker {
     pub fn add_usage(&mut self, model: &str, tokens: usize, cost: f32) {
         self.total_tokens += tokens;
         self.total_cost += cost;
-        
-        let entry = self.model_usage
-            .entry(model.to_string())
-            .or_insert_with(ModelUsage::default);
-        
+
+        let entry = self.model_usage.entry(model.to_string()).or_insert_with(ModelUsage::default);
+
         entry.tokens += tokens;
         entry.cost += cost;
         entry.requests += 1;

@@ -1,11 +1,11 @@
 #![allow(unused)]
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::collections::VecDeque;
-use anyhow::{Result, Context};
-use serde::{Serialize, Deserialize};
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use tracing::{debug, info, warn};
 
 /// Maintains an audit trail of all self-modifications
@@ -116,9 +116,9 @@ impl AuditTrail {
     pub fn new(config: AuditConfig) -> Result<Self> {
         // Ensure log directory exists
         fs::create_dir_all(&config.log_directory)?;
-        
+
         let log_file = config.log_directory.join("audit.log");
-        
+
         Ok(Self {
             entries: VecDeque::with_capacity(1000),
             log_file,
@@ -131,7 +131,7 @@ impl AuditTrail {
     pub fn record(&mut self, entry: AuditEntry) -> Result<()> {
         // Add to memory buffer
         self.entries.push_back(entry.clone());
-        
+
         // Trim memory buffer if needed
         if self.entries.len() > self.max_memory_entries {
             self.entries.pop_front();
@@ -139,12 +139,12 @@ impl AuditTrail {
 
         // Write to file
         self.write_to_file(&entry)?;
-        
+
         // Check if rotation is needed
         self.rotate_if_needed()?;
-        
+
         info!("Audit entry recorded: {:?} on {:?}", entry.action, entry.file_path);
-        
+
         Ok(())
     }
 
@@ -183,18 +183,18 @@ impl AuditTrail {
 
         let json = serde_json::to_string(entry)?;
         writeln!(file, "{}", json)?;
-        
+
         Ok(())
     }
 
     /// Rotate log file if it's too large
     fn rotate_if_needed(&self) -> Result<()> {
         let metadata = fs::metadata(&self.log_file)?;
-        
+
         if metadata.len() > self.config.max_log_size as u64 {
             self.rotate_logs()?;
         }
-        
+
         Ok(())
     }
 
@@ -204,7 +204,7 @@ impl AuditTrail {
         for i in (1..self.config.backup_count).rev() {
             let from = self.config.log_directory.join(format!("audit.log.{}", i));
             let to = self.config.log_directory.join(format!("audit.log.{}", i + 1));
-            
+
             if from.exists() {
                 fs::rename(from, to)?;
             }
@@ -213,7 +213,7 @@ impl AuditTrail {
         // Move current log to .1
         let backup = self.config.log_directory.join("audit.log.1");
         fs::rename(&self.log_file, backup)?;
-        
+
         info!("Audit log rotated");
         Ok(())
     }
@@ -221,29 +221,20 @@ impl AuditTrail {
     /// Generate unique ID for entries
     fn generate_id() -> String {
         use std::time::UNIX_EPOCH;
-        
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-        
+
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+
         format!("{}-{:x}", timestamp.as_secs(), rand::random::<u32>())
     }
 
     /// Query audit entries
     pub fn query(&self, filter: AuditFilter) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|entry| filter.matches(entry))
-            .collect()
+        self.entries.iter().filter(|entry| filter.matches(entry)).collect()
     }
 
     /// Get recent entries
     pub fn get_recent(&self, count: usize) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .rev()
-            .take(count)
-            .collect()
+        self.entries.iter().rev().take(count).collect()
     }
 
     /// Export audit trail to file
@@ -251,7 +242,7 @@ impl AuditTrail {
         let entries: Vec<_> = self.entries.iter().cloned().collect();
         let json = serde_json::to_string_pretty(&entries)?;
         fs::write(path, json)?;
-        
+
         info!("Audit trail exported to {:?}", path);
         Ok(())
     }
@@ -259,7 +250,7 @@ impl AuditTrail {
     /// Clear old entries from memory
     pub fn cleanup_old_entries(&mut self, max_age: std::time::Duration) {
         let cutoff = SystemTime::now() - max_age;
-        
+
         self.entries.retain(|entry| entry.timestamp > cutoff);
     }
 }
@@ -348,7 +339,7 @@ impl AuditSummary {
 
         for entry in entries {
             files.insert(entry.file_path.clone());
-            
+
             if entry.timestamp < min_time {
                 min_time = entry.timestamp;
             }
@@ -366,7 +357,7 @@ impl AuditSummary {
 
         summary.files_modified = files.into_iter().collect();
         summary.time_range = (min_time, max_time);
-        
+
         summary
     }
 }
@@ -389,21 +380,17 @@ mod tests {
     #[test]
     fn test_audit_entry_creation() {
         let temp_dir = TempDir::new().unwrap();
-        let config = AuditConfig {
-            log_directory: temp_dir.path().to_path_buf(),
-            ..Default::default()
-        };
-        
+        let config =
+            AuditConfig { log_directory: temp_dir.path().to_path_buf(), ..Default::default() };
+
         let trail = AuditTrail::new(config).unwrap();
         let entry = trail.create_entry(
             &PathBuf::from("test.rs"),
             AuditAction::Update,
-            ModificationInitiator::System { 
-                component: "self_monitor".to_string() 
-            },
+            ModificationInitiator::System { component: "self_monitor".to_string() },
             ModificationResult::Success,
         );
-        
+
         assert_eq!(entry.file_path, PathBuf::from("test.rs"));
         assert!(matches!(entry.action, AuditAction::Update));
         assert!(matches!(entry.result, ModificationResult::Success));
@@ -412,22 +399,20 @@ mod tests {
     #[test]
     fn test_audit_recording() {
         let temp_dir = TempDir::new().unwrap();
-        let config = AuditConfig {
-            log_directory: temp_dir.path().to_path_buf(),
-            ..Default::default()
-        };
-        
+        let config =
+            AuditConfig { log_directory: temp_dir.path().to_path_buf(), ..Default::default() };
+
         let mut trail = AuditTrail::new(config).unwrap();
-        
+
         let entry = trail.create_entry(
             &PathBuf::from("test.rs"),
             AuditAction::Create,
             ModificationInitiator::User { username: None },
             ModificationResult::Success,
         );
-        
+
         trail.record(entry.clone()).unwrap();
-        
+
         let recent = trail.get_recent(1);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].file_path, PathBuf::from("test.rs"));
@@ -436,30 +421,25 @@ mod tests {
     #[test]
     fn test_audit_filter() {
         let temp_dir = TempDir::new().unwrap();
-        let config = AuditConfig {
-            log_directory: temp_dir.path().to_path_buf(),
-            ..Default::default()
-        };
-        
+        let config =
+            AuditConfig { log_directory: temp_dir.path().to_path_buf(), ..Default::default() };
+
         let mut trail = AuditTrail::new(config).unwrap();
-        
+
         // Add multiple entries
         for i in 0..5 {
             let entry = trail.create_entry(
                 &PathBuf::from(format!("test{}.rs", i)),
                 AuditAction::Update,
-                ModificationInitiator::System { 
-                    component: "test".to_string() 
-                },
+                ModificationInitiator::System { component: "test".to_string() },
                 ModificationResult::Success,
             );
             trail.record(entry).unwrap();
         }
-        
+
         // Query with filter
-        let filter = AuditFilter::new()
-            .with_path(PathBuf::from("test2.rs"));
-        
+        let filter = AuditFilter::new().with_path(PathBuf::from("test2.rs"));
+
         let results = trail.query(filter);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].file_path, PathBuf::from("test2.rs"));

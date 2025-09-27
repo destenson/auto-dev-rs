@@ -3,7 +3,7 @@
 
 use super::{
     HotReloadConfig, HotReloadError, HotReloadResult, MigrationEngine, ReloadMetrics,
-    StateManager, TrafficController, ReloadVerifier,
+    ReloadVerifier, StateManager, TrafficController,
 };
 use crate::modules::{ModuleLoader, ModuleRegistry, ModuleRuntime, ModuleState};
 use anyhow::Result;
@@ -113,9 +113,7 @@ impl ReloadCoordinator {
         }
 
         // Execute reload phases
-        let result = self
-            .execute_reload(&mut transaction, registry, loader, runtime)
-            .await;
+        let result = self.execute_reload(&mut transaction, registry, loader, runtime).await;
 
         // Clean up transaction
         {
@@ -126,19 +124,19 @@ impl ReloadCoordinator {
         // Update metrics
         let mut metrics = self.metrics.write().await;
         metrics.total_reloads += 1;
-        
+
         let duration = start.elapsed();
         let reload_result = match result {
             Ok(messages_preserved) => {
                 metrics.successful_reloads += 1;
                 metrics.messages_preserved += messages_preserved;
                 metrics.last_reload_time = Some(chrono::Utc::now());
-                
+
                 // Update average reload time
                 let total_time = metrics.average_reload_time_ms * (metrics.successful_reloads - 1);
-                metrics.average_reload_time_ms = 
+                metrics.average_reload_time_ms =
                     (total_time + duration.as_millis() as u64) / metrics.successful_reloads;
-                
+
                 ReloadResult {
                     success: true,
                     module_id: module_id.to_string(),
@@ -150,7 +148,7 @@ impl ReloadCoordinator {
             }
             Err(e) => {
                 metrics.failed_reloads += 1;
-                
+
                 ReloadResult {
                     success: false,
                     module_id: module_id.to_string(),
@@ -165,9 +163,7 @@ impl ReloadCoordinator {
         if reload_result.success {
             Ok(reload_result)
         } else {
-            Err(HotReloadError::VerificationFailed(
-                reload_result.error.unwrap_or_default(),
-            ))
+            Err(HotReloadError::VerificationFailed(reload_result.error.unwrap_or_default()))
         }
     }
 
@@ -182,10 +178,11 @@ impl ReloadCoordinator {
         // Phase 1: Prepare
         self.set_phase(transaction, ReloadPhase::Prepare).await;
         debug!("Phase: Prepare - Loading new module version");
-        
-        let format = loader.get_format(&transaction.module_id)
+
+        let format = loader
+            .get_format(&transaction.module_id)
             .map_err(|e| HotReloadError::VerificationFailed(e.to_string()))?;
-        
+
         let new_module = loader
             .load(transaction.new_module_path.clone(), format)
             .await
@@ -194,11 +191,9 @@ impl ReloadCoordinator {
         // Phase 2: Drain
         self.set_phase(transaction, ReloadPhase::Drain).await;
         debug!("Phase: Drain - Stopping new requests to old module");
-        
-        self.traffic_controller
-            .start_draining(&transaction.module_id)
-            .await?;
-        
+
+        self.traffic_controller.start_draining(&transaction.module_id).await?;
+
         // Wait for drain or timeout
         let drain_start = Instant::now();
         while !self.traffic_controller.is_drained(&transaction.module_id).await {
@@ -212,12 +207,9 @@ impl ReloadCoordinator {
         // Phase 3: Snapshot
         self.set_phase(transaction, ReloadPhase::Snapshot).await;
         debug!("Phase: Snapshot - Capturing current state");
-        
-        transaction.old_state = runtime
-            .get_module_state(&transaction.module_id)
-            .await
-            .ok();
-        
+
+        transaction.old_state = runtime.get_module_state(&transaction.module_id).await.ok();
+
         let snapshot = if let Some(ref state) = transaction.old_state {
             Some(self.state_manager.create_snapshot(&transaction.module_id, state).await?)
         } else {
@@ -227,12 +219,12 @@ impl ReloadCoordinator {
         // Phase 4: Migrate
         self.set_phase(transaction, ReloadPhase::Migrate).await;
         debug!("Phase: Migrate - Transforming state if needed");
-        
+
         let migrated_state = if let Some(ref old_state) = transaction.old_state {
             // Check if migration is needed
             let old_version = self.state_manager.get_state_version(old_state);
             let new_version = self.state_manager.get_module_version(&new_module);
-            
+
             if old_version != new_version {
                 info!("Migrating state from {} to {}", old_version, new_version);
                 self.migration_engine
@@ -249,19 +241,13 @@ impl ReloadCoordinator {
         // Phase 5: Swap
         self.set_phase(transaction, ReloadPhase::Swap).await;
         debug!("Phase: Swap - Replacing old module with new");
-        
+
         // Buffer any incoming messages during swap
-        self.traffic_controller
-            .start_buffering(&transaction.module_id)
-            .await;
-        
+        self.traffic_controller.start_buffering(&transaction.module_id).await;
+
         // Perform atomic swap
-        let swap_result = registry
-            .write()
-            .await
-            .update(&transaction.module_id, new_module)
-            .await;
-        
+        let swap_result = registry.write().await.update(&transaction.module_id, new_module).await;
+
         if let Err(e) = swap_result {
             error!("Module swap failed: {}", e);
             self.rollback(transaction, snapshot, runtime).await?;
@@ -271,11 +257,8 @@ impl ReloadCoordinator {
         // Phase 6: Restore
         self.set_phase(transaction, ReloadPhase::Restore).await;
         debug!("Phase: Restore - Loading state into new module");
-        
-        if let Err(e) = runtime
-            .restore_module_state(&transaction.module_id, migrated_state)
-            .await
-        {
+
+        if let Err(e) = runtime.restore_module_state(&transaction.module_id, migrated_state).await {
             error!("State restoration failed: {}", e);
             self.rollback(transaction, snapshot, runtime).await?;
             return Err(HotReloadError::MigrationFailed(e.to_string()));
@@ -284,13 +267,11 @@ impl ReloadCoordinator {
         // Phase 7: Verify
         self.set_phase(transaction, ReloadPhase::Verify).await;
         debug!("Phase: Verify - Ensuring module works");
-        
+
         for attempt in 0..self.config.max_verification_attempts {
-            let verification = self
-                .verifier
-                .verify_module(&transaction.module_id, runtime.clone())
-                .await;
-            
+            let verification =
+                self.verifier.verify_module(&transaction.module_id, runtime.clone()).await;
+
             match verification {
                 Ok(result) if result.is_healthy => {
                     info!("Module verification successful on attempt {}", attempt + 1);
@@ -300,9 +281,10 @@ impl ReloadCoordinator {
                     warn!("Module verification failed: {:?}", result.issues);
                     if attempt == self.config.max_verification_attempts - 1 {
                         self.rollback(transaction, snapshot, runtime).await?;
-                        return Err(HotReloadError::VerificationFailed(
-                            format!("Health check failed: {:?}", result.issues),
-                        ));
+                        return Err(HotReloadError::VerificationFailed(format!(
+                            "Health check failed: {:?}",
+                            result.issues
+                        )));
                     }
                 }
                 Err(e) => {
@@ -313,25 +295,19 @@ impl ReloadCoordinator {
                     }
                 }
             }
-            
+
             tokio::time::sleep(self.config.verification_delay).await;
         }
 
         // Phase 8: Commit
         self.set_phase(transaction, ReloadPhase::Commit).await;
         debug!("Phase: Commit - Finalizing reload");
-        
+
         // Resume traffic and deliver buffered messages
-        let messages_count = self
-            .traffic_controller
-            .resume_traffic(&transaction.module_id)
-            .await?;
-        
-        info!(
-            "Hot-reload completed successfully for module: {}",
-            transaction.module_id
-        );
-        
+        let messages_count = self.traffic_controller.resume_traffic(&transaction.module_id).await?;
+
+        info!("Hot-reload completed successfully for module: {}", transaction.module_id);
+
         Ok(messages_count as u64)
     }
 
@@ -354,9 +330,7 @@ impl ReloadCoordinator {
         }
 
         // Cancel traffic control
-        self.traffic_controller
-            .cancel_draining(&transaction.module_id)
-            .await;
+        self.traffic_controller.cancel_draining(&transaction.module_id).await;
 
         // Update metrics
         let mut metrics = self.metrics.write().await;
@@ -368,10 +342,7 @@ impl ReloadCoordinator {
     /// Update the current phase of a reload transaction
     async fn set_phase(&self, transaction: &mut ReloadTransaction, phase: ReloadPhase) {
         transaction.phase = phase;
-        debug!(
-            "Module {} reload phase: {:?}",
-            transaction.module_id, phase
-        );
+        debug!("Module {} reload phase: {:?}", transaction.module_id, phase);
     }
 
     /// Get current reload metrics

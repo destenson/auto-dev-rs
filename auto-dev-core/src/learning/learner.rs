@@ -6,10 +6,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::{debug, info};
 use crate::incremental::Implementation;
 use crate::parser::model::Specification;
 use crate::validation::ValidationResult;
+use crate::{debug, info};
 
 use super::decision_improver::{DecisionHistory, DecisionImprover};
 use super::failure_analyzer::{FailureAnalyzer, FailureCause};
@@ -156,10 +156,7 @@ impl LearningSystem {
             self.import_knowledge().await?;
         }
 
-        info!(
-            "Learning system initialized with {} patterns",
-            self.knowledge_base.pattern_count()
-        );
+        info!("Learning system initialized with {} patterns", self.knowledge_base.pattern_count());
 
         Ok(())
     }
@@ -360,10 +357,7 @@ impl LearningSystem {
 
         self.knowledge_base.import(export)?;
 
-        info!(
-            "Imported knowledge base with {} patterns",
-            self.knowledge_base.pattern_count()
-        );
+        info!("Imported knowledge base with {} patterns", self.knowledge_base.pattern_count());
         Ok(())
     }
 

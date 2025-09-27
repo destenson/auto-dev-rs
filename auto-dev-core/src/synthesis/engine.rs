@@ -6,8 +6,8 @@ use super::{
     pipeline::{PipelineContext, PipelineStage},
     state::SynthesisState,
 };
-use crate::{debug, error, info};
 use crate::parser::model::Specification;
+use crate::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

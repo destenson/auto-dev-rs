@@ -18,31 +18,30 @@ impl ConflictResolver {
     /// Create new conflict resolver
     pub fn new(repo_path: impl AsRef<Path>) -> Result<Self> {
         let repo_path = repo_path.as_ref().to_path_buf();
-        let repo = Repository::open(&repo_path)
-            .context("Failed to open git repository")?;
-        
+        let repo = Repository::open(&repo_path).context("Failed to open git repository")?;
+
         Ok(Self { repo, repo_path })
     }
 
     /// Attempt to resolve conflicts
     pub fn attempt_resolution(&self, max_attempts: usize) -> Result<ConflictResolution> {
         let conflicts = self.find_conflicts()?;
-        
+
         if conflicts.is_empty() {
             return Ok(ConflictResolution::Resolved);
         }
-        
+
         info!("Found {} conflicted files", conflicts.len());
-        
+
         let mut unresolved = Vec::new();
         let mut attempts = 0;
-        
+
         for conflict_path in conflicts {
             if attempts >= max_attempts {
                 unresolved.push(conflict_path);
                 continue;
             }
-            
+
             match self.resolve_file(&conflict_path) {
                 Ok(true) => {
                     info!("Resolved conflict in {:?}", conflict_path);
@@ -56,10 +55,10 @@ impl ConflictResolver {
                     unresolved.push(conflict_path);
                 }
             }
-            
+
             attempts += 1;
         }
-        
+
         if unresolved.is_empty() {
             Ok(ConflictResolution::Resolved)
         } else {
@@ -71,10 +70,10 @@ impl ConflictResolver {
     pub fn find_conflicts(&self) -> Result<Vec<PathBuf>> {
         let mut opts = StatusOptions::new();
         opts.include_untracked(false);
-        
+
         let statuses = self.repo.statuses(Some(&mut opts))?;
         let mut conflicts = Vec::new();
-        
+
         for entry in statuses.iter() {
             if entry.status().contains(Status::CONFLICTED) {
                 if let Some(path) = entry.path() {
@@ -82,48 +81,49 @@ impl ConflictResolver {
                 }
             }
         }
-        
+
         Ok(conflicts)
     }
 
     /// Attempt to resolve a single file
     fn resolve_file(&self, path: &Path) -> Result<bool> {
         let full_path = self.repo_path.join(path);
-        
+
         if !full_path.exists() {
             return Ok(false);
         }
-        
+
         let content = fs::read_to_string(&full_path)?;
-        
+
         // Check if it's a simple conflict we can resolve
         if let Some(resolved) = self.try_simple_resolution(&content) {
             fs::write(&full_path, resolved)?;
             self.mark_resolved(path)?;
             return Ok(true);
         }
-        
+
         // Try strategy-based resolution
         if let Some(resolved) = self.try_strategy_resolution(&content, path) {
             fs::write(&full_path, resolved)?;
             self.mark_resolved(path)?;
             return Ok(true);
         }
-        
+
         Ok(false)
     }
 
     /// Try simple conflict resolution
     fn try_simple_resolution(&self, content: &str) -> Option<String> {
         // Handle conflicts where one side is empty (additions)
-        if content.contains("<<<<<<<") && content.contains("=======") && content.contains(">>>>>>>") {
+        if content.contains("<<<<<<<") && content.contains("=======") && content.contains(">>>>>>>")
+        {
             let lines: Vec<&str> = content.lines().collect();
             let mut result = Vec::new();
             let mut in_conflict = false;
             let mut ours: Vec<&str> = Vec::with_capacity(lines.len() / 2);
             let mut theirs: Vec<&str> = Vec::with_capacity(lines.len() / 2);
             let mut current_section = 0; // 0 = before, 1 = ours, 2 = theirs
-            
+
             for line in lines {
                 if line.starts_with("<<<<<<<") {
                     in_conflict = true;
@@ -158,12 +158,12 @@ impl ConflictResolver {
                     result.push(line.to_string());
                 }
             }
-            
+
             if !in_conflict {
                 return Some(result.join("\n"));
             }
         }
-        
+
         None
     }
 
@@ -176,12 +176,12 @@ impl ConflictResolver {
         if theirs.is_empty() && !ours.is_empty() {
             return Some(ours.to_vec());
         }
-        
+
         // If both sides are identical, take one
         if ours == theirs {
             return Some(ours.to_vec());
         }
-        
+
         // Check for simple addition conflicts (both added different things)
         // In this case, we can sometimes combine them
         if self.looks_like_additions(ours, theirs) {
@@ -189,7 +189,7 @@ impl ConflictResolver {
             combined.extend(theirs);
             return Some(combined);
         }
-        
+
         None
     }
 
@@ -211,7 +211,7 @@ impl ConflictResolver {
     /// Try strategy-based resolution based on file type
     fn try_strategy_resolution(&self, content: &str, path: &Path) -> Option<String> {
         let extension = path.extension()?.to_str()?;
-        
+
         match extension {
             "toml" | "json" | "yaml" => {
                 // For config files, might try to merge keys
@@ -239,19 +239,19 @@ impl ConflictResolver {
     pub fn get_conflict_details(&self, path: &Path) -> Result<ConflictDetails> {
         let full_path = self.repo_path.join(path);
         let content = fs::read_to_string(&full_path)?;
-        
+
         let mut conflicts = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
         let mut i = 0;
-        
+
         while i < lines.len() {
             if lines[i].starts_with("<<<<<<<") {
                 let start_line = i + 1;
                 let mut ours_end = i;
                 let mut theirs_start = i;
                 let mut end_line = i;
-                
-                for j in i+1..lines.len() {
+
+                for j in i + 1..lines.len() {
                     if lines[j] == "=======" {
                         ours_end = j;
                         theirs_start = j + 1;
@@ -260,35 +260,22 @@ impl ConflictResolver {
                         break;
                     }
                 }
-                
+
                 if ours_end > i && theirs_start > ours_end && end_line > theirs_start {
-                    let ours: Vec<String> = lines[start_line..ours_end]
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect();
-                    let theirs: Vec<String> = lines[theirs_start..end_line]
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect();
-                    
-                    conflicts.push(ConflictSection {
-                        start_line,
-                        end_line,
-                        ours,
-                        theirs,
-                    });
-                    
+                    let ours: Vec<String> =
+                        lines[start_line..ours_end].iter().map(|s| s.to_string()).collect();
+                    let theirs: Vec<String> =
+                        lines[theirs_start..end_line].iter().map(|s| s.to_string()).collect();
+
+                    conflicts.push(ConflictSection { start_line, end_line, ours, theirs });
+
                     i = end_line;
                 }
             }
             i += 1;
         }
-        
-        Ok(ConflictDetails {
-            path: path.to_path_buf(),
-            conflicts,
-            total_lines: lines.len(),
-        })
+
+        Ok(ConflictDetails { path: path.to_path_buf(), conflicts, total_lines: lines.len() })
     }
 
     /// Apply manual resolution
@@ -328,10 +315,10 @@ mod tests {
             repo: unsafe { std::mem::zeroed() }, // Mock for testing
             repo_path: PathBuf::new(),
         };
-        
+
         let content = "line 1\n<<<<<<< HEAD\n=======\nnew line\n>>>>>>> branch\nline 2";
         let resolved = resolver.try_simple_resolution(content);
-        
+
         assert!(resolved.is_some());
         let resolved = resolved.unwrap();
         assert!(resolved.contains("new line"));
@@ -340,14 +327,12 @@ mod tests {
 
     #[test]
     fn test_simple_resolution_identical() {
-        let resolver = ConflictResolver {
-            repo: unsafe { std::mem::zeroed() },
-            repo_path: PathBuf::new(),
-        };
-        
+        let resolver =
+            ConflictResolver { repo: unsafe { std::mem::zeroed() }, repo_path: PathBuf::new() };
+
         let content = "<<<<<<< HEAD\nsame line\n=======\nsame line\n>>>>>>> branch";
         let resolved = resolver.try_simple_resolution(content);
-        
+
         assert!(resolved.is_some());
         let resolved = resolved.unwrap();
         assert!(resolved.contains("same line"));

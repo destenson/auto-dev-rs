@@ -21,7 +21,9 @@ mod tests;
 
 pub use coordinator::{ReloadCoordinator, ReloadPhase, ReloadResult};
 pub use migration::{FieldMapping, MigrationEngine, MigrationRule, TransformType};
-pub use scheduler::{ReloadScheduler, ReloadRequest, ReloadPriority, SchedulerConfig, SchedulingStrategy};
+pub use scheduler::{
+    ReloadPriority, ReloadRequest, ReloadScheduler, SchedulerConfig, SchedulingStrategy,
+};
 pub use state_manager::{StateManager, StateSnapshot, StateVersion};
 pub use traffic_controller::{TrafficController, TrafficState};
 pub use verifier::{ReloadVerifier, TestType, VerificationResult, VerificationTest};
@@ -31,22 +33,22 @@ pub use verifier::{ReloadVerifier, TestType, VerificationResult, VerificationTes
 pub struct HotReloadConfig {
     /// Maximum time to wait for traffic draining
     pub drain_timeout: Duration,
-    
+
     /// Maximum time for the entire reload operation
     pub reload_timeout: Duration,
-    
+
     /// Enable automatic rollback on failure
     pub auto_rollback: bool,
-    
+
     /// Number of verification attempts before considering reload failed
     pub max_verification_attempts: u32,
-    
+
     /// Delay between verification attempts
     pub verification_delay: Duration,
-    
+
     /// Enable concurrent module reloads
     pub allow_concurrent_reloads: bool,
-    
+
     /// Maximum memory usage during reload (bytes)
     pub max_memory_usage: usize,
 }
@@ -83,22 +85,22 @@ pub struct ReloadMetrics {
 pub enum HotReloadError {
     #[error("Traffic draining timeout exceeded")]
     DrainTimeout,
-    
+
     #[error("State migration failed: {0}")]
     MigrationFailed(String),
-    
+
     #[error("Module verification failed: {0}")]
     VerificationFailed(String),
-    
+
     #[error("Rollback failed: {0}")]
     RollbackFailed(String),
-    
+
     #[error("Concurrent reload not allowed")]
     ConcurrentReloadDenied,
-    
+
     #[error("Memory limit exceeded during reload")]
     MemoryLimitExceeded,
-    
+
     #[error("Incompatible state version: expected {expected}, got {actual}")]
     IncompatibleStateVersion { expected: String, actual: String },
 }

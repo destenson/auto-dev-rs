@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::modules::store::manifest::{ModuleManifest, ManifestParser, TrustLevel};
+use crate::modules::store::manifest::{ManifestParser, ModuleManifest, TrustLevel};
 
 /// Search index entry for a module
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,12 +66,7 @@ impl ModuleDiscovery {
             (HashMap::new(), InvertedIndex::default())
         };
 
-        Self {
-            store_root,
-            index,
-            index_path,
-            inverted_index,
-        }
+        Self { store_root, index, index_path, inverted_index }
     }
 
     /// Index a module for discovery
@@ -80,7 +75,7 @@ impl ModuleDiscovery {
         let mut keywords = manifest.module.keywords.clone().unwrap_or_default();
         keywords.push(manifest.module.name.clone());
         keywords.push(manifest.module.category.clone());
-        
+
         let entry = IndexEntry {
             id: module_id.to_string(),
             name: manifest.module.name.clone(),
@@ -89,7 +84,8 @@ impl ModuleDiscovery {
             category: manifest.module.category.clone(),
             keywords: keywords.clone(),
             provides: manifest.capabilities.provides.clone(),
-            trust_level: manifest.verification
+            trust_level: manifest
+                .verification
                 .as_ref()
                 .and_then(|v| v.trust_level.clone())
                 .unwrap_or_default(),
@@ -112,14 +108,14 @@ impl ModuleDiscovery {
     pub fn search(&self, query: &str) -> Result<Vec<ModuleManifest>> {
         let query_lower = query.to_lowercase();
         let terms: Vec<&str> = query_lower.split_whitespace().collect();
-        
+
         if terms.is_empty() {
             return Ok(Vec::new());
         }
 
         // Find matching module IDs
         let mut matching_ids = HashSet::new();
-        
+
         for term in &terms {
             // Search in term index
             if let Some(ids) = self.inverted_index.terms.get(*term) {
@@ -129,7 +125,7 @@ impl ModuleDiscovery {
                     matching_ids = matching_ids.intersection(ids).cloned().collect();
                 }
             }
-            
+
             // Search in capabilities
             if let Some(ids) = self.inverted_index.capabilities.get(*term) {
                 matching_ids.extend(ids.iter().cloned());
@@ -138,8 +134,9 @@ impl ModuleDiscovery {
 
         // Also do substring matching on names and descriptions
         for (id, entry) in &self.index {
-            if entry.name.to_lowercase().contains(&query_lower) ||
-               entry.description.to_lowercase().contains(&query_lower) {
+            if entry.name.to_lowercase().contains(&query_lower)
+                || entry.description.to_lowercase().contains(&query_lower)
+            {
                 matching_ids.insert(id.clone());
             }
         }
@@ -157,54 +154,54 @@ impl ModuleDiscovery {
     /// List modules by category
     pub fn list_by_category(&self, category: &str) -> Result<Vec<ModuleManifest>> {
         let category_lower = category.to_lowercase();
-        let ids = self.inverted_index.categories
-            .get(&category_lower)
-            .cloned()
-            .unwrap_or_default();
-        
+        let ids = self.inverted_index.categories.get(&category_lower).cloned().unwrap_or_default();
+
         self.load_manifests(ids)
     }
 
     /// List modules by capability
     pub fn list_by_capability(&self, capability: &str) -> Result<Vec<ModuleManifest>> {
         let capability_lower = capability.to_lowercase();
-        let ids = self.inverted_index.capabilities
-            .get(&capability_lower)
-            .cloned()
-            .unwrap_or_default();
-        
+        let ids =
+            self.inverted_index.capabilities.get(&capability_lower).cloned().unwrap_or_default();
+
         self.load_manifests(ids)
     }
 
     /// List modules by trust level
     pub fn list_by_trust_level(&self, min_trust: TrustLevel) -> Result<Vec<ModuleManifest>> {
-        let ids: HashSet<String> = self.index
+        let ids: HashSet<String> = self
+            .index
             .iter()
             .filter(|(_, entry)| Self::trust_level_gte(&entry.trust_level, &min_trust))
             .map(|(id, _)| id.clone())
             .collect();
-        
+
         self.load_manifests(ids)
     }
 
     /// Get recommended modules
     pub fn get_recommendations(&self, for_module: &str) -> Result<Vec<ModuleManifest>> {
         // Find the module
-        let entry = self.index.get(for_module)
+        let entry = self
+            .index
+            .get(for_module)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", for_module))?;
-        
+
         // Find similar modules based on category and keywords
         let mut scores: HashMap<String, f32> = HashMap::new();
-        
+
         // Same category gives points
-        if let Some(category_modules) = self.inverted_index.categories.get(&entry.category.to_lowercase()) {
+        if let Some(category_modules) =
+            self.inverted_index.categories.get(&entry.category.to_lowercase())
+        {
             for id in category_modules {
                 if id != for_module {
                     *scores.entry(id.clone()).or_default() += 1.0;
                 }
             }
         }
-        
+
         // Shared keywords give points
         for keyword in &entry.keywords {
             if let Some(keyword_modules) = self.inverted_index.terms.get(&keyword.to_lowercase()) {
@@ -215,12 +212,12 @@ impl ModuleDiscovery {
                 }
             }
         }
-        
+
         // Sort by score and take top 10
         let mut sorted: Vec<(String, f32)> = scores.into_iter().collect();
         sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         sorted.truncate(10);
-        
+
         let ids: HashSet<String> = sorted.into_iter().map(|(id, _)| id).collect();
         self.load_manifests(ids)
     }
@@ -230,11 +227,11 @@ impl ModuleDiscovery {
         if let Some(entry) = self.index.remove(module_id) {
             // Remove from inverted index
             self.remove_from_inverted_index(module_id, &entry);
-            
+
             // Save index
             self.save_index()?;
         }
-        
+
         Ok(())
     }
 
@@ -246,34 +243,31 @@ impl ModuleDiscovery {
         for keyword in &entry.keywords {
             terms.insert(keyword.to_lowercase());
         }
-        
+
         // Split description into words
         for word in entry.description.split_whitespace() {
-            let word = word.to_lowercase()
-                .trim_matches(|c: char| !c.is_alphanumeric())
-                .to_string();
+            let word = word.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string();
             if !word.is_empty() && word.len() > 2 {
                 terms.insert(word);
             }
         }
-        
+
         for term in terms {
-            self.inverted_index.terms
-                .entry(term)
-                .or_default()
-                .insert(module_id.to_string());
+            self.inverted_index.terms.entry(term).or_default().insert(module_id.to_string());
         }
-        
+
         // Index capabilities
         for capability in &entry.provides {
-            self.inverted_index.capabilities
+            self.inverted_index
+                .capabilities
                 .entry(capability.to_lowercase())
                 .or_default()
                 .insert(module_id.to_string());
         }
-        
+
         // Index category
-        self.inverted_index.categories
+        self.inverted_index
+            .categories
             .entry(entry.category.to_lowercase())
             .or_default()
             .insert(module_id.to_string());
@@ -285,14 +279,16 @@ impl ModuleDiscovery {
         for term_set in self.inverted_index.terms.values_mut() {
             term_set.remove(module_id);
         }
-        
+
         // Remove from capability index
         for cap_set in self.inverted_index.capabilities.values_mut() {
             cap_set.remove(module_id);
         }
-        
+
         // Remove from category index
-        if let Some(cat_set) = self.inverted_index.categories.get_mut(&entry.category.to_lowercase()) {
+        if let Some(cat_set) =
+            self.inverted_index.categories.get_mut(&entry.category.to_lowercase())
+        {
             cat_set.remove(module_id);
         }
     }
@@ -300,7 +296,7 @@ impl ModuleDiscovery {
     /// Load manifests for given module IDs
     fn load_manifests(&self, ids: HashSet<String>) -> Result<Vec<ModuleManifest>> {
         let mut manifests = Vec::new();
-        
+
         for id in ids {
             if let Some(entry) = self.index.get(&id) {
                 if entry.manifest_path.exists() {
@@ -311,14 +307,14 @@ impl ModuleDiscovery {
                 }
             }
         }
-        
+
         Ok(manifests)
     }
 
     /// Compare trust levels
     fn trust_level_gte(level: &TrustLevel, min_level: &TrustLevel) -> bool {
         use TrustLevel::*;
-        
+
         let level_value = match level {
             Core => 5,
             Verified => 4,
@@ -326,7 +322,7 @@ impl ModuleDiscovery {
             Known => 2,
             Unknown => 1,
         };
-        
+
         let min_value = match min_level {
             Core => 5,
             Verified => 4,
@@ -334,17 +330,16 @@ impl ModuleDiscovery {
             Known => 2,
             Unknown => 1,
         };
-        
+
         level_value >= min_value
     }
 
     /// Load index from file
     fn load_index(path: &Path) -> Result<(HashMap<String, IndexEntry>, InvertedIndex)> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read index file")?;
-        let index: HashMap<String, IndexEntry> = serde_json::from_str(&content)
-            .context("Failed to parse index file")?;
-        
+        let content = fs::read_to_string(path).context("Failed to read index file")?;
+        let index: HashMap<String, IndexEntry> =
+            serde_json::from_str(&content).context("Failed to parse index file")?;
+
         // Rebuild inverted index
         let mut inverted = InvertedIndex::default();
         let mut discovery = ModuleDiscovery {
@@ -353,20 +348,19 @@ impl ModuleDiscovery {
             index_path: PathBuf::new(),
             inverted_index: inverted,
         };
-        
+
         for (id, entry) in &index {
             discovery.update_inverted_index(id, entry);
         }
-        
+
         Ok((index, discovery.inverted_index))
     }
 
     /// Save index to file
     fn save_index(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.index)
-            .context("Failed to serialize index")?;
-        fs::write(&self.index_path, content)
-            .context("Failed to write index file")?;
+        let content =
+            serde_json::to_string_pretty(&self.index).context("Failed to serialize index")?;
+        fs::write(&self.index_path, content).context("Failed to write index file")?;
         Ok(())
     }
 
@@ -376,13 +370,12 @@ impl ModuleDiscovery {
         self.inverted_index = InvertedIndex::default();
 
         // Scan store directory for modules
-        let entries = fs::read_dir(&self.store_root)
-            .context("Failed to read store directory")?;
+        let entries = fs::read_dir(&self.store_root).context("Failed to read store directory")?;
 
         for entry in entries {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_dir() {
                 let manifest_path = path.join("module.toml");
                 if manifest_path.exists() {

@@ -1,25 +1,25 @@
 //! Self-Documentation System for auto-dev-rs
-//! 
+//!
 //! This module provides automatic documentation generation capabilities,
 //! ensuring all self-modifications are properly documented.
 
 use anyhow::Result;
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
-pub mod extractor;
-pub mod generator;
-pub mod formatter;
 pub mod changelog;
 pub mod examples;
+pub mod extractor;
+pub mod formatter;
+pub mod generator;
 
-pub use extractor::DocExtractor;
-pub use generator::DocGenerator;
-pub use formatter::DocFormatter;
 pub use changelog::ChangelogBuilder;
 pub use examples::ExampleGenerator;
+pub use extractor::DocExtractor;
+pub use formatter::DocFormatter;
+pub use generator::DocGenerator;
 
 /// Main documentation system interface
 pub struct DocumentationSystem {
@@ -201,35 +201,25 @@ impl DocumentationSystem {
         let extractor = DocExtractor::new(project_root.clone());
         let generator = DocGenerator::new(config.clone());
         let changelog = ChangelogBuilder::new(config.changelog);
-        
-        Ok(Self {
-            project_root,
-            output_dir: config.output_dir,
-            extractor,
-            generator,
-            changelog,
-        })
+
+        Ok(Self { project_root, output_dir: config.output_dir, extractor, generator, changelog })
     }
 
     /// Generate documentation for entire project
     pub async fn generate_all(&self) -> Result<GenerationResult> {
         // Extract documentation from code
         let entries = self.extractor.extract_all(&self.project_root)?;
-        
+
         // Generate documentation files
         let files = self.generator.generate_docs(&entries, &self.output_dir)?;
-        
+
         // Update changelog
         self.changelog.update()?;
-        
+
         // Calculate statistics
         let stats = self.calculate_stats(&entries);
-        
-        Ok(GenerationResult {
-            files,
-            stats,
-            warnings: vec![],
-        })
+
+        Ok(GenerationResult { files, stats, warnings: vec![] })
     }
 
     /// Generate documentation for specific module
@@ -263,14 +253,13 @@ impl DocumentationSystem {
 
     fn calculate_stats(&self, entries: &[DocEntry]) -> DocStats {
         let modules = entries.len();
-        let functions = entries.iter()
+        let functions = entries
+            .iter()
             .flat_map(|e| &e.api_docs)
             .filter(|api| matches!(api.kind, ApiItemKind::Function | ApiItemKind::Method))
             .count();
-        let examples = entries.iter()
-            .flat_map(|e| &e.examples)
-            .count();
-        
+        let examples = entries.iter().flat_map(|e| &e.examples).count();
+
         DocStats {
             modules,
             functions,

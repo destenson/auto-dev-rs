@@ -74,11 +74,11 @@ pub enum Commands {
     /// Self-development integration control
     #[command(name = "self-dev", about = "Control self-development integration and orchestration")]
     SelfDev(super::commands::self_dev::SelfDevCommand),
-    
+
     /// Bootstrap self-development mode
     #[command(name = "bootstrap", about = "Initialize self-development mode with safety checks")]
     Bootstrap(super::commands::bootstrap::BootstrapCommand),
-    
+
     /// View and analyze self-improvement metrics
     #[command(name = "metrics", about = "Track and analyze self-improvement progress")]
     Metrics(super::commands::metrics::MetricsCommand),

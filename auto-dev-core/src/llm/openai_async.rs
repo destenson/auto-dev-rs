@@ -1,25 +1,25 @@
 //! Enhanced OpenAI provider using async-openai with streaming support
 
 use super::{
+    ClassificationResult,
     provider::*,
     token_manager::{ConversationManager, Message as TokenMessage, TokenManager},
-    ClassificationResult,
 };
 use anyhow::{Context, Result};
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
         ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
         CreateChatCompletionRequestArgs,
     },
-    Client,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tracing::{error, warn};
 
 /// Enhanced OpenAI provider with streaming and token management
@@ -37,13 +37,13 @@ impl AsyncOpenAIProvider {
         // Set up OpenAI client configuration
         let api_key = std::env::var(&config.api_key_env)
             .with_context(|| format!("OpenAI API key not found in {}", config.api_key_env))?;
-        
+
         let openai_config = OpenAIConfig::new()
             .with_api_key(api_key)
             .with_org_id(config.organization_id.clone().unwrap_or_default());
-        
+
         let client = Client::with_config(openai_config);
-        
+
         let model_tier = match config.model.as_str() {
             "gpt-3.5-turbo" | "gpt-3.5-turbo-16k" => ModelTier::Small,
             "gpt-4" | "gpt-4-turbo-preview" => ModelTier::Medium,
@@ -51,9 +51,9 @@ impl AsyncOpenAIProvider {
             "gpt-4o-mini" => ModelTier::Small,
             _ => ModelTier::Medium,
         };
-        
+
         let conversation = ConversationManager::new(config.model.clone());
-        
+
         Ok(Self {
             client,
             config,
@@ -62,7 +62,7 @@ impl AsyncOpenAIProvider {
             conversation: Arc::new(Mutex::new(conversation)),
         })
     }
-    
+
     /// Convert internal messages to OpenAI format
     fn convert_messages(&self, messages: Vec<TokenMessage>) -> Vec<ChatCompletionRequestMessage> {
         messages
@@ -91,7 +91,7 @@ impl AsyncOpenAIProvider {
             })
             .collect()
     }
-    
+
     /// Stream chat completion
     pub async fn stream_chat_completion(
         &self,
@@ -102,7 +102,7 @@ impl AsyncOpenAIProvider {
             let mut token_manager = self.token_manager.lock().await;
             let token_count = token_manager.count_message_tokens(&messages, &self.config.model)?;
             let limit = token_manager.get_model_limit(&self.config.model);
-            
+
             if token_count + self.config.max_tokens > limit {
                 warn!(
                     "Token count ({} + {}) exceeds limit ({}), trimming messages",
@@ -119,12 +119,12 @@ impl AsyncOpenAIProvider {
                 messages
             }
         };
-        
+
         let (tx, rx) = mpsc::channel(100);
-        
+
         // Convert messages to OpenAI format
         let openai_messages = self.convert_messages(messages_to_use);
-        
+
         // Create request
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.config.model)
@@ -133,10 +133,10 @@ impl AsyncOpenAIProvider {
             .max_tokens(self.config.max_tokens as u32)
             .stream(true)
             .build()?;
-        
+
         // Clone client for async task
         let client = self.client.clone();
-        
+
         // Spawn task to handle streaming
         tokio::spawn(async move {
             match client.chat().create_stream(request).await {
@@ -165,10 +165,10 @@ impl AsyncOpenAIProvider {
                 }
             }
         });
-        
+
         Ok(rx)
     }
-    
+
     /// Regular (non-streaming) chat completion
     async fn chat_completion(&self, messages: Vec<TokenMessage>) -> Result<String> {
         // Check and trim messages if needed
@@ -180,23 +180,19 @@ impl AsyncOpenAIProvider {
             true,
         )?;
         drop(token_manager);
-        
+
         let openai_messages = self.convert_messages(messages);
-        
+
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.config.model)
             .messages(openai_messages)
             .temperature(self.config.temperature)
             .max_tokens(self.config.max_tokens as u32)
             .build()?;
-        
-        let response = self
-            .client
-            .chat()
-            .create(request)
-            .await
-            .context("Failed to get OpenAI response")?;
-        
+
+        let response =
+            self.client.chat().create(request).await.context("Failed to get OpenAI response")?;
+
         response
             .choices
             .first()
@@ -210,15 +206,15 @@ impl LLMProvider for AsyncOpenAIProvider {
     fn name(&self) -> &str {
         "async-openai"
     }
-    
+
     fn tier(&self) -> ModelTier {
         self.model_tier
     }
-    
+
     async fn is_available(&self) -> bool {
         std::env::var(&self.config.api_key_env).is_ok()
     }
-    
+
     fn cost_per_1k_tokens(&self) -> f32 {
         match self.config.model.as_str() {
             "gpt-3.5-turbo" | "gpt-3.5-turbo-16k" => 0.002,
@@ -229,7 +225,7 @@ impl LLMProvider for AsyncOpenAIProvider {
             _ => 0.01,
         }
     }
-    
+
     async fn generate_code(
         &self,
         spec: &Specification,
@@ -241,7 +237,7 @@ impl LLMProvider for AsyncOpenAIProvider {
              that follows best practices and existing project patterns.",
             context.language
         );
-        
+
         let user_prompt = format!(
             "Project context:\n\
              - Language: {}\n\
@@ -258,20 +254,12 @@ impl LLMProvider for AsyncOpenAIProvider {
             spec.requirements.join("\n"),
             spec.examples.join("\n")
         );
-        
+
         let messages = vec![
-            TokenMessage {
-                role: "system".to_string(),
-                content: system_prompt,
-                name: None,
-            },
-            TokenMessage {
-                role: "user".to_string(),
-                content: user_prompt,
-                name: None,
-            },
+            TokenMessage { role: "system".to_string(), content: system_prompt, name: None },
+            TokenMessage { role: "user".to_string(), content: user_prompt, name: None },
         ];
-        
+
         // Use streaming if requested
         let response = if options.streaming {
             let mut rx = self.stream_chat_completion(messages).await?;
@@ -283,14 +271,14 @@ impl LLMProvider for AsyncOpenAIProvider {
         } else {
             self.chat_completion(messages).await?
         };
-        
+
         // Parse code blocks from response
         let files = extract_code_files(&response);
-        
+
         // Count tokens used
         let mut token_manager = self.token_manager.lock().await;
         let tokens_used = token_manager.count_tokens(&response, &self.config.model)?;
-        
+
         Ok(GeneratedCode {
             files,
             explanation: "Generated by OpenAI GPT".to_string(),
@@ -300,7 +288,7 @@ impl LLMProvider for AsyncOpenAIProvider {
             cached: false,
         })
     }
-    
+
     async fn explain_implementation(
         &self,
         code: &str,
@@ -317,18 +305,14 @@ impl LLMProvider for AsyncOpenAIProvider {
              4. Any trade-offs or limitations",
             code, spec.content
         );
-        
-        let messages = vec![TokenMessage {
-            role: "user".to_string(),
-            content: prompt,
-            name: None,
-        }];
-        
+
+        let messages = vec![TokenMessage { role: "user".to_string(), content: prompt, name: None }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Parse the response into structured explanation
         let sections: Vec<&str> = response.split("\n\n").collect();
-        
+
         Ok(Explanation {
             summary: sections.first().unwrap_or(&"").to_string(),
             details: sections.get(1).map(|s| vec![s.to_string()]).unwrap_or_default(),
@@ -336,14 +320,14 @@ impl LLMProvider for AsyncOpenAIProvider {
             trade_offs: sections.get(3).map(|s| vec![s.to_string()]).unwrap_or_default(),
         })
     }
-    
+
     async fn review_code(&self, code: &str, requirements: &[Requirement]) -> Result<ReviewResult> {
         let req_list = requirements
             .iter()
             .map(|r| format!("{}: {} (Priority: {:?})", r.id, r.description, r.priority))
             .collect::<Vec<_>>()
             .join("\n");
-        
+
         let prompt = format!(
             "Review this code against the requirements:\n\n\
              Code:\n```\n{}\n```\n\n\
@@ -352,20 +336,16 @@ impl LLMProvider for AsyncOpenAIProvider {
              Also provide general code quality feedback.",
             code, req_list
         );
-        
-        let messages = vec![TokenMessage {
-            role: "user".to_string(),
-            content: prompt,
-            name: None,
-        }];
-        
+
+        let messages = vec![TokenMessage { role: "user".to_string(), content: prompt, name: None }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Parse response to extract issues and suggestions
         let mut issues = Vec::new();
         let mut suggestions = Vec::new();
         let mut meets_requirements = true;
-        
+
         for line in response.lines() {
             let lower = line.to_lowercase();
             if lower.contains("issue:") || lower.contains("problem:") || lower.contains("error:") {
@@ -376,14 +356,14 @@ impl LLMProvider for AsyncOpenAIProvider {
                 } else {
                     IssueSeverity::Info
                 };
-                
+
                 issues.push(Issue {
                     severity,
                     message: line.to_string(),
                     line: None,
                     suggestion: None,
                 });
-                
+
                 if severity == IssueSeverity::Error {
                     meets_requirements = false;
                 }
@@ -393,26 +373,21 @@ impl LLMProvider for AsyncOpenAIProvider {
                 meets_requirements = false;
             }
         }
-        
-        Ok(ReviewResult {
-            issues,
-            suggestions,
-            meets_requirements,
-            confidence: 0.85,
-        })
+
+        Ok(ReviewResult { issues, suggestions, meets_requirements, confidence: 0.85 })
     }
-    
+
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
         let messages = vec![TokenMessage {
             role: "user".to_string(),
             content: question.to_string(),
             name: None,
         }];
-        
+
         let response = self.chat_completion(messages).await?;
         Ok(Some(response))
     }
-    
+
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         let prompt = format!(
             "Classify this content. Respond with only a JSON object:\n\
@@ -421,34 +396,27 @@ impl LLMProvider for AsyncOpenAIProvider {
              Content:\n{}",
             &content[..content.len().min(500)]
         );
-        
-        let messages = vec![TokenMessage {
-            role: "user".to_string(),
-            content: prompt,
-            name: None,
-        }];
-        
+
+        let messages = vec![TokenMessage { role: "user".to_string(), content: prompt, name: None }];
+
         let response = self.chat_completion(messages).await?;
-        
+
         // Extract JSON from response
         let json_start = response.find('{').unwrap_or(0);
         let json_end = response.rfind('}').map(|i| i + 1).unwrap_or(response.len());
         let json_str = &response[json_start..json_end];
-        
+
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
             return Ok(ClassificationResult {
                 is_code: parsed["is_code"].as_bool().unwrap_or(false),
                 is_documentation: parsed["is_doc"].as_bool().unwrap_or(false),
                 is_test: parsed["is_test"].as_bool().unwrap_or(false),
                 is_config: parsed["is_config"].as_bool().unwrap_or(false),
-                language: parsed["language"]
-                    .as_str()
-                    .filter(|s| *s != "null")
-                    .map(String::from),
+                language: parsed["language"].as_str().filter(|s| *s != "null").map(String::from),
                 confidence: 0.95,
             });
         }
-        
+
         // Fallback
         Ok(ClassificationResult {
             is_code: false,
@@ -459,7 +427,7 @@ impl LLMProvider for AsyncOpenAIProvider {
             confidence: 0.1,
         })
     }
-    
+
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         let prompt = format!(
             "Assess the complexity of this task. Respond with one of:\n\
@@ -472,16 +440,12 @@ impl LLMProvider for AsyncOpenAIProvider {
              Respond with just the complexity level and a brief reason.",
             task
         );
-        
-        let messages = vec![TokenMessage {
-            role: "user".to_string(),
-            content: prompt,
-            name: None,
-        }];
-        
+
+        let messages = vec![TokenMessage { role: "user".to_string(), content: prompt, name: None }];
+
         let response = self.chat_completion(messages).await?;
         let lower = response.to_lowercase();
-        
+
         let tier = if lower.contains("trivial") {
             ModelTier::NoLLM
         } else if lower.contains("simple") {
@@ -493,7 +457,7 @@ impl LLMProvider for AsyncOpenAIProvider {
         } else {
             ModelTier::Medium
         };
-        
+
         Ok(TaskComplexity {
             tier,
             reasoning: response,
@@ -534,7 +498,7 @@ fn extract_code_files(response: &str) -> Vec<GeneratedFile> {
     let mut current_code = String::new();
     let mut current_lang = String::new();
     let mut current_path = None;
-    
+
     for line in response.lines() {
         if line.starts_with("```") {
             if in_code_block {
@@ -576,19 +540,18 @@ fn extract_code_files(response: &str) -> Vec<GeneratedFile> {
             current_code.push('\n');
         }
     }
-    
+
     // Handle unclosed code block
     if in_code_block && !current_code.is_empty() {
         files.push(GeneratedFile {
-            path: current_path.unwrap_or_else(|| {
-                format!("generated.{}", lang_to_extension(&current_lang))
-            }),
+            path: current_path
+                .unwrap_or_else(|| format!("generated.{}", lang_to_extension(&current_lang))),
             content: current_code,
             language: current_lang,
             is_test: false,
         });
     }
-    
+
     files
 }
 
@@ -608,7 +571,7 @@ fn lang_to_extension(lang: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_extract_code_files() {
         let response = r#"
@@ -631,7 +594,7 @@ fn test_main() {
 }
 ```
 "#;
-        
+
         let files = extract_code_files(response);
         assert_eq!(files.len(), 2);
         assert_eq!(files[0].path, "src/main.rs");

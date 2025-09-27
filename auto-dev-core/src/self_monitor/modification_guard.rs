@@ -1,7 +1,7 @@
 #![allow(unused)]
-use std::path::{Path, PathBuf};
-use std::collections::HashSet;
 use anyhow::{Result, bail};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
 /// Guards against unsafe modifications to the codebase
@@ -17,7 +17,7 @@ pub struct ModificationGuard {
 impl ModificationGuard {
     pub fn new() -> Self {
         let mut critical_files = HashSet::new();
-        
+
         // Core files that should never be auto-modified
         critical_files.insert(PathBuf::from("Cargo.toml"));
         critical_files.insert(PathBuf::from("Cargo.lock"));
@@ -25,7 +25,7 @@ impl ModificationGuard {
         critical_files.insert(PathBuf::from(".gitignore"));
         critical_files.insert(PathBuf::from("LICENSE-MIT"));
         critical_files.insert(PathBuf::from("LICENSE-APACHE"));
-        
+
         Self {
             critical_files,
             validation_patterns: Self::default_validation_rules(),
@@ -34,27 +34,33 @@ impl ModificationGuard {
     }
 
     /// Check if a modification is safe to perform
-    pub fn validate_modification(&self, path: &Path, content: Option<&str>) -> Result<ValidationResult> {
+    pub fn validate_modification(
+        &self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<ValidationResult> {
         // Check if file is in critical list
         if self.is_critical_file(path) {
             return Ok(ValidationResult::Denied(
-                "Modification of critical file not allowed".to_string()
+                "Modification of critical file not allowed".to_string(),
             ));
         }
 
         // Check file extension
         if !self.is_allowed_extension(path) {
             return Ok(ValidationResult::Denied(
-                "File type not allowed for modification".to_string()
+                "File type not allowed for modification".to_string(),
             ));
         }
 
         // If content provided, perform content validation
         if let Some(content) = content {
             if content.len() > self.max_file_size {
-                return Ok(ValidationResult::Denied(
-                    format!("File size {} exceeds maximum {}", content.len(), self.max_file_size)
-                ));
+                return Ok(ValidationResult::Denied(format!(
+                    "File size {} exceeds maximum {}",
+                    content.len(),
+                    self.max_file_size
+                )));
             }
 
             // Check for dangerous patterns
@@ -66,9 +72,10 @@ impl ModificationGuard {
         // Apply validation rules
         for rule in &self.validation_patterns {
             if rule.matches(path) {
-                return Ok(ValidationResult::RequiresReview(
-                    format!("File matches validation pattern: {}", rule.name)
-                ));
+                return Ok(ValidationResult::RequiresReview(format!(
+                    "File matches validation pattern: {}",
+                    rule.name
+                )));
             }
         }
 
@@ -98,10 +105,7 @@ impl ModificationGuard {
     fn is_allowed_extension(&self, path: &Path) -> bool {
         if let Some(ext) = path.extension() {
             let ext = ext.to_string_lossy().to_lowercase();
-            matches!(
-                ext.as_str(),
-                "rs" | "toml" | "md" | "txt" | "json" | "yaml" | "yml"
-            )
+            matches!(ext.as_str(), "rs" | "toml" | "md" | "txt" | "json" | "yaml" | "yml")
         } else {
             false
         }
@@ -181,18 +185,18 @@ impl ValidationRule {
     /// Check if a path matches this rule's pattern
     fn matches(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
-        
+
         // Simple glob-like pattern matching
         if self.pattern.starts_with("**") {
             let suffix = &self.pattern[2..];
             return path_str.contains(suffix);
         }
-        
+
         if self.pattern.starts_with("*") {
             let suffix = &self.pattern[1..];
             return path_str.ends_with(suffix);
         }
-        
+
         path_str.contains(&self.pattern)
     }
 }
@@ -229,7 +233,7 @@ mod tests {
     #[test]
     fn test_critical_file_detection() {
         let guard = ModificationGuard::new();
-        
+
         assert!(guard.is_critical_file(&PathBuf::from("Cargo.toml")));
         assert!(guard.is_critical_file(&PathBuf::from("src/main.rs")));
         assert!(guard.is_critical_file(&PathBuf::from("src/lib.rs")));
@@ -239,7 +243,7 @@ mod tests {
     #[test]
     fn test_allowed_extensions() {
         let guard = ModificationGuard::new();
-        
+
         assert!(guard.is_allowed_extension(&PathBuf::from("file.rs")));
         assert!(guard.is_allowed_extension(&PathBuf::from("config.toml")));
         assert!(guard.is_allowed_extension(&PathBuf::from("README.md")));
@@ -250,13 +254,13 @@ mod tests {
     #[test]
     fn test_dangerous_pattern_detection() {
         let guard = ModificationGuard::new();
-        
+
         let unsafe_code = "unsafe { ptr::write(ptr, value); }";
         assert!(guard.detect_dangerous_patterns(unsafe_code).is_some());
-        
+
         let delete_code = "std::fs::remove_dir_all(&path)?;";
         assert!(guard.detect_dangerous_patterns(delete_code).is_some());
-        
+
         let safe_code = "let result = calculate_sum(a, b);";
         assert!(guard.detect_dangerous_patterns(safe_code).is_none());
     }
@@ -268,7 +272,7 @@ mod tests {
             pattern: "**/tests/**".to_string(),
             requires_human_review: false,
         };
-        
+
         assert!(rule.matches(&PathBuf::from("src/tests/unit.rs")));
         assert!(rule.matches(&PathBuf::from("module/tests/integration.rs")));
         assert!(!rule.matches(&PathBuf::from("src/main.rs")));

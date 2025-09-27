@@ -1,18 +1,18 @@
 #![allow(unused)]
-use std::time::{Duration, Instant};
-use std::path::PathBuf;
-use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn, error};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use tracing::{debug, error, info, warn};
 
-use super::{SelfTestConfig, SelfTestError, TestReport};
-use super::sandbox_env::TestSandbox;
 use super::compatibility::CompatibilityChecker;
-use super::regression::RegressionSuite;
 use super::performance::PerformanceBenchmark;
+use super::regression::RegressionSuite;
 use super::safety::SafetyValidator;
+use super::sandbox_env::TestSandbox;
+use super::{SelfTestConfig, SelfTestError, TestReport};
 
 /// Main test orchestrator for self-testing
 pub struct SelfTestRunner {
@@ -28,7 +28,7 @@ pub struct SelfTestRunner {
 impl SelfTestRunner {
     pub async fn new(config: SelfTestConfig) -> Result<Self, SelfTestError> {
         let sandbox = TestSandbox::new(Default::default()).await?;
-        
+
         Ok(Self {
             config,
             sandbox,
@@ -39,20 +39,20 @@ impl SelfTestRunner {
             test_results: Vec::new(),
         })
     }
-    
+
     /// Run all configured test levels
     pub async fn run_all_tests(&mut self) -> Result<TestReport, SelfTestError> {
         info!("Starting self-test suite");
         let start = Instant::now();
-        
+
         self.test_results.clear();
-        
+
         for level in &self.config.test_levels.clone() {
             if self.config.fail_fast && self.has_failures() {
                 warn!("Stopping tests due to fail-fast mode");
                 break;
             }
-            
+
             match self.run_test_level(level).await {
                 Ok(results) => self.test_results.extend(results),
                 Err(e) => {
@@ -63,20 +63,22 @@ impl SelfTestRunner {
                 }
             }
         }
-        
+
         let duration = start.elapsed();
         let report = self.generate_report(duration).await?;
-        
-        info!("Self-test suite completed: {} passed, {} failed", 
-              report.passed, report.failed);
-        
+
+        info!("Self-test suite completed: {} passed, {} failed", report.passed, report.failed);
+
         Ok(report)
     }
-    
+
     /// Run tests for a specific level
-    pub async fn run_test_level(&mut self, level: &TestLevel) -> Result<Vec<TestResult>, SelfTestError> {
+    pub async fn run_test_level(
+        &mut self,
+        level: &TestLevel,
+    ) -> Result<Vec<TestResult>, SelfTestError> {
         info!("Running {:?} tests", level);
-        
+
         let results = match level {
             TestLevel::Syntax => self.run_syntax_tests().await?,
             TestLevel::Unit => self.run_unit_tests().await?,
@@ -87,19 +89,19 @@ impl SelfTestRunner {
             TestLevel::Safety => self.run_safety_tests().await?,
             TestLevel::EndToEnd => self.run_e2e_tests().await?,
         };
-        
+
         Ok(results)
     }
-    
+
     /// Test that modified code compiles
     async fn run_syntax_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running syntax tests");
-        
+
         let mut results = Vec::new();
-        
+
         // Run cargo check in sandbox
         let result = self.sandbox.run_command("cargo", &["check", "--all-targets"]).await?;
-        
+
         results.push(TestResult {
             name: "Syntax Check".to_string(),
             level: TestLevel::Syntax,
@@ -107,19 +109,19 @@ impl SelfTestRunner {
             duration_ms: result.duration_ms,
             message: result.output,
         });
-        
+
         Ok(results)
     }
-    
+
     /// Run unit tests
     async fn run_unit_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running unit tests");
-        
+
         let mut results = Vec::new();
-        
+
         // Run cargo test for unit tests
         let result = self.sandbox.run_command("cargo", &["test", "--lib"]).await?;
-        
+
         results.push(TestResult {
             name: "Unit Tests".to_string(),
             level: TestLevel::Unit,
@@ -127,19 +129,19 @@ impl SelfTestRunner {
             duration_ms: result.duration_ms,
             message: result.output,
         });
-        
+
         Ok(results)
     }
-    
+
     /// Run integration tests
     async fn run_integration_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running integration tests");
-        
+
         let mut results = Vec::new();
-        
+
         // Run integration tests
         let result = self.sandbox.run_command("cargo", &["test", "--test", "*"]).await?;
-        
+
         results.push(TestResult {
             name: "Integration Tests".to_string(),
             level: TestLevel::Integration,
@@ -147,17 +149,17 @@ impl SelfTestRunner {
             duration_ms: result.duration_ms,
             message: result.output,
         });
-        
+
         Ok(results)
     }
-    
+
     /// Check API compatibility
     async fn run_compatibility_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running compatibility tests");
-        
+
         let changes = self.compatibility_checker.check_interfaces(&self.sandbox).await?;
         let mut results = Vec::new();
-        
+
         for change in changes {
             results.push(TestResult {
                 name: format!("Compatibility: {}", change.interface_name),
@@ -167,7 +169,7 @@ impl SelfTestRunner {
                 message: change.description(),
             });
         }
-        
+
         if results.is_empty() {
             results.push(TestResult {
                 name: "No Interface Changes".to_string(),
@@ -177,17 +179,17 @@ impl SelfTestRunner {
                 message: "All interfaces remain compatible".to_string(),
             });
         }
-        
+
         Ok(results)
     }
-    
+
     /// Run regression test suite
     async fn run_regression_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running regression tests");
-        
+
         let test_cases = self.regression_suite.get_test_cases();
         let mut results = Vec::new();
-        
+
         for test_case in test_cases {
             let result = self.regression_suite.run_test(&test_case, &mut self.sandbox).await?;
             results.push(TestResult {
@@ -198,21 +200,21 @@ impl SelfTestRunner {
                 message: result.message,
             });
         }
-        
+
         Ok(results)
     }
-    
+
     /// Run performance benchmarks
     async fn run_performance_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running performance tests");
-        
+
         let benchmarks = self.performance_benchmark.run_benchmarks(&mut self.sandbox).await?;
         let mut results = Vec::new();
-        
+
         for benchmark in benchmarks {
             let baseline = self.performance_benchmark.get_baseline(&benchmark.name);
             let degradation = baseline.map(|b| benchmark.is_degraded_from(b)).unwrap_or(false);
-            
+
             results.push(TestResult {
                 name: benchmark.name.clone(),
                 level: TestLevel::Performance,
@@ -221,17 +223,17 @@ impl SelfTestRunner {
                 message: benchmark.summary(),
             });
         }
-        
+
         Ok(results)
     }
-    
+
     /// Validate safety constraints
     async fn run_safety_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running safety tests");
-        
+
         let checks = self.safety_validator.validate(&self.sandbox).await?;
         let mut results = Vec::new();
-        
+
         for check in checks {
             results.push(TestResult {
                 name: check.name.clone(),
@@ -241,22 +243,19 @@ impl SelfTestRunner {
                 message: check.message,
             });
         }
-        
+
         Ok(results)
     }
-    
+
     /// Run end-to-end system tests
     async fn run_e2e_tests(&mut self) -> Result<Vec<TestResult>, SelfTestError> {
         debug!("Running end-to-end tests");
-        
+
         let mut results = Vec::new();
-        
+
         // Test complete workflow
-        let result = self.sandbox.run_command(
-            "cargo",
-            &["run", "--", "test-workflow"]
-        ).await?;
-        
+        let result = self.sandbox.run_command("cargo", &["run", "--", "test-workflow"]).await?;
+
         results.push(TestResult {
             name: "End-to-End Workflow".to_string(),
             level: TestLevel::EndToEnd,
@@ -264,27 +263,27 @@ impl SelfTestRunner {
             duration_ms: result.duration_ms,
             message: result.output,
         });
-        
+
         Ok(results)
     }
-    
+
     /// Generate test report
     async fn generate_report(&self, duration: Duration) -> Result<TestReport, SelfTestError> {
         let total_tests = self.test_results.len();
         let passed = self.test_results.iter().filter(|r| r.status == TestStatus::Passed).count();
         let failed = self.test_results.iter().filter(|r| r.status == TestStatus::Failed).count();
         let skipped = self.test_results.iter().filter(|r| r.status == TestStatus::Skipped).count();
-        
+
         let mut recommendations = Vec::new();
-        
+
         if failed > 0 {
             recommendations.push("Fix failing tests before deploying changes".to_string());
         }
-        
+
         if self.get_coverage().await < self.config.coverage_threshold {
             recommendations.push("Increase test coverage to meet threshold".to_string());
         }
-        
+
         Ok(TestReport {
             total_tests,
             passed,
@@ -296,32 +295,29 @@ impl SelfTestRunner {
             recommendations,
         })
     }
-    
+
     /// Check if any tests have failed
     fn has_failures(&self) -> bool {
         self.test_results.iter().any(|r| r.status == TestStatus::Failed)
     }
-    
+
     /// Get test coverage percentage
     async fn get_coverage(&self) -> f32 {
         // In a real implementation, this would calculate actual code coverage
         0.85
     }
-    
+
     /// Run tests for a specific module
     pub async fn test_module(&mut self, module_name: &str) -> Result<TestReport, SelfTestError> {
         info!("Testing module: {}", module_name);
-        
+
         // Filter tests for specific module
         let start = Instant::now();
         self.test_results.clear();
-        
+
         // Run module-specific tests
-        let result = self.sandbox.run_command(
-            "cargo",
-            &["test", "--package", module_name]
-        ).await?;
-        
+        let result = self.sandbox.run_command("cargo", &["test", "--package", module_name]).await?;
+
         self.test_results.push(TestResult {
             name: format!("Module: {}", module_name),
             level: TestLevel::Unit,
@@ -329,7 +325,7 @@ impl SelfTestRunner {
             duration_ms: result.duration_ms,
             message: result.output,
         });
-        
+
         self.generate_report(start.elapsed()).await
     }
 }

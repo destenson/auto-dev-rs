@@ -45,7 +45,7 @@ impl BuildProfile {
             }
         }
     }
-    
+
     /// Get the target directory for this profile
     pub fn target_dir(&self) -> PathBuf {
         // First try compile-time CARGO_TARGET_DIR
@@ -53,19 +53,18 @@ impl BuildProfile {
             compile_time_target.to_string()
         } else {
             // Fall back to runtime environment variable
-            std::env::var("CARGO_TARGET_DIR")
-                .unwrap_or_else(|_| "target".to_string())
+            std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string())
         };
-        
+
         let profile_dir = match self {
             BuildProfile::Debug => "debug",
             BuildProfile::Release => "release",
             BuildProfile::Custom(name) => name.as_str(),
         };
-        
+
         PathBuf::from(base_target).join(profile_dir)
     }
-    
+
     /// Get compile-time target directory information
     pub fn compile_time_target_dir() -> PathBuf {
         // CARGO_TARGET_DIR is set at build time if specified
@@ -74,76 +73,68 @@ impl BuildProfile {
             // OUT_DIR is like: target/{profile}/build/{pkg}-{hash}/out
             let path = PathBuf::from(out_dir);
             // Navigate up to the profile directory
-            if let Some(target_profile_dir) = path.parent() // out -> {pkg}-{hash}
+            if let Some(target_profile_dir) = path
+                .parent() // out -> {pkg}-{hash}
                 .and_then(|p| p.parent()) // {pkg}-{hash} -> build
-                .and_then(|p| p.parent()) // build -> {profile}
+                .and_then(|p| p.parent())
+            // build -> {profile}
             {
                 return target_profile_dir.to_path_buf();
             }
         }
-        
+
         // Fallback to standard location with detected profile
         PathBuf::from("target").join(Self::compile_time_profile_dir())
     }
-    
+
     /// Get the compile-time profile directory name
     fn compile_time_profile_dir() -> &'static str {
         // PROFILE is set by Cargo for build scripts (build.rs)
         // For regular compilation, we use cfg!(debug_assertions)
-        if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        }
+        if cfg!(debug_assertions) { "debug" } else { "release" }
     }
-    
+
     /// Get the Cargo profile name from environment
     pub fn cargo_profile_from_env() -> Option<String> {
         // CARGO_BUILD_PROFILE is available in build scripts
         // PROFILE is sometimes available
-        std::env::var("CARGO_BUILD_PROFILE")
-            .or_else(|_| std::env::var("PROFILE"))
-            .ok()
+        std::env::var("CARGO_BUILD_PROFILE").or_else(|_| std::env::var("PROFILE")).ok()
     }
-    
+
     /// Detect build profile from environment
     pub fn from_env() -> Self {
         // Check for common environment variables
         if std::env::var("PROFILE").as_deref() == Ok("release") {
             return BuildProfile::Release;
         }
-        
+
         if std::env::var("AUTO_DEV_BUILD_PROFILE").as_deref() == Ok("release") {
             return BuildProfile::Release;
         }
-        
+
         // Check if we're in CI/CD environment
         if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
             return BuildProfile::Release;
         }
-        
+
         // Default to debug for development
         BuildProfile::Debug
     }
-    
+
     /// Detect the build profile of the current running executable
     pub fn from_current_exe() -> Self {
         // Check if we were compiled with debug assertions
         // This is the most reliable way to detect debug vs release
-        if cfg!(debug_assertions) {
-            BuildProfile::Debug
-        } else {
-            BuildProfile::Release
-        }
+        if cfg!(debug_assertions) { BuildProfile::Debug } else { BuildProfile::Release }
     }
-    
+
     /// Get the actual Cargo target directory at runtime
     pub fn get_target_dir() -> PathBuf {
         // First check CARGO_TARGET_DIR environment variable
         if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
             return PathBuf::from(target_dir);
         }
-        
+
         // Try to find it from current executable path
         if let Ok(exe_path) = std::env::current_exe() {
             // Walk up the path to find "target" directory
@@ -155,18 +146,18 @@ impl BuildProfile {
                 path = parent;
             }
         }
-        
+
         // Default to "target" in current directory
         PathBuf::from("target")
     }
-    
+
     /// Get the Cargo manifest directory (where Cargo.toml is)
     pub fn get_manifest_dir() -> Option<PathBuf> {
         // CARGO_MANIFEST_DIR is set during compilation
         if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
             return Some(PathBuf::from(manifest_dir));
         }
-        
+
         // Try to find it at runtime by looking for Cargo.toml
         let mut current_dir = std::env::current_dir().ok()?;
         loop {
@@ -174,21 +165,21 @@ impl BuildProfile {
             if cargo_toml.exists() {
                 return Some(current_dir);
             }
-            
+
             // Move up one directory
             if !current_dir.pop() {
                 break;
             }
         }
-        
+
         None
     }
-    
+
     /// Detect profile from executable path
     fn from_current_exe_path() -> Self {
         if let Ok(exe_path) = std::env::current_exe() {
             let exe_str = exe_path.to_string_lossy();
-            
+
             // Check for explicit profile directories
             if exe_str.contains("/release/") || exe_str.contains("\\release\\") {
                 return BuildProfile::Release;
@@ -197,13 +188,9 @@ impl BuildProfile {
                 return BuildProfile::Debug;
             }
         }
-        
+
         // Fall back to compile-time debug_assertions
-        if cfg!(debug_assertions) {
-            BuildProfile::Debug
-        } else {
-            BuildProfile::Release
-        }
+        if cfg!(debug_assertions) { BuildProfile::Debug } else { BuildProfile::Release }
     }
 }
 

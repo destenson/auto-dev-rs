@@ -74,11 +74,7 @@ impl MockLLMProvider {
                 message: Message::assistant(content),
                 finish_reason: Some(FinishReason::Stop),
             }],
-            usage: Some(Usage {
-                prompt_tokens: 10,
-                completion_tokens: 20,
-                total_tokens: 30,
-            }),
+            usage: Some(Usage { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }),
             created: 1234567890,
         }
     }
@@ -128,10 +124,7 @@ impl LLMProvider for MockLLMProvider {
         options: CompletionOptions,
     ) -> Result<CompletionResponse, LLMError> {
         // Store call in history
-        self.call_history
-            .lock()
-            .unwrap()
-            .push((messages.clone(), options.clone()));
+        self.call_history.lock().unwrap().push((messages.clone(), options.clone()));
 
         // Check for errors first
         if let Some(error) = self.errors.lock().unwrap().pop() {
@@ -167,10 +160,7 @@ impl LLMProvider for MockLLMProvider {
         options: CompletionOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
         // Store call in history
-        self.call_history
-            .lock()
-            .unwrap()
-            .push((messages, options));
+        self.call_history.lock().unwrap().push((messages, options));
 
         // Check for errors first
         if let Some(error) = self.errors.lock().unwrap().pop() {

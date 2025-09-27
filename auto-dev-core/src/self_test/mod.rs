@@ -1,21 +1,21 @@
 //! Self-testing framework for auto-dev-rs
-//! 
+//!
 //! Provides comprehensive testing capabilities to validate self-modifications
 //! before they are applied, ensuring system stability during self-development.
 
-pub mod test_runner;
-pub mod sandbox_env;
 pub mod compatibility;
-pub mod regression;
 pub mod performance;
+pub mod regression;
 pub mod safety;
+pub mod sandbox_env;
+pub mod test_runner;
 
-pub use test_runner::{SelfTestRunner, TestConfig, TestResult, TestLevel};
-pub use sandbox_env::{TestSandbox, SandboxConfig};
 pub use compatibility::{CompatibilityChecker, InterfaceChange};
+pub use performance::{BenchmarkResult, PerformanceBenchmark};
 pub use regression::{RegressionSuite, RegressionTest};
-pub use performance::{PerformanceBenchmark, BenchmarkResult};
-pub use safety::{SafetyValidator, SafetyCheck};
+pub use safety::{SafetyCheck, SafetyValidator};
+pub use sandbox_env::{SandboxConfig, TestSandbox};
+pub use test_runner::{SelfTestRunner, TestConfig, TestLevel, TestResult};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,22 +24,22 @@ use thiserror::Error;
 pub enum SelfTestError {
     #[error("Test execution failed: {0}")]
     Execution(String),
-    
+
     #[error("Sandbox error: {0}")]
     Sandbox(String),
-    
+
     #[error("Compatibility check failed: {0}")]
     Compatibility(String),
-    
+
     #[error("Regression detected: {0}")]
     Regression(String),
-    
+
     #[error("Performance degradation: {0}")]
     Performance(String),
-    
+
     #[error("Safety violation: {0}")]
     Safety(String),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
 }
@@ -98,13 +98,9 @@ pub struct TestReport {
 
 impl TestReport {
     pub fn success_rate(&self) -> f32 {
-        if self.total_tests == 0 {
-            0.0
-        } else {
-            self.passed as f32 / self.total_tests as f32
-        }
+        if self.total_tests == 0 { 0.0 } else { self.passed as f32 / self.total_tests as f32 }
     }
-    
+
     pub fn is_passing(&self) -> bool {
         self.failed == 0 && self.passed > 0
     }

@@ -103,19 +103,14 @@ pub struct CapabilitySet {
 impl CapabilitySet {
     /// Create an empty capability set
     pub fn new() -> Self {
-        Self {
-            capabilities: HashSet::new(),
-            inherit_from: None,
-        }
+        Self { capabilities: HashSet::new(), inherit_from: None }
     }
 
     /// Create a capability set with default minimal permissions
     pub fn minimal() -> Self {
         let mut set = Self::new();
         // Only allow getting time and basic memory allocation
-        set.add(Capability::System(SystemCapability {
-            operation: SystemOperation::GetTime,
-        }));
+        set.add(Capability::System(SystemCapability { operation: SystemOperation::GetTime }));
         set.add(Capability::Resource(ResourceCapability {
             resource_type: ResourceType::Memory,
             limit: 10 * 1024 * 1024, // 10MB
@@ -126,20 +121,16 @@ impl CapabilitySet {
     /// Create a capability set from a string specification
     pub fn from_spec(spec: &str) -> Result<Capability> {
         let parts: Vec<&str> = spec.split(':').collect();
-        
+
         match parts.as_slice() {
-            ["filesystem", "read", path] => {
-                Ok(Capability::FileSystem(FileSystemCapability {
-                    operation: FileOperation::Read,
-                    path: PathBuf::from(path),
-                }))
-            }
-            ["filesystem", "write", path] => {
-                Ok(Capability::FileSystem(FileSystemCapability {
-                    operation: FileOperation::Write,
-                    path: PathBuf::from(path),
-                }))
-            }
+            ["filesystem", "read", path] => Ok(Capability::FileSystem(FileSystemCapability {
+                operation: FileOperation::Read,
+                path: PathBuf::from(path),
+            })),
+            ["filesystem", "write", path] => Ok(Capability::FileSystem(FileSystemCapability {
+                operation: FileOperation::Write,
+                path: PathBuf::from(path),
+            })),
             ["network", protocol, host] => {
                 let protocol = match *protocol {
                     "http" => NetworkProtocol::Http,
@@ -168,12 +159,10 @@ impl CapabilitySet {
                     limit,
                 }))
             }
-            ["module", "call", target] => {
-                Ok(Capability::Module(ModuleCapability {
-                    operation: ModuleOperation::Call,
-                    target_module: target.to_string(),
-                }))
-            }
+            ["module", "call", target] => Ok(Capability::Module(ModuleCapability {
+                operation: ModuleOperation::Call,
+                target_module: target.to_string(),
+            })),
             _ => Err(anyhow::anyhow!("Invalid capability specification: {}", spec)),
         }
     }
@@ -202,12 +191,8 @@ impl CapabilitySet {
 
         // Check for broader permissions
         match requested {
-            Capability::FileSystem(fs_cap) => {
-                self.check_filesystem_permission(fs_cap)
-            }
-            Capability::Network(net_cap) => {
-                self.check_network_permission(net_cap)
-            }
+            Capability::FileSystem(fs_cap) => self.check_filesystem_permission(fs_cap),
+            Capability::Network(net_cap) => self.check_network_permission(net_cap),
             _ => false,
         }
     }
@@ -281,7 +266,7 @@ impl CapabilityManager {
 /// Parse size strings like "100MB", "1GB", etc.
 fn parse_size(size_str: &str) -> Result<u64> {
     let size_str = size_str.to_uppercase();
-    
+
     if let Some(mb_str) = size_str.strip_suffix("MB") {
         let num = mb_str.parse::<u64>()?;
         Ok(num * 1024 * 1024)
@@ -293,8 +278,7 @@ fn parse_size(size_str: &str) -> Result<u64> {
         Ok(num * 1024)
     } else {
         // Assume bytes if no suffix
-        size_str.parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("Invalid size specification: {}", e))
+        size_str.parse::<u64>().map_err(|e| anyhow::anyhow!("Invalid size specification: {}", e))
     }
 }
 

@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::fs as async_fs;
 
-use crate::modules::store::manifest::{ModuleManifest, ManifestParser};
+use crate::modules::store::manifest::{ManifestParser, ModuleManifest};
 
 /// Storage layout version
 const STORAGE_VERSION: &str = "1.0";
@@ -57,24 +57,21 @@ impl StorageManager {
         }
 
         let index_path = store_root.join("modules.index");
-        let index = if index_path.exists() {
-            Self::load_index(&index_path)?
-        } else {
-            HashMap::new()
-        };
+        let index =
+            if index_path.exists() { Self::load_index(&index_path)? } else { HashMap::new() };
 
-        Ok(Self {
-            store_root,
-            index,
-            index_path,
-        })
+        Ok(Self { store_root, index, index_path })
     }
 
     /// Store a module
-    pub async fn store_module(&mut self, module_path: &PathBuf, manifest: &ModuleManifest) -> Result<String> {
+    pub async fn store_module(
+        &mut self,
+        module_path: &PathBuf,
+        manifest: &ModuleManifest,
+    ) -> Result<String> {
         // Generate module ID
         let module_id = Self::generate_module_id(&manifest.module.name, &manifest.module.version);
-        
+
         // Check if module already exists
         if self.index.contains_key(&module_id) {
             anyhow::bail!("Module already exists: {}", module_id);
@@ -83,11 +80,11 @@ impl StorageManager {
         // Create module directory in store
         let store_path = self.store_root.join(&module_id);
         if store_path.exists() {
-            async_fs::remove_dir_all(&store_path).await
+            async_fs::remove_dir_all(&store_path)
+                .await
                 .context("Failed to remove existing module directory")?;
         }
-        async_fs::create_dir_all(&store_path).await
-            .context("Failed to create module directory")?;
+        async_fs::create_dir_all(&store_path).await.context("Failed to create module directory")?;
 
         // Copy module files
         self.copy_module_files(module_path, &store_path).await?;
@@ -113,7 +110,7 @@ impl StorageManager {
 
         // Add to index
         self.index.insert(module_id.clone(), info);
-        
+
         // Save index
         self.save_index()?;
 
@@ -122,7 +119,9 @@ impl StorageManager {
 
     /// Get module manifest
     pub fn get_manifest(&self, module_id: &str) -> Result<ModuleManifest> {
-        let info = self.index.get(module_id)
+        let info = self
+            .index
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         let manifest_path = self.store_root.join(&info.path).join("module.toml");
@@ -131,7 +130,9 @@ impl StorageManager {
 
     /// Get module storage path
     pub fn get_module_path(&self, module_id: &str) -> Result<PathBuf> {
-        let info = self.index.get(module_id)
+        let info = self
+            .index
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         Ok(self.store_root.join(&info.path))
@@ -139,12 +140,15 @@ impl StorageManager {
 
     /// Remove a module
     pub async fn remove_module(&mut self, module_id: &str) -> Result<()> {
-        let info = self.index.remove(module_id)
+        let info = self
+            .index
+            .remove(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not found: {}", module_id))?;
 
         let module_path = self.store_root.join(&info.path);
         if module_path.exists() {
-            async_fs::remove_dir_all(&module_path).await
+            async_fs::remove_dir_all(&module_path)
+                .await
                 .context("Failed to remove module directory")?;
         }
 
@@ -165,7 +169,7 @@ impl StorageManager {
             info.last_accessed = Some(chrono::Utc::now());
             // Note: We should save the index here, but doing it on every access might be expensive
         }
-        
+
         self.index.get(module_id)
     }
 
@@ -188,14 +192,15 @@ impl StorageManager {
             let target = dst.join(relative);
 
             if entry.file_type().is_dir() {
-                async_fs::create_dir_all(&target).await
-                    .context("Failed to create directory")?;
+                async_fs::create_dir_all(&target).await.context("Failed to create directory")?;
             } else {
                 if let Some(parent) = target.parent() {
-                    async_fs::create_dir_all(parent).await
+                    async_fs::create_dir_all(parent)
+                        .await
                         .context("Failed to create parent directory")?;
                 }
-                async_fs::copy(path, &target).await
+                async_fs::copy(path, &target)
+                    .await
                     .with_context(|| format!("Failed to copy file: {:?}", path))?;
             }
         }
@@ -204,7 +209,7 @@ impl StorageManager {
 
     /// Calculate SHA256 checksum of module
     async fn calculate_checksum(&self, path: &Path) -> Result<String> {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
 
         for entry in walkdir::WalkDir::new(path) {
@@ -232,18 +237,15 @@ impl StorageManager {
 
     /// Load index from file
     fn load_index(path: &Path) -> Result<HashMap<String, ModuleStorageInfo>> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read index file")?;
-        serde_json::from_str(&content)
-            .context("Failed to parse index file")
+        let content = fs::read_to_string(path).context("Failed to read index file")?;
+        serde_json::from_str(&content).context("Failed to parse index file")
     }
 
     /// Save index to file
     fn save_index(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.index)
-            .context("Failed to serialize index")?;
-        fs::write(&self.index_path, content)
-            .context("Failed to write index file")?;
+        let content =
+            serde_json::to_string_pretty(&self.index).context("Failed to serialize index")?;
+        fs::write(&self.index_path, content).context("Failed to write index file")?;
         Ok(())
     }
 
@@ -251,13 +253,12 @@ impl StorageManager {
     pub async fn cleanup_orphaned(&mut self) -> Result<Vec<String>> {
         let mut orphaned = Vec::new();
 
-        let entries = fs::read_dir(&self.store_root)
-            .context("Failed to read store directory")?;
+        let entries = fs::read_dir(&self.store_root).context("Failed to read store directory")?;
 
         for entry in entries {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
-            
+
             // Skip index file and other non-module files
             if name.ends_with(".index") || name.starts_with('.') {
                 continue;
@@ -266,11 +267,12 @@ impl StorageManager {
             // Check if module is in index
             if !self.index.contains_key(&name) {
                 orphaned.push(name.clone());
-                
+
                 // Remove orphaned directory
                 let path = entry.path();
                 if path.is_dir() {
-                    async_fs::remove_dir_all(&path).await
+                    async_fs::remove_dir_all(&path)
+                        .await
                         .context("Failed to remove orphaned module")?;
                 }
             }
@@ -283,18 +285,9 @@ impl StorageManager {
     pub fn get_stats(&self) -> StorageStats {
         let total_modules = self.index.len();
         let total_size: u64 = self.index.values().map(|info| info.size).sum();
-        let avg_size = if total_modules > 0 {
-            total_size / total_modules as u64
-        } else {
-            0
-        };
+        let avg_size = if total_modules > 0 { total_size / total_modules as u64 } else { 0 };
 
-        StorageStats {
-            total_modules,
-            total_size,
-            avg_size,
-            store_path: self.store_root.clone(),
-        }
+        StorageStats { total_modules, total_size, avg_size, store_path: self.store_root.clone() }
     }
 }
 

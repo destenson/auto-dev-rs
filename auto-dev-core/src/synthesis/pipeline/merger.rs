@@ -2,8 +2,8 @@
 //! Code merger for integrating generated code with existing code
 
 use super::{PipelineContext, PipelineStage};
-use crate::{debug, info};
 use crate::synthesis::{Result, SynthesisError};
+use crate::{debug, info};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs;

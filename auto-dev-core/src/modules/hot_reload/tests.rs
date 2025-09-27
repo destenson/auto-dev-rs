@@ -4,12 +4,14 @@
 mod tests {
     use super::super::*;
     use crate::modules::{
-        interface::{ModuleCapability, ModuleInterface, ModuleMetadata, ModuleState, ModuleVersion},
-        loader::{ModuleFormat, ModuleLoader, LoadedModule},
+        ModuleSystem,
+        interface::{
+            ModuleCapability, ModuleInterface, ModuleMetadata, ModuleState, ModuleVersion,
+        },
+        loader::{LoadedModule, ModuleFormat, ModuleLoader},
         messages::{Message, MessageBus, MessageType},
         registry::ModuleRegistry,
         runtime::{ExecutionContext, ModuleRuntime},
-        ModuleSystem,
     };
     use anyhow::Result;
     use async_trait::async_trait;
@@ -76,7 +78,7 @@ mod tests {
                 "input": input,
                 "execution_count": *count,
                 "module": self.metadata.name,
-                "version": format!("{}.{}.{}", 
+                "version": format!("{}.{}.{}",
                     self.metadata.version.major,
                     self.metadata.version.minor,
                     self.metadata.version.patch
@@ -128,19 +130,19 @@ mod tests {
     #[tokio::test]
     async fn test_state_manager_snapshot() {
         let state_manager = StateManager::new();
-        
+
         let mut state = ModuleState::new(ModuleVersion::new(1, 0, 0));
         state.set("counter".to_string(), Value::Number(42.into()));
-        state.set("config".to_string(), serde_json::json!({
-            "enabled": true,
-            "threshold": 100
-        }));
+        state.set(
+            "config".to_string(),
+            serde_json::json!({
+                "enabled": true,
+                "threshold": 100
+            }),
+        );
 
         // Create snapshot
-        let snapshot = state_manager
-            .create_snapshot("test_module", &state)
-            .await
-            .unwrap();
+        let snapshot = state_manager.create_snapshot("test_module", &state).await.unwrap();
 
         assert_eq!(snapshot.module_id, "test_module");
         assert_eq!(snapshot.state.get("counter"), Some(&Value::Number(42.into())));
@@ -158,7 +160,7 @@ mod tests {
         let v2 = StateVersion::new(2, 0, 0);
 
         assert!(v1.is_compatible_with(&v1_1)); // Minor version compatible
-        assert!(!v1.is_compatible_with(&v2));  // Major version incompatible
+        assert!(!v1.is_compatible_with(&v2)); // Major version incompatible
     }
 
     #[tokio::test]
@@ -167,14 +169,14 @@ mod tests {
 
         // Start draining
         controller.start_draining("test_module").await.unwrap();
-        
+
         // Should not be drained yet if there are active requests
         controller.track_request("test_module").await;
         assert!(!controller.is_drained("test_module").await);
 
         // Complete request
         controller.complete_request("test_module").await;
-        
+
         // Now should be drained
         assert!(controller.is_drained("test_module").await);
     }
@@ -220,12 +222,14 @@ mod tests {
         let rule = MigrationRule {
             from_version: from_version.clone(),
             to_version: to_version.clone(),
-            field_mappings: HashMap::from([
-                ("old_field".to_string(), FieldMapping::Rename("new_field".to_string())),
-            ]),
-            new_fields: HashMap::from([
-                ("added_field".to_string(), Value::String("default".to_string())),
-            ]),
+            field_mappings: HashMap::from([(
+                "old_field".to_string(),
+                FieldMapping::Rename("new_field".to_string()),
+            )]),
+            new_fields: HashMap::from([(
+                "added_field".to_string(),
+                Value::String("default".to_string()),
+            )]),
             removed_fields: vec![],
             custom_transform: None,
         };
@@ -233,18 +237,12 @@ mod tests {
         engine.register_rule(rule).await;
 
         // Perform migration
-        let migrated = engine
-            .migrate_state(old_state, from_version, to_version)
-            .await
-            .unwrap();
+        let migrated = engine.migrate_state(old_state, from_version, to_version).await.unwrap();
 
         // Check migration results
         assert!(migrated.data.contains_key("new_field"));
         assert!(!migrated.data.contains_key("old_field"));
-        assert_eq!(
-            migrated.data.get("added_field"),
-            Some(&Value::String("default".to_string()))
-        );
+        assert_eq!(migrated.data.get("added_field"), Some(&Value::String("default".to_string())));
     }
 
     #[tokio::test]
@@ -282,13 +280,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_reload_prevention() {
-        let config = HotReloadConfig {
-            allow_concurrent_reloads: false,
-            ..Default::default()
-        };
+        let config = HotReloadConfig { allow_concurrent_reloads: false, ..Default::default() };
 
         let coordinator = Arc::new(ReloadCoordinator::new(config));
-        
+
         // Simulate concurrent reload attempts
         let coord1 = coordinator.clone();
         let coord2 = coordinator.clone();
@@ -305,16 +300,16 @@ mod tests {
         // Create initial state
         let mut initial_state = ModuleState::new(ModuleVersion::new(1, 0, 0));
         initial_state.set("counter".to_string(), Value::Number(100.into()));
-        initial_state.set("data".to_string(), serde_json::json!({
-            "items": [1, 2, 3],
-            "config": {"enabled": true}
-        }));
+        initial_state.set(
+            "data".to_string(),
+            serde_json::json!({
+                "items": [1, 2, 3],
+                "config": {"enabled": true}
+            }),
+        );
 
         // Create snapshot
-        let snapshot = state_manager
-            .create_snapshot("test_module", &initial_state)
-            .await
-            .unwrap();
+        let snapshot = state_manager.create_snapshot("test_module", &initial_state).await.unwrap();
 
         // Simulate state change
         let mut new_state = ModuleState::new(ModuleVersion::new(1, 1, 0));
@@ -348,7 +343,7 @@ mod tests {
                 serde_json::json!({"index": i}),
             );
             messages.push(msg.clone());
-            
+
             let buffered = controller.route_message(module_id, msg).await.unwrap();
             assert!(buffered);
         }
@@ -391,7 +386,7 @@ mod tests {
         };
 
         let coordinator = ReloadCoordinator::new(config);
-        
+
         // Test that reload respects timeout
         // Would need full setup with slow module for complete test
     }
@@ -399,10 +394,10 @@ mod tests {
     #[tokio::test]
     async fn test_memory_limit_enforcement() {
         let controller = TrafficController::new(Duration::from_secs(1));
-        
+
         // Set up module with limited buffer
         controller.start_buffering("memory_test").await;
-        
+
         // Try to buffer many messages (would hit limit eventually)
         // This is a structural test - full test would need memory tracking
     }

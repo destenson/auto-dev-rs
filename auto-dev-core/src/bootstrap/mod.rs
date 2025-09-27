@@ -1,51 +1,51 @@
 //! Bootstrap sequence for safe self-development initialization
-//! 
+//!
 //! This module implements the bootstrap process that initializes auto-dev-rs's
 //! self-development mode, setting up the environment, validating prerequisites,
 //! and starting the continuous self-improvement loop.
 
-pub mod sequence;
-pub mod validator;
 pub mod initializer;
-pub mod snapshot;
 pub mod preflight;
+pub mod sequence;
+pub mod snapshot;
+pub mod validator;
 
-pub use sequence::BootstrapSequence;
-pub use validator::EnvironmentValidator;
 pub use initializer::SystemInitializer;
-pub use snapshot::BaselineCreator;
 pub use preflight::PreflightChecker;
+pub use sequence::BootstrapSequence;
+pub use snapshot::BaselineCreator;
+pub use validator::EnvironmentValidator;
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use std::path::PathBuf;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BootstrapError {
     #[error("Pre-flight check failed: {0}")]
     PreflightFailed(String),
-    
+
     #[error("Environment validation failed: {0}")]
     ValidationFailed(String),
-    
+
     #[error("Initialization failed: {0}")]
     InitializationFailed(String),
-    
+
     #[error("Baseline creation failed: {0}")]
     BaselineFailed(String),
-    
+
     #[error("Activation failed: {0}")]
     ActivationFailed(String),
-    
+
     #[error("Bootstrap already in progress")]
     AlreadyInProgress,
-    
+
     #[error("Bootstrap interrupted at stage: {0}")]
     Interrupted(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
 }
@@ -182,12 +182,8 @@ impl Default for BootstrapStatus {
 
 pub async fn bootstrap(config: BootstrapConfig, dry_run: bool) -> Result<()> {
     let mut sequence = BootstrapSequence::new(config);
-    
-    if dry_run {
-        sequence.dry_run().await
-    } else {
-        sequence.execute().await
-    }
+
+    if dry_run { sequence.dry_run().await } else { sequence.execute().await }
 }
 
 pub async fn resume_bootstrap() -> Result<()> {

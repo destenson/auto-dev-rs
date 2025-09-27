@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::fs as async_fs;
 
-use crate::modules::store::manifest::{ModuleManifest, ModuleDependency};
+use crate::modules::store::manifest::{ModuleDependency, ModuleManifest};
 
 /// Installation status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -68,17 +68,17 @@ impl ModuleInstaller {
             HashMap::new()
         };
 
-        Self {
-            install_root,
-            records,
-            records_path,
-        }
+        Self { install_root, records, records_path }
     }
 
     /// Install a module
-    pub async fn install(&mut self, source_path: &Path, manifest: &ModuleManifest) -> Result<PathBuf> {
+    pub async fn install(
+        &mut self,
+        source_path: &Path,
+        manifest: &ModuleManifest,
+    ) -> Result<PathBuf> {
         let module_id = Self::generate_module_id(&manifest.module.name, &manifest.module.version);
-        
+
         // Check if already installed
         if let Some(record) = self.records.get(&module_id) {
             if record.status == InstallStatus::Installed {
@@ -115,7 +115,7 @@ impl ModuleInstaller {
         match self.copy_module_files(source_path, &install_path).await {
             Ok(_) => {
                 record.status = InstallStatus::Installed;
-                
+
                 // Run post-install hooks if any
                 self.run_post_install(&install_path).await?;
             }
@@ -136,7 +136,9 @@ impl ModuleInstaller {
 
     /// Uninstall a module
     pub async fn uninstall(&mut self, module_id: &str) -> Result<()> {
-        let record = self.records.remove(module_id)
+        let record = self
+            .records
+            .remove(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not installed: {}", module_id))?;
 
         // Check for dependent modules
@@ -147,7 +149,8 @@ impl ModuleInstaller {
 
         // Remove module files
         if record.install_path.exists() {
-            async_fs::remove_dir_all(&record.install_path).await
+            async_fs::remove_dir_all(&record.install_path)
+                .await
                 .context("Failed to remove module files")?;
         }
 
@@ -156,13 +159,15 @@ impl ModuleInstaller {
     }
 
     /// Update an installed module
-    pub async fn update(&mut self, source_path: &Path, manifest: &ModuleManifest) -> Result<PathBuf> {
+    pub async fn update(
+        &mut self,
+        source_path: &Path,
+        manifest: &ModuleManifest,
+    ) -> Result<PathBuf> {
         let module_name = &manifest.module.name;
-        
+
         // Find existing installation
-        let old_record = self.records.values()
-            .find(|r| r.name == *module_name)
-            .cloned();
+        let old_record = self.records.values().find(|r| r.name == *module_name).cloned();
 
         if let Some(old) = old_record {
             // Backup old version
@@ -197,9 +202,7 @@ impl ModuleInstaller {
 
     /// Check if a module is installed
     pub fn is_installed(&self, module_id: &str) -> bool {
-        self.records.get(module_id)
-            .map(|r| r.status == InstallStatus::Installed)
-            .unwrap_or(false)
+        self.records.get(module_id).map(|r| r.status == InstallStatus::Installed).unwrap_or(false)
     }
 
     /// Get installation record
@@ -209,15 +212,13 @@ impl ModuleInstaller {
 
     /// List all installed modules
     pub fn list_installed(&self) -> Vec<InstallRecord> {
-        self.records.values()
-            .filter(|r| r.status == InstallStatus::Installed)
-            .cloned()
-            .collect()
+        self.records.values().filter(|r| r.status == InstallStatus::Installed).cloned().collect()
     }
 
     /// Find modules that depend on the given module
     fn find_dependents(&self, module_id: &str) -> Vec<String> {
-        self.records.values()
+        self.records
+            .values()
             .filter(|r| r.dependencies.contains(&module_id.to_string()))
             .map(|r| r.module_id.clone())
             .collect()
@@ -227,13 +228,13 @@ impl ModuleInstaller {
     async fn copy_module_files(&self, src: &Path, dst: &Path) -> Result<()> {
         // Remove destination if it exists
         if dst.exists() {
-            async_fs::remove_dir_all(dst).await
+            async_fs::remove_dir_all(dst)
+                .await
                 .context("Failed to remove existing installation")?;
         }
 
         // Create destination directory
-        async_fs::create_dir_all(dst).await
-            .context("Failed to create installation directory")?;
+        async_fs::create_dir_all(dst).await.context("Failed to create installation directory")?;
 
         // Copy files
         for entry in walkdir::WalkDir::new(src) {
@@ -243,14 +244,15 @@ impl ModuleInstaller {
             let target = dst.join(relative);
 
             if entry.file_type().is_dir() {
-                async_fs::create_dir_all(&target).await
-                    .context("Failed to create directory")?;
+                async_fs::create_dir_all(&target).await.context("Failed to create directory")?;
             } else {
                 if let Some(parent) = target.parent() {
-                    async_fs::create_dir_all(parent).await
+                    async_fs::create_dir_all(parent)
+                        .await
                         .context("Failed to create parent directory")?;
                 }
-                async_fs::copy(path, &target).await
+                async_fs::copy(path, &target)
+                    .await
                     .with_context(|| format!("Failed to copy file: {:?}", path))?;
             }
         }
@@ -275,24 +277,23 @@ impl ModuleInstaller {
 
     /// Load installation records
     fn load_records(path: &Path) -> Result<HashMap<String, InstallRecord>> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read installation records")?;
-        serde_json::from_str(&content)
-            .context("Failed to parse installation records")
+        let content = fs::read_to_string(path).context("Failed to read installation records")?;
+        serde_json::from_str(&content).context("Failed to parse installation records")
     }
 
     /// Save installation records
     fn save_records(&self) -> Result<()> {
         let content = serde_json::to_string_pretty(&self.records)
             .context("Failed to serialize installation records")?;
-        fs::write(&self.records_path, content)
-            .context("Failed to write installation records")?;
+        fs::write(&self.records_path, content).context("Failed to write installation records")?;
         Ok(())
     }
 
     /// Verify module installation
     pub fn verify_installation(&self, module_id: &str) -> Result<bool> {
-        let record = self.records.get(module_id)
+        let record = self
+            .records
+            .get(module_id)
             .ok_or_else(|| anyhow::anyhow!("Module not installed: {}", module_id))?;
 
         if record.status != InstallStatus::Installed {
@@ -317,7 +318,8 @@ impl ModuleInstaller {
     pub async fn cleanup_failed(&mut self) -> Result<Vec<String>> {
         let mut cleaned = Vec::new();
 
-        let failed: Vec<String> = self.records
+        let failed: Vec<String> = self
+            .records
             .iter()
             .filter(|(_, r)| matches!(r.status, InstallStatus::Failed(_)))
             .map(|(id, _)| id.clone())
@@ -327,7 +329,8 @@ impl ModuleInstaller {
             if let Some(record) = self.records.remove(&module_id) {
                 // Remove installation directory if it exists
                 if record.install_path.exists() {
-                    async_fs::remove_dir_all(&record.install_path).await
+                    async_fs::remove_dir_all(&record.install_path)
+                        .await
                         .context("Failed to remove failed installation")?;
                 }
                 cleaned.push(module_id);

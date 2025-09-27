@@ -2,10 +2,10 @@
 //! Implementation planning stage
 
 use super::{PipelineContext, PipelineStage};
-use crate::{debug, info};
 use crate::synthesis::{
     Complexity, ImplementationApproach, Result, SynthesisError, state::ImplementationTask,
 };
+use crate::{debug, info};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;

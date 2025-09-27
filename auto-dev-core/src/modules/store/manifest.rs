@@ -124,9 +124,9 @@ pub struct ManifestParser;
 impl ManifestParser {
     /// Parse manifest from TOML string
     pub fn parse(content: &str) -> Result<ModuleManifest> {
-        let mut manifest: ModuleManifest = toml::from_str(content)
-            .context("Failed to parse module manifest")?;
-        
+        let mut manifest: ModuleManifest =
+            toml::from_str(content).context("Failed to parse module manifest")?;
+
         // Set timestamps if not provided
         let now = Utc::now();
         if manifest.module.created.is_none() {
@@ -135,10 +135,10 @@ impl ManifestParser {
         if manifest.module.updated.is_none() {
             manifest.module.updated = Some(now);
         }
-        
+
         // Validate manifest
         Self::validate(&manifest)?;
-        
+
         Ok(manifest)
     }
 
@@ -155,22 +155,22 @@ impl ManifestParser {
         if manifest.module.name.is_empty() {
             anyhow::bail!("Module name cannot be empty");
         }
-        
+
         // Validate version format
         if !Self::is_valid_version(&manifest.module.version) {
             anyhow::bail!("Invalid version format: {}", manifest.module.version);
         }
-        
+
         // Validate category
         if !Self::is_valid_category(&manifest.module.category) {
             anyhow::bail!("Invalid module category: {}", manifest.module.category);
         }
-        
+
         // Validate capabilities
         if manifest.capabilities.provides.is_empty() {
             anyhow::bail!("Module must provide at least one capability");
         }
-        
+
         Ok(())
     }
 
@@ -184,7 +184,7 @@ impl ManifestParser {
     fn is_valid_category(category: &str) -> bool {
         const VALID_CATEGORIES: &[&str] = &[
             "parser",
-            "generator", 
+            "generator",
             "analyzer",
             "formatter",
             "validator",
@@ -237,8 +237,7 @@ impl ModuleManifest {
 
     /// Convert to TOML string
     pub fn to_toml(&self) -> Result<String> {
-        toml::to_string_pretty(self)
-            .context("Failed to serialize manifest to TOML")
+        toml::to_string_pretty(self).context("Failed to serialize manifest to TOML")
     }
 
     /// Save to file

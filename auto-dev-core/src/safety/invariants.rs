@@ -19,7 +19,7 @@ impl InvariantChecker {
             ],
         }
     }
-    
+
     pub async fn check_all(&self) -> Result<()> {
         for invariant in &self.invariants {
             invariant.check().await?;
@@ -43,7 +43,7 @@ impl Invariant for BuildSystemInvariant {
         // TODO: Check that project still builds
         Ok(())
     }
-    
+
     fn name(&self) -> &str {
         "BuildSystem"
     }
@@ -57,7 +57,7 @@ impl Invariant for TestsPassInvariant {
         // TODO: Check that all tests pass
         Ok(())
     }
-    
+
     fn name(&self) -> &str {
         "TestsPass"
     }
@@ -71,7 +71,7 @@ impl Invariant for DocumentationInvariant {
         // TODO: Check that documentation is valid
         Ok(())
     }
-    
+
     fn name(&self) -> &str {
         "Documentation"
     }

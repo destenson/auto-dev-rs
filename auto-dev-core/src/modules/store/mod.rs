@@ -17,7 +17,7 @@ mod tests;
 
 pub use discovery::ModuleDiscovery;
 pub use installer::ModuleInstaller;
-pub use manifest::{ModuleManifest, ManifestParser};
+pub use manifest::{ManifestParser, ModuleManifest};
 pub use storage::StorageManager;
 
 /// Local module store configuration
@@ -62,28 +62,23 @@ impl ModuleStore {
         let discovery = ModuleDiscovery::new(config.store_path.clone());
         let installer = ModuleInstaller::new(config.install_path.clone());
 
-        Ok(Self {
-            config,
-            storage,
-            discovery,
-            installer,
-        })
+        Ok(Self { config, storage, discovery, installer })
     }
 
     /// Add a module to the store
     pub async fn add_module(&mut self, module_path: &PathBuf) -> Result<String> {
         // Parse manifest
         let manifest = ManifestParser::parse_from_path(&module_path.join("module.toml"))?;
-        
+
         // Validate module
         self.validate_module(&manifest, module_path)?;
-        
+
         // Store module
         let module_id = self.storage.store_module(module_path, &manifest).await?;
-        
+
         // Index for discovery
         self.discovery.index_module(&module_id, &manifest)?;
-        
+
         Ok(module_id)
     }
 
@@ -101,13 +96,13 @@ impl ModuleStore {
     pub async fn install(&mut self, module_id: &str) -> Result<PathBuf> {
         // Get module manifest
         let manifest = self.storage.get_manifest(module_id)?;
-        
+
         // Get module path in store
         let store_path = self.storage.get_module_path(module_id)?;
-        
+
         // Install module
         let install_path = self.installer.install(&store_path, &manifest).await?;
-        
+
         Ok(install_path)
     }
 
@@ -125,10 +120,10 @@ impl ModuleStore {
     pub async fn remove(&mut self, module_id: &str) -> Result<()> {
         // Remove from storage
         self.storage.remove_module(module_id).await?;
-        
+
         // Remove from index
         self.discovery.remove_from_index(module_id)?;
-        
+
         Ok(())
     }
 
@@ -165,4 +160,3 @@ impl ModuleStore {
         Ok(total_size)
     }
 }
-

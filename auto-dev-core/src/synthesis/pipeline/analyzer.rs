@@ -2,8 +2,8 @@
 //! Code analyzer for understanding existing code
 
 use super::{PipelineContext, PipelineStage};
-use crate::{debug, info};
 use crate::synthesis::{Result, SynthesisError};
+use crate::{debug, info};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -73,10 +73,7 @@ impl PipelineStage for CodeAnalyzer {
     }
 
     async fn execute(&self, mut context: PipelineContext) -> Result<PipelineContext> {
-        info!(
-            "Analyzing existing code for specification: {}",
-            context.spec.source.display()
-        );
+        info!("Analyzing existing code for specification: {}", context.spec.source.display());
 
         context.metadata.current_stage = self.name().to_string();
 

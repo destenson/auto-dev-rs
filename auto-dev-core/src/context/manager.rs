@@ -4,11 +4,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{debug, info};
 use crate::context::analyzer::{CodePattern, CodingConventions, ProjectAnalyzer};
 use crate::context::embeddings::EmbeddingStore;
 use crate::context::query::ContextQuery;
 use crate::context::storage::{ContextStorage, ProjectContext};
+use crate::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct ContextManager {

@@ -2,9 +2,9 @@
 //!
 //! Provides capability-based security for dynamically loaded modules
 
+pub mod audit;
 pub mod capabilities;
 pub mod resource_limits;
-pub mod audit;
 pub mod violations;
 
 use anyhow::Result;
@@ -13,9 +13,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+pub use audit::{AuditLogger, SecurityEvent};
 pub use capabilities::{Capability, CapabilityManager, CapabilitySet};
 pub use resource_limits::{ResourceMonitor, ResourceUsage};
-pub use audit::{AuditLogger, SecurityEvent};
 pub use violations::{ViolationHandler, ViolationType};
 
 /// Main sandbox environment for modules
@@ -31,7 +31,7 @@ impl ModuleSandbox {
     /// Create a new sandbox for a module
     pub fn new(module_id: String, capabilities: CapabilitySet) -> Result<Self> {
         let audit_logger = Arc::new(AuditLogger::new());
-        
+
         Ok(Self {
             capability_manager: CapabilityManager::new(capabilities),
             resource_monitor: ResourceMonitor::new(),
@@ -50,7 +50,7 @@ impl ModuleSandbox {
             )?;
             return Err(anyhow::anyhow!("Capability not allowed: {:?}", capability));
         }
-        
+
         self.audit_logger.log_access(&self.module_id, capability);
         Ok(())
     }
@@ -58,7 +58,7 @@ impl ModuleSandbox {
     /// Check resource usage
     pub async fn check_resources(&self) -> Result<ResourceUsage> {
         let usage = self.resource_monitor.get_usage().await?;
-        
+
         if usage.exceeds_limits() {
             self.violation_handler.handle_violation(
                 &self.module_id,
@@ -66,7 +66,7 @@ impl ModuleSandbox {
             )?;
             return Err(anyhow::anyhow!("Resource limits exceeded"));
         }
-        
+
         Ok(usage)
     }
 
@@ -78,14 +78,14 @@ impl ModuleSandbox {
     {
         // Start resource monitoring
         self.resource_monitor.start_monitoring();
-        
+
         // Execute the function
         let result = tokio::task::spawn_blocking(func).await?;
-        
+
         // Stop monitoring and check usage
         self.resource_monitor.stop_monitoring();
         self.check_resources().await?;
-        
+
         result
     }
 

@@ -90,36 +90,36 @@ impl CommitBuilder {
         breaking: bool,
     ) -> String {
         let mut message = String::new();
-        
+
         // Type
         message.push_str(&commit_type.to_string());
-        
+
         // Scope
         if let Some(scope) = scope {
             message.push_str(&format!("({})", scope));
         }
-        
+
         // Breaking change indicator
         if breaking {
             message.push('!');
         }
-        
+
         // Description
         message.push_str(&format!(": {}", description));
-        
+
         // Body (optional)
         if let Some(body) = body {
             message.push_str(&format!("\n\n{}", body));
         }
-        
+
         // Footer (optional)
         if let Some(footer) = footer {
             message.push_str(&format!("\n\n{}", footer));
         }
-        
+
         // Auto-generated footer
         message.push_str("\n\n[auto-dev-rs] Automated self-development commit");
-        
+
         message
     }
 
@@ -133,7 +133,7 @@ impl CommitBuilder {
         let commit_type = self.infer_commit_type(change_type);
         let scope = Some(module);
         let description = format!("{}: {}", change_type, details);
-        
+
         self.build_message(commit_type, scope, &description)
     }
 
@@ -141,8 +141,7 @@ impl CommitBuilder {
     pub fn build_merge_message(&self, source_branch: &str, target_branch: &str) -> String {
         format!(
             "Merge branch '{}' into '{}'\n\n[auto-dev-rs] Automated merge",
-            source_branch,
-            target_branch
+            source_branch, target_branch
         )
     }
 
@@ -150,15 +149,14 @@ impl CommitBuilder {
     pub fn build_revert_message(&self, original_commit: &str, reason: &str) -> String {
         format!(
             "Revert \"{}\"\n\nReason: {}\n\n[auto-dev-rs] Automated revert",
-            original_commit,
-            reason
+            original_commit, reason
         )
     }
 
     /// Infer commit type from change description
     fn infer_commit_type(&self, change_type: &str) -> CommitType {
         let lower = change_type.to_lowercase();
-        
+
         if lower.contains("feature") || lower.contains("add") || lower.contains("implement") {
             CommitType::Feat
         } else if lower.contains("fix") || lower.contains("bug") || lower.contains("patch") {
@@ -191,54 +189,51 @@ impl CommitBuilder {
     /// Validate conventional commit format
     fn validate_conventional(&self, message: &str) -> Result<(), ValidationError> {
         let lines: Vec<&str> = message.lines().collect();
-        
+
         if lines.is_empty() {
             return Err(ValidationError::EmptyMessage);
         }
-        
+
         let header = lines[0];
-        
+
         // Check for type
         let valid_types = [
-            "feat", "fix", "refactor", "perf", "docs", 
-            "style", "test", "build", "ci", "chore", "revert"
+            "feat", "fix", "refactor", "perf", "docs", "style", "test", "build", "ci", "chore",
+            "revert",
         ];
-        
-        let has_valid_type = valid_types.iter()
-            .any(|&t| header.starts_with(&format!("{}:", t)) || header.starts_with(&format!("{}(", t)));
-        
+
+        let has_valid_type = valid_types.iter().any(|&t| {
+            header.starts_with(&format!("{}:", t)) || header.starts_with(&format!("{}(", t))
+        });
+
         if !has_valid_type {
             return Err(ValidationError::InvalidType);
         }
-        
+
         // Check for description after colon
         if !header.contains(": ") {
             return Err(ValidationError::MissingDescription);
         }
-        
+
         // Check description length (should be <= 72 chars for header)
         if header.len() > 72 {
             return Err(ValidationError::HeaderTooLong);
         }
-        
+
         Ok(())
     }
 
     /// Generate a commit message from file changes
     pub fn from_changes(&self, changes: &[FileChange]) -> String {
         if changes.is_empty() {
-            return self.build_message(
-                CommitType::Chore,
-                None,
-                "empty commit"
-            );
+            return self.build_message(CommitType::Chore, None, "empty commit");
         }
-        
+
         // Group changes by type
         let mut added = 0;
         let mut modified = 0;
         let mut deleted = 0;
-        
+
         for change in changes {
             match change.change_type {
                 FileChangeType::Added => added += 1,
@@ -246,7 +241,7 @@ impl CommitBuilder {
                 FileChangeType::Deleted => deleted += 1,
             }
         }
-        
+
         // Determine primary action
         let (commit_type, description) = if added > modified && added > deleted {
             (CommitType::Feat, format!("add {} new files", added))
@@ -255,10 +250,10 @@ impl CommitBuilder {
         } else {
             (CommitType::Chore, format!("remove {} files", deleted))
         };
-        
+
         // Determine scope from common path prefix
         let scope = self.find_common_scope(changes);
-        
+
         self.build_message(commit_type, scope.as_deref(), &description)
     }
 
@@ -267,16 +262,14 @@ impl CommitBuilder {
         if changes.is_empty() {
             return None;
         }
-        
+
         // Extract directory components
-        let paths: Vec<Vec<&str>> = changes.iter()
-            .map(|c| c.path.split('/').collect())
-            .collect();
-        
+        let paths: Vec<Vec<&str>> = changes.iter().map(|c| c.path.split('/').collect()).collect();
+
         // Find common prefix
         let mut common = Vec::new();
         let min_len = paths.iter().map(|p| p.len()).min().unwrap_or(0);
-        
+
         for i in 0..min_len {
             let component = paths[0][i];
             if paths.iter().all(|p| p[i] == component) {
@@ -285,12 +278,8 @@ impl CommitBuilder {
                 break;
             }
         }
-        
-        if !common.is_empty() && common[0] != "." {
-            Some(common[0].to_string())
-        } else {
-            None
-        }
+
+        if !common.is_empty() && common[0] != "." { Some(common[0].to_string()) } else { None }
     }
 }
 
@@ -329,12 +318,8 @@ mod tests {
     #[test]
     fn test_conventional_commit() {
         let builder = CommitBuilder::new(CommitStyle::Conventional);
-        let message = builder.build_message(
-            CommitType::Feat,
-            Some("vcs"),
-            "add git integration"
-        );
-        
+        let message = builder.build_message(CommitType::Feat, Some("vcs"), "add git integration");
+
         assert!(message.starts_with("feat(vcs): add git integration"));
         assert!(message.contains("[auto-dev-rs]"));
     }
@@ -342,12 +327,8 @@ mod tests {
     #[test]
     fn test_simple_commit() {
         let builder = CommitBuilder::new(CommitStyle::Simple);
-        let message = builder.build_message(
-            CommitType::Fix,
-            None,
-            "resolve merge conflict"
-        );
-        
+        let message = builder.build_message(CommitType::Fix, None, "resolve merge conflict");
+
         assert_eq!(message, "fix: resolve merge conflict");
     }
 
@@ -360,16 +341,16 @@ mod tests {
             "change response format",
             None,
             None,
-            true
+            true,
         );
-        
+
         assert!(message.starts_with("feat(api)!: change response format"));
     }
 
     #[test]
     fn test_validate_conventional() {
         let builder = CommitBuilder::new(CommitStyle::Conventional);
-        
+
         assert!(builder.validate_message("feat: add new feature").is_ok());
         assert!(builder.validate_message("fix(core): resolve bug").is_ok());
         assert!(builder.validate_message("invalid message").is_err());
@@ -379,18 +360,9 @@ mod tests {
     #[test]
     fn test_infer_commit_type() {
         let builder = CommitBuilder::new(CommitStyle::Conventional);
-        
-        assert!(matches!(
-            builder.infer_commit_type("add new feature"),
-            CommitType::Feat
-        ));
-        assert!(matches!(
-            builder.infer_commit_type("fix bug"),
-            CommitType::Fix
-        ));
-        assert!(matches!(
-            builder.infer_commit_type("optimize performance"),
-            CommitType::Perf
-        ));
+
+        assert!(matches!(builder.infer_commit_type("add new feature"), CommitType::Feat));
+        assert!(matches!(builder.infer_commit_type("fix bug"), CommitType::Fix));
+        assert!(matches!(builder.infer_commit_type("optimize performance"), CommitType::Perf));
     }
 }
