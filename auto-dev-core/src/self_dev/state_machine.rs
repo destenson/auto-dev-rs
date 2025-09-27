@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! State machine for managing self-development lifecycle
 
 use super::{Result, SelfDevError};

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Version verification
 
 use anyhow::Result;

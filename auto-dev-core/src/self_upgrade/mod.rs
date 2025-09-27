@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Self-upgrade and restart mechanism for auto-dev-rs
 
 pub mod platform;

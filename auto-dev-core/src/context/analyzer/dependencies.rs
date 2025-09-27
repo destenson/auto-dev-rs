@@ -1,3 +1,4 @@
+#![allow(unused)]
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
 use regex::Regex;

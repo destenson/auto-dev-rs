@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Central orchestrator for self-development activities
 
 use super::{

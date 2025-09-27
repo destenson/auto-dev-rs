@@ -1,4 +1,5 @@
-// Migration Engine - Handles state transformation between versions
+#![allow(unused)]
+//! Migration Engine - Handles state transformation between versions
 
 use super::{HotReloadError, HotReloadResult};
 use super::state_manager::StateVersion;

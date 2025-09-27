@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Validation command for running code quality and correctness checks
 
 use anyhow::Result;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Continuous monitoring and autonomous development loop module
 
 pub mod control_server;

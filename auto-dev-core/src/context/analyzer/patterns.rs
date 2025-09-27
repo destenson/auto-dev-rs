@@ -1,3 +1,4 @@
+#![allow(unused)]
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

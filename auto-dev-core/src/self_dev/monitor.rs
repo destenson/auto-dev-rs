@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Safety monitoring for self-development activities
 
 use super::{Result, SafetyLevel};

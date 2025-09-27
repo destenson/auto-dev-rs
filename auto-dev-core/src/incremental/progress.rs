@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Progress tracking and reporting
 
 use super::{Complexity, IncrementStatus, Result};

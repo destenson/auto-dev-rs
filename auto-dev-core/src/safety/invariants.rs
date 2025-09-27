@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! System invariants that must always hold
 
 use super::{Result, SafetyError};

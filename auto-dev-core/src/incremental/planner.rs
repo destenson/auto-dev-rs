@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Increment planning and dependency analysis
 
 use super::{

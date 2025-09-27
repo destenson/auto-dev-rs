@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Operator control interface for managing self-development
 
 use super::{Result, SelfDevError};

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Static code analysis
 
 use super::Result;

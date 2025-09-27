@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Component coordinator for integrating self-development subsystems
 
 use super::{Result, SelfDevConfig, SelfDevError};

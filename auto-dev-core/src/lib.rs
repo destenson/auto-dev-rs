@@ -16,6 +16,7 @@ pub mod safety;
 pub mod self_dev;
 pub mod self_monitor;
 pub mod self_target;
+pub mod self_test;
 pub mod self_upgrade;
 pub mod synthesis;
 pub mod test_gen;
