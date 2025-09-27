@@ -9,15 +9,15 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 
 | Metric | Count | Percentage |
 |--------|-------|------------|
-| Total PRPs | 40 | 100% |
-| Completed (Archived) | 28 | 70% |
+| Total PRPs | 51 | 100% |
+| Completed (Archived) | 29 | 57% |
 | Partial (Active) | 0 | 0% |
-| Not Started (Active) | 12 | 30% |
+| Not Started (Active) | 22 | 43% |
 
 ### Implementation Progress
 
 ```
-[████████████████████░░░░░░░░] 70% Complete (28/40 PRPs fully implemented)
+[████████████████░░░░░░░░░░░░] 57% Complete (29/51 PRPs fully implemented)
 ```
 
 ## Active PRPs (Pending Work)
@@ -40,6 +40,16 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 230 | Fabric Patterns Integration | ❌ NOT STARTED | 2025-09-27 | Community patterns |
 | 231 | Claude Code CLI Integration | ❌ NOT STARTED | 2025-09-27 | Advanced CLI features |
 | 233-238 | Claude Binary/Command Suite | ❌ NOT STARTED | 2025-09-27 | Full Claude Code integration |
+| 261 | CLAUDE.md File Loader | ❌ NOT STARTED | 2025-09-27 | Loads and validates CLAUDE.md content |
+| 262 | Claude Command Parser | ❌ NOT STARTED | 2025-09-27 | Parses command files from .claude/commands/ |
+| 263 | Claude Context Integration | ❌ NOT STARTED | 2025-09-27 | Integrates CLAUDE.md into ContextManager |
+| 264 | Claude Command Registry | ❌ NOT STARTED | 2025-09-27 | Central registry for discovered commands |
+| 265 | Claude Config Priority System | ❌ NOT STARTED | 2025-09-27 | Handles override and merge logic |
+| 266 | Claude Config File Watcher | ❌ NOT STARTED | 2025-09-27 | Hot-reload on configuration changes |
+| 267 | Claude CLI Integration | ❌ NOT STARTED | 2025-09-27 | Makes commands available in CLI |
+| 268 | Claude Config Testing Framework | ❌ NOT STARTED | 2025-09-27 | Comprehensive testing infrastructure |
+| 269 | Claude Config Documentation | ❌ NOT STARTED | 2025-09-27 | User documentation and examples |
+| 270 | Claude Configuration Initialization | ❌ NOT STARTED | 2025-09-27 | Bootstrap and initialization sequence |
 
 ## Archived PRPs (Completed)
 
@@ -79,6 +89,7 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 | 216 | LLM Response Types | 2025-09-27 | Core types for LLM responses |
 | 226 | Ollama Provider | 2025-09-27 | Local/remote model support with full features |
 | 232 | OpenRouter Gateway | 2025-09-27 | 400+ models via unified gateway |
+| 260 | Claude Configuration Discovery | 2025-09-27 | Foundation for .claude directory support |
 
 ## Implementation Roadmap
 
@@ -123,6 +134,7 @@ The Project Requirement Plans (PRPs) define the roadmap for auto-dev-rs's autono
 
 ## Recent Updates
 
+- 2025-09-27: Completed Claude Configuration Discovery (PRP-260) with full path discovery, caching, and priority system
 - 2025-09-27: Completed OpenRouter gateway (PRP-232) with 400+ model access
 - 2025-09-27: Completed Ollama provider (PRP-226) with local/remote model support
 - 2025-09-27: Completed self-documentation system (PRP-214) with full docs module

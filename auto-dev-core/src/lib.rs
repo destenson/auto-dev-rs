@@ -4,6 +4,7 @@
 //! including project management, code generation, and plugin systems.
 
 pub mod bootstrap;
+pub mod claude;
 pub mod context;
 pub mod dev_loop;
 pub mod docs;
