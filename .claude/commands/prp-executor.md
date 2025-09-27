@@ -149,6 +149,42 @@ If you can't complete a PRP:
 4. Move to next viable PRP
 5. Return to blocked PRPs when dependencies are met
 
+## Gap Analysis Phase - When All PRPs Are Complete
+
+When all existing PRPs are implemented or blocked:
+
+### Step 1: Comprehensive Codebase Review
+- Analyze the overall system architecture
+- Identify incomplete features or missing capabilities
+- Check for TODOs and FIXMEs that suggest needed work
+- Review documentation for mentioned but unimplemented features
+- Examine test coverage for untested areas
+
+### Step 2: Feature Gap Identification
+**Common gaps to look for:**
+- Missing error handling or recovery mechanisms
+- Incomplete API endpoints or commands
+- Lacking monitoring or observability features
+- Missing integrations mentioned in docs
+- Incomplete user-facing features
+- Security or validation gaps
+- Absent performance optimizations
+
+### Step 3: Generate New PRPs
+For each identified gap:
+1. Assess if it's a genuine need vs nice-to-have
+2. Determine scope (follow 2-4 hour rule)
+3. Check dependencies and prerequisites
+4. Use the `/generate-prp` pattern from `~/.claude/commands/generate-prp.md`
+
+### Step 4: PRP Generation Guidelines
+When creating new PRPs:
+- **Scope**: Each PRP = 2-4 hours of work maximum
+- **Atomic**: Single focused feature per PRP
+- **Testable**: Must produce verifiable results
+- **Context**: Include all necessary documentation
+- **No Code**: Focus on WHAT and WHY, not HOW
+
 ## Example Execution Flow
 
 ```
@@ -159,6 +195,8 @@ If you can't complete a PRP:
 5. Validate: Tests pass, feature works
 6. Document: Mark as complete, commit changes
 7. Repeat: Move to 005
+8. Gap Analysis: All PRPs complete, review codebase for gaps
+9. Generate: Create new PRPs for identified missing features
 ```
 
 ## Tips for Success
@@ -188,4 +226,44 @@ You're making progress when:
 - Each PRP takes roughly similar time to complete
 - Blockers are documented and worked around
 
+## Automated PRP Generation
+
+When gaps are identified, generate new PRPs following these principles:
+
+### Research Phase
+1. **Codebase Analysis**
+   - Search for similar patterns
+   - Identify conventions to follow
+   - Note existing test approaches
+
+2. **External Research** 
+   - Find documentation URLs
+   - Locate implementation examples
+   - Identify best practices
+
+### PRP Creation Rules
+- **NO CODE** in PRPs - focus on requirements
+- Include executable validation commands
+- Reference existing patterns in codebase
+- Break large features into multiple small PRPs
+- Each PRP should be independently testable
+
+### Quality Metrics for New PRPs
+- Clear scope (2-4 hours of work)
+- Complete context and documentation
+- Executable validation gates
+- Minimal dependencies
+- Follows project conventions
+
 Remember: PRPs are guides, not contracts. Implementation details may vary based on what you discover in the code. The goal is to deliver the intended functionality, not necessarily follow the PRP exactly if better approaches become apparent during implementation.
+
+## Continuous Improvement Loop
+
+1. **Execute** existing PRPs
+2. **Review** codebase when PRPs complete
+3. **Identify** gaps and missing features
+4. **Generate** new PRPs for gaps
+5. **Prioritize** based on value and dependencies
+6. **Repeat** the cycle
+
+This creates a self-improving system where the codebase continuously evolves based on identified needs and gaps.
