@@ -512,11 +512,12 @@ mod tests {
     fn test_variable_substitution() {
         let cmd = ClaudeCommand {
             name: "test".to_string(),
-            description: None,
-            command_type: None,
-            content: Some("echo ${name} ${age}".to_string()),
-            arguments: None,
-            metadata: None,
+            description: "Test command".to_string(),
+            usage: String::new(),
+            instructions: "echo ${name} ${age}".to_string(),
+            arguments: vec![],
+            raw_content: String::new(),
+            examples: vec![],
         };
         
         let executor = CommandExecutor::new(cmd);
@@ -532,11 +533,12 @@ mod tests {
     fn test_script_type_detection() {
         let cmd = ClaudeCommand {
             name: "test".to_string(),
-            description: None,
-            command_type: None,
-            content: None,
-            arguments: None,
-            metadata: None,
+            description: "Test command".to_string(),
+            usage: String::new(),
+            instructions: String::new(),
+            arguments: vec![],
+            raw_content: String::new(),
+            examples: vec![],
         };
         
         let executor = CommandExecutor::new(cmd);

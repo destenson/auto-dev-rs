@@ -351,9 +351,9 @@ mod tests {
     async fn test_classify_change() {
         let change = FileChange {
             path: PathBuf::from("/project/.claude/CLAUDE.md"),
+            category: crate::monitor::FileCategory::Configuration,
             change_type: ChangeType::Modified,
             timestamp: std::time::SystemTime::now(),
-            size: Some(100),
         };
 
         let result = classify_change(&change).await;
@@ -365,9 +365,9 @@ mod tests {
     async fn test_classify_command_change() {
         let change = FileChange {
             path: PathBuf::from("/project/.claude/commands/test.md"),
+            category: crate::monitor::FileCategory::Configuration,
             change_type: ChangeType::Created,
             timestamp: std::time::SystemTime::now(),
-            size: Some(50),
         };
 
         let result = classify_change(&change).await;
@@ -379,9 +379,9 @@ mod tests {
     async fn test_ignore_temp_files() {
         let change = FileChange {
             path: PathBuf::from("/project/.claude/CLAUDE.md.swp"),
+            category: crate::monitor::FileCategory::Configuration,
             change_type: ChangeType::Modified,
             timestamp: std::time::SystemTime::now(),
-            size: Some(100),
         };
 
         let result = classify_change(&change).await;
