@@ -9,6 +9,7 @@ pub mod context;
 pub mod dev_loop;
 pub mod docs;
 pub mod incremental;
+pub mod instructions;
 pub mod learning;
 pub mod llm;
 pub mod mcp;
