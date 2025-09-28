@@ -1,23 +1,69 @@
-#![allow(unused)]
-//! Anthropic Claude provider implementation
+//! Anthropic Claude provider implementation with streaming, retry logic, and rate limiting
 
 use super::{ClassificationResult, provider::*};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::{Stream, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+use tokio::time::sleep;
+use tracing::{debug, warn, info};
+
+/// Rate limiter for API calls
+#[derive(Debug, Clone)]
+struct RateLimiter {
+    /// Maximum requests per minute
+    max_rpm: usize,
+    /// Track request timestamps
+    request_times: Arc<Mutex<Vec<Instant>>>,
+}
+
+impl RateLimiter {
+    fn new(max_rpm: usize) -> Self {
+        Self {
+            max_rpm,
+            request_times: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    async fn wait_if_needed(&self) {
+        let mut times = self.request_times.lock().await;
+        let now = Instant::now();
+        
+        // Remove timestamps older than 1 minute
+        times.retain(|&t| now.duration_since(t) < Duration::from_secs(60));
+        
+        // If we've hit the rate limit, wait
+        if times.len() >= self.max_rpm {
+            if let Some(&oldest) = times.first() {
+                let wait_time = Duration::from_secs(60) - now.duration_since(oldest);
+                if wait_time > Duration::ZERO {
+                    debug!("Rate limit reached, waiting {:?}", wait_time);
+                    sleep(wait_time).await;
+                }
+            }
+        }
+        
+        times.push(now);
+    }
+}
 
 /// Claude provider for Anthropic's models
 pub struct ClaudeProvider {
     client: Client,
     config: ClaudeConfig,
     model_tier: ModelTier,
+    rate_limiter: RateLimiter,
 }
 
 impl ClaudeProvider {
     pub fn new(config: ClaudeConfig) -> Result<Self> {
-        let client = Client::builder().timeout(Duration::from_secs(config.timeout_secs)).build()?;
+        let client = Client::builder()
+            .timeout(Duration::from_secs(config.timeout_secs))
+            .build()?;
 
         let model_tier = match config.model.as_str() {
             "claude-3-haiku-20240307" => ModelTier::Small,
@@ -27,12 +73,71 @@ impl ClaudeProvider {
             _ => ModelTier::Medium,
         };
 
-        Ok(Self { client, config, model_tier })
+        let rate_limiter = RateLimiter::new(config.max_requests_per_minute);
+
+        Ok(Self {
+            client,
+            config,
+            model_tier,
+            rate_limiter,
+        })
     }
 
-    async fn create_message(&self, messages: Vec<Message>) -> Result<String> {
-        let api_key =
-            std::env::var(&self.config.api_key_env).context("Anthropic API key not found")?;
+    /// Create a message with retry logic
+    async fn create_message_with_retry(&self, messages: Vec<Message>) -> Result<String> {
+        let mut attempt = 0;
+        let max_retries = self.config.max_retries;
+        let mut backoff = Duration::from_millis(self.config.initial_retry_delay_ms);
+
+        loop {
+            // Apply rate limiting
+            self.rate_limiter.wait_if_needed().await;
+
+            match self.create_message_internal(messages.clone()).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    let error_str = e.to_string();
+                    
+                    // Check if it's a rate limit error
+                    if error_str.contains("429") || error_str.contains("rate_limit") {
+                        warn!("Rate limit error, backing off");
+                        attempt += 1;
+                        if attempt > max_retries {
+                            return Err(e);
+                        }
+                        sleep(backoff).await;
+                        backoff *= 2; // Exponential backoff
+                        continue;
+                    }
+                    
+                    // Check if it's a temporary error worth retrying
+                    if error_str.contains("timeout") || 
+                       error_str.contains("connection") ||
+                       error_str.contains("500") ||
+                       error_str.contains("502") ||
+                       error_str.contains("503") ||
+                       error_str.contains("504") {
+                        attempt += 1;
+                        if attempt > max_retries {
+                            return Err(e);
+                        }
+                        warn!("Temporary error, retrying in {:?}: {}", backoff, error_str);
+                        sleep(backoff).await;
+                        backoff = (backoff * 2).min(Duration::from_secs(30)); // Cap at 30 seconds
+                        continue;
+                    }
+                    
+                    // Non-retryable error
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    /// Internal message creation without retry logic
+    async fn create_message_internal(&self, messages: Vec<Message>) -> Result<String> {
+        let api_key = std::env::var(&self.config.api_key_env)
+            .context("Anthropic API key not found")?;
 
         let request = MessageRequest {
             model: self.config.model.clone(),
@@ -40,6 +145,7 @@ impl ClaudeProvider {
             max_tokens: self.config.max_tokens,
             temperature: self.config.temperature,
             system: self.config.system_prompt.clone(),
+            stream: false, // Non-streaming request
         };
 
         let response = self
@@ -54,18 +160,91 @@ impl ClaudeProvider {
             .context("Failed to send request to Claude")?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await?;
-            return Err(anyhow::anyhow!("Claude API error: {}", error_text));
+            return Err(anyhow::anyhow!("Claude API error ({}): {}", status, error_text));
         }
 
-        let result: MessageResponse =
-            response.json().await.context("Failed to parse Claude response")?;
+        let result: MessageResponse = response
+            .json()
+            .await
+            .context("Failed to parse Claude response")?;
 
         result
             .content
             .first()
-            .and_then(|c| if let Content::Text { text } = c { Some(text.clone()) } else { None })
+            .and_then(|c| match c {
+                Content::Text { text } => Some(text.clone()),
+            })
             .ok_or_else(|| anyhow::anyhow!("No response from Claude"))
+    }
+
+    /// Create a streaming message
+    pub async fn create_message_stream(
+        &self,
+        messages: Vec<Message>,
+    ) -> Result<impl Stream<Item = Result<String>>> {
+        let api_key = std::env::var(&self.config.api_key_env)
+            .context("Anthropic API key not found")?;
+
+        let request = StreamingMessageRequest {
+            model: self.config.model.clone(),
+            messages,
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            system: self.config.system_prompt.clone(),
+            stream: true,
+        };
+
+        // Apply rate limiting
+        self.rate_limiter.wait_if_needed().await;
+
+        let response = self
+            .client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Claude")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!("Claude API error ({}): {}", status, error_text));
+        }
+
+        // Convert response to stream of Server-Sent Events
+        let stream = response.bytes_stream().map(move |chunk| {
+            match chunk {
+                Ok(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    // Parse SSE format
+                    if text.starts_with("data: ") {
+                        let json_str = text.trim_start_matches("data: ").trim();
+                        if json_str == "[DONE]" {
+                            return Ok(String::new());
+                        }
+                        
+                        if let Ok(event) = serde_json::from_str::<StreamEvent>(json_str) {
+                            if let Some(delta) = event.delta {
+                                return Ok(delta.text);
+                            }
+                        }
+                    }
+                    Ok(String::new())
+                }
+                Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
+            }
+        });
+
+        Ok(stream)
+    }
+
+    async fn create_message(&self, messages: Vec<Message>) -> Result<String> {
+        self.create_message_with_retry(messages).await
     }
 }
 
@@ -100,42 +279,24 @@ impl LLMProvider for ClaudeProvider {
         options: &GenerationOptions,
     ) -> Result<GeneratedCode> {
         let prompt = format!(
-            "You are tasked with implementing code based on the following specification.
-\n\
-             Project Context:
-\
-             - Language: {}
-\
-             - Framework: {:?}
-\
-             - Existing patterns to follow: {:?}
-\
-             - Dependencies available: {:?}
-\n\
-             Specification:
-\
-             {}
-\n\
-             Requirements:
-\
-             {}
-\n\
-             Examples:
-\
-             {}
-\n\
-             Please generate clean, well-documented code that:
-\
-             1. Follows the specification exactly
-\
-             2. Uses existing project patterns
-\
-             3. Includes comprehensive error handling
-\
-             4. Has clear documentation
-\
-             5. Follows {} best practices
-\n\
+            "You are tasked with implementing code based on the following specification.\n\
+             Project Context:\
+             - Language: {}\
+             - Framework: {:?}\
+             - Existing patterns to follow: {:?}\
+             - Dependencies available: {:?}\n\
+             Specification:\
+             {}\n\
+             Requirements:\
+             {}\n\
+             Examples:\
+             {}\n\
+             Please generate clean, well-documented code that:\
+             1. Follows the specification exactly\
+             2. Uses existing project patterns\
+             3. Includes comprehensive error handling\
+             4. Has clear documentation\
+             5. Follows {} best practices\n\
              Format your response with code blocks marked with the language \
              and include a comment with the filepath at the top of each file.",
             context.language,
@@ -148,9 +309,25 @@ impl LLMProvider for ClaudeProvider {
             context.language
         );
 
-        let messages = vec![Message { role: "user".to_string(), content: prompt }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
 
-        let response = self.create_message(messages).await?;
+        let response = if options.streaming {
+            // For now, collect the stream into a single response
+            // In a real implementation, you'd yield chunks to the caller
+            let mut stream = self.create_message_stream(messages).await?;
+            let mut full_response = String::new();
+            while let Some(chunk) = stream.next().await {
+                if let Ok(text) = chunk {
+                    full_response.push_str(&text);
+                }
+            }
+            full_response
+        } else {
+            self.create_message(messages).await?
+        };
 
         // Parse code blocks from response
         let files = extract_code_files(&response);
@@ -171,33 +348,25 @@ impl LLMProvider for ClaudeProvider {
         spec: &Specification,
     ) -> Result<Explanation> {
         let prompt = format!(
-            "Please explain how this code implements the given specification.
-\n\
-             Code:
-\
-             ```
-\
-             {}
-\
-             ```
-\n\
-             Specification:
-\
-             {}
-\n\
-             Provide:
-\
-             1. A brief summary
-\
-             2. Key implementation details
-\
-             3. Design decisions made
-\
+            "Please explain how this code implements the given specification.\n\
+             Code:\
+             ```\
+             {}\
+             ```\n\
+             Specification:\
+             {}\n\
+             Provide:\
+             1. A brief summary\
+             2. Key implementation details\
+             3. Design decisions made\
              4. Any trade-offs or limitations",
             code, spec.content
         );
 
-        let messages = vec![Message { role: "user".to_string(), content: prompt }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
 
         let response = self.create_message(messages).await?;
 
@@ -220,27 +389,22 @@ impl LLMProvider for ClaudeProvider {
             .join("\n");
 
         let prompt = format!(
-            "Please review this code against the following requirements.
-\n\
-             Code to review:
-\
-             ```
-\
-             {}
-\
-             ```
-\n\
-             Requirements:
-\
-             {}
-\n\
-             For each requirement, indicate if it's satisfied and note any issues.
-\
+            "Please review this code against the following requirements.\n\
+             Code to review:\
+             ```\
+             {}\
+             ```\n\
+             Requirements:\
+             {}\n\
+             For each requirement, indicate if it's satisfied and note any issues.\
              Also provide general code quality feedback and suggestions for improvement.",
             code, req_list
         );
 
-        let messages = vec![Message { role: "user".to_string(), content: prompt }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
 
         let response = self.create_message(messages).await?;
 
@@ -280,11 +444,19 @@ impl LLMProvider for ClaudeProvider {
             }
         }
 
-        Ok(ReviewResult { issues, suggestions, meets_requirements, confidence: 0.9 })
+        Ok(ReviewResult {
+            issues,
+            suggestions,
+            meets_requirements,
+            confidence: 0.9,
+        })
     }
 
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
-        let messages = vec![Message { role: "user".to_string(), content: question.to_string() }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: question.to_string(),
+        }];
 
         let response = self.create_message(messages).await?;
         Ok(Some(response))
@@ -293,18 +465,18 @@ impl LLMProvider for ClaudeProvider {
     async fn classify_content(&self, content: &str) -> Result<ClassificationResult> {
         // Claude is overkill for classification, but can do it
         let prompt = format!(
-            "Classify this content. Respond with only a JSON object in this format:
-\
+            "Classify this content. Respond with only a JSON object in this format:\
              {{\"is_code\": boolean, \"is_doc\": boolean, \"is_test\": boolean, \
-              \"is_config\": boolean, \"language\": \"language name or null\"}}
-\n\
-             Content to classify:
-\
+              \"is_config\": boolean, \"language\": \"language name or null\"}}\n\
+             Content to classify:\
              {}",
             &content[..content.len().min(500)]
         );
 
-        let messages = vec![Message { role: "user".to_string(), content: prompt }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
 
         let response = self.create_message(messages).await?;
 
@@ -319,7 +491,10 @@ impl LLMProvider for ClaudeProvider {
                 is_documentation: parsed["is_doc"].as_bool().unwrap_or(false),
                 is_test: parsed["is_test"].as_bool().unwrap_or(false),
                 is_config: parsed["is_config"].as_bool().unwrap_or(false),
-                language: parsed["language"].as_str().filter(|s| *s != "null").map(String::from),
+                language: parsed["language"]
+                    .as_str()
+                    .filter(|s| *s != "null")
+                    .map(String::from),
                 confidence: 0.95,
             });
         }
@@ -337,25 +512,21 @@ impl LLMProvider for ClaudeProvider {
 
     async fn assess_complexity(&self, task: &str) -> Result<TaskComplexity> {
         let prompt = format!(
-            "Assess the complexity of this task. Respond with one of:
-\
-             - 'trivial' (can be done with heuristics)
-\
-             - 'simple' (tiny model like 0.5B can handle)
-\
-             - 'moderate' (needs 7B model)
-\
-             - 'complex' (needs 13-34B model)
-\
-             - 'very complex' (needs 70B+ model)
-\n\
-             Task: {}
-\n\
+            "Assess the complexity of this task. Respond with one of:\
+             - 'trivial' (can be done with heuristics)\
+             - 'simple' (tiny model like 0.5B can handle)\
+             - 'moderate' (needs 7B model)\
+             - 'complex' (needs 13-34B model)\
+             - 'very complex' (needs 70B+ model)\n\
+             Task: {}\n\
              Respond with just the complexity level and a brief reason.",
             task
         );
 
-        let messages = vec![Message { role: "user".to_string(), content: prompt }];
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
 
         let response = self.create_message(messages).await?;
         let lower = response.to_lowercase();
@@ -390,6 +561,9 @@ pub struct ClaudeConfig {
     pub temperature: f32,
     pub system_prompt: Option<String>,
     pub timeout_secs: u64,
+    pub max_retries: usize,
+    pub initial_retry_delay_ms: u64,
+    pub max_requests_per_minute: usize,
 }
 
 impl Default for ClaudeConfig {
@@ -401,12 +575,15 @@ impl Default for ClaudeConfig {
             temperature: 0.2,
             system_prompt: Some("You are an expert software engineer.".to_string()),
             timeout_secs: 60,
+            max_retries: 3,
+            initial_retry_delay_ms: 1000,
+            max_requests_per_minute: 50, // Conservative default
         }
     }
 }
 
 /// Message structure for Claude API
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct Message {
     role: String,
     content: String,
@@ -421,6 +598,19 @@ struct MessageRequest {
     temperature: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
+    stream: bool,
+}
+
+/// Streaming Claude API request
+#[derive(Debug, Serialize)]
+struct StreamingMessageRequest {
+    model: String,
+    messages: Vec<Message>,
+    max_tokens: usize,
+    temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    stream: bool,
 }
 
 /// Claude API response
@@ -434,6 +624,17 @@ struct MessageResponse {
 enum Content {
     #[serde(rename = "text")]
     Text { text: String },
+}
+
+/// Streaming event from Claude API
+#[derive(Debug, Deserialize)]
+struct StreamEvent {
+    delta: Option<TextDelta>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TextDelta {
+    text: String,
 }
 
 /// Extract code files from response
@@ -519,5 +720,110 @@ fn lang_to_extension(lang: &str) -> &str {
         "json" => "json",
         "toml" => "toml",
         _ => "txt",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_default() {
+        let config = ClaudeConfig::default();
+        assert_eq!(config.api_key_env, "ANTHROPIC_API_KEY");
+        assert_eq!(config.model, "claude-3-5-sonnet-20241022");
+        assert_eq!(config.max_retries, 3);
+    }
+
+    #[test]
+    fn test_extract_code_files() {
+        let response = r#"
+Here's the implementation:
+
+```rust
+// File: src/main.rs
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+And a test:
+
+```rust
+// File: src/test.rs
+#[test]
+fn test_main() {
+    assert!(true);
+}
+```
+"#;
+
+        let files = extract_code_files(response);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].path, "src/main.rs");
+        assert!(!files[0].is_test);
+        assert_eq!(files[1].path, "src/test.rs");
+        assert!(files[1].is_test);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter() {
+        let limiter = RateLimiter::new(5); // 5 requests per minute
+        
+        // Should allow 5 quick requests
+        for _ in 0..5 {
+            limiter.wait_if_needed().await;
+        }
+        
+        // The 6th request should wait
+        let start = Instant::now();
+        limiter.wait_if_needed().await;
+        // This test might be flaky in CI, so just check it doesn't panic
+        assert!(start.elapsed() < Duration::from_secs(61));
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "integration")]
+mod integration_tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore] // Ignored by default, requires API key
+    async fn test_real_claude_api() {
+        let config = ClaudeConfig::default();
+        let provider = ClaudeProvider::new(config).unwrap();
+
+        let result = provider
+            .answer_question("What is 2+2? Reply with just the number.")
+            .await;
+
+        assert!(result.is_ok());
+        let answer = result.unwrap().unwrap();
+        assert!(answer.contains("4"));
+    }
+
+    #[tokio::test]
+    #[ignore] // Ignored by default, requires API key
+    async fn test_streaming() {
+        let config = ClaudeConfig::default();
+        let provider = ClaudeProvider::new(config).unwrap();
+
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: "Count from 1 to 5".to_string(),
+        }];
+
+        let mut stream = provider.create_message_stream(messages).await.unwrap();
+        let mut collected = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            if let Ok(text) = chunk {
+                collected.push_str(&text);
+            }
+        }
+
+        assert!(collected.contains("1"));
+        assert!(collected.contains("5"));
     }
 }

@@ -14,6 +14,7 @@
 pub mod candle;
 pub mod classifier;
 pub mod claude;
+pub mod claude_code;
 pub mod cli_tools;
 pub mod config;
 pub mod context_manager;

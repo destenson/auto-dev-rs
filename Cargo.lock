@@ -444,6 +444,7 @@ dependencies = [
  "metrics",
  "notify",
  "ollama-rs",
+ "once_cell",
  "openapiv3",
  "openrouter-rs",
  "petgraph",
