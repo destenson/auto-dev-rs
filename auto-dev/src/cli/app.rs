@@ -82,6 +82,18 @@ pub enum Commands {
     /// View and analyze self-improvement metrics
     #[command(name = "metrics", about = "Track and analyze self-improvement progress")]
     Metrics(super::commands::metrics::MetricsCommand),
+    
+    /// Execute Claude user-defined commands
+    #[command(name = "claude", about = "Execute Claude user-defined commands")]
+    Claude {
+        /// Name of the Claude command to execute
+        #[arg(help = "Command name")]
+        command: String,
+        
+        /// Arguments to pass to the command
+        #[arg(help = "Command arguments", trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
 }
 
 #[derive(Parser, Debug)]

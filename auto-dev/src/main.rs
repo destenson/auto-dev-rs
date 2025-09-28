@@ -100,6 +100,12 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(cli::commands::metrics::handle_metrics_command(command))?;
         }
+        Commands::Claude { command, args } => {
+            info!("Claude command: {} with args: {:?}", command, args);
+            // Create async runtime for the command
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(cli::claude_commands::handle_claude_command(command, args))?;
+        }
     }
 
     Ok(())
