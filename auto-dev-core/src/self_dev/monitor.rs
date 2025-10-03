@@ -196,9 +196,6 @@ impl SafetyMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    use super::*;
     use crate::safety::{RiskLevel, ValidationReport};
     use std::sync::Arc;
     use tokio::sync::RwLock;

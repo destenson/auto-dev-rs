@@ -62,7 +62,7 @@ pub enum DevelopmentMode {
     FullyAutonomous,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SafetyLevel {
     Permissive,
     Standard,
