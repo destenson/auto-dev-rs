@@ -134,6 +134,22 @@ pub async fn handle_self_dev_command(command: SelfDevCommand) -> Result<()> {
 async fn start_self_dev(mode: DevelopmentMode, safety: SafetyLevel) -> Result<()> {
     info!("Starting self-development mode");
 
+    let existing = {
+        let guard = ORCHESTRATOR.read().await;
+        guard.clone()
+    };
+
+    if let Some(orchestrator) = existing {
+        orchestrator.handle_control_command(ControlCommand::SetMode(mode.clone())).await?;
+        orchestrator.handle_control_command(ControlCommand::SetSafetyLevel(safety.clone())).await?;
+
+        println!(
+            "Self-development already running. Updated mode to {:?} and safety to {:?}",
+            mode, safety
+        );
+        return Ok(());
+    }
+
     let config = SelfDevConfig {
         enabled: true,
         mode: mode.clone(),
@@ -233,6 +249,26 @@ async fn show_status() -> Result<()> {
         println!("Today's changes: {}", status.today_changes);
         println!("Pending changes: {}", status.pending_changes.len());
         println!("Active components: {}", status.active_components.join(", "));
+
+        if let Some(snapshot) = &status.latest_metrics {
+            println!("\nLatest Metrics Snapshot ({})", snapshot.timestamp);
+            println!(
+                "  Success rate: {:.1}% | Modifications/day: {:.2}",
+                snapshot.development.success_rate * 100.0,
+                snapshot.development.modifications_per_day
+            );
+            println!(
+                "  Avg implementation time: {} ms | Rollback freq: {:.2}",
+                snapshot.development.implementation_time_avg_ms,
+                snapshot.development.rollback_frequency
+            );
+            println!(
+                "  Test coverage: {:.1}% | Documentation coverage: {:.1}%",
+                snapshot.development.test_coverage_percent, snapshot.quality.documentation_coverage
+            );
+        } else {
+            println!("\nMetrics: no snapshots recorded yet");
+        }
 
         if !status.pending_changes.is_empty() {
             println!("\nPending Changes:");

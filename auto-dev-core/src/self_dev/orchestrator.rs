@@ -5,12 +5,15 @@ use super::{
     ComponentCoordinator, ControlCommand, DevelopmentMode, DevelopmentState,
     DevelopmentStateMachine, OperatorInterface, Result, SafetyMonitor, SelfDevConfig, SelfDevError,
 };
+use crate::metrics::{MetricEvent, MetricsCollector, MetricsSnapshot};
 use crate::parser::SpecParser;
 use crate::parser::model::{Priority, Requirement, RequirementType, SourceLocation, Specification};
+use chrono::Utc;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{debug, error, info, warn};
 
@@ -182,6 +185,7 @@ pub struct SelfDevOrchestrator {
     shutdown_tx: mpsc::Sender<()>,
     shutdown_rx: Arc<Mutex<Option<mpsc::Receiver<()>>>>,
     project_root: PathBuf,
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 impl SelfDevOrchestrator {
@@ -195,6 +199,13 @@ impl SelfDevOrchestrator {
         let safety_level = { config.read().await.safety_level.clone() };
         let safety_monitor = SafetyMonitor::new(safety_level);
         let operator_interface = OperatorInterface::new();
+        let metrics = match MetricsCollector::new().await {
+            Ok(collector) => Some(Arc::new(collector)),
+            Err(err) => {
+                warn!("Failed to initialize metrics collector: {}", err);
+                None
+            }
+        };
 
         Ok(Self {
             config,
@@ -205,6 +216,7 @@ impl SelfDevOrchestrator {
             shutdown_tx,
             shutdown_rx: Arc::new(Mutex::new(Some(shutdown_rx))),
             project_root,
+            metrics,
         })
     }
 
@@ -217,6 +229,14 @@ impl SelfDevOrchestrator {
         }
 
         drop(config);
+
+        {
+            let state_machine = self.state_machine.lock().await;
+            if state_machine.current_state() != DevelopmentState::Idle {
+                info!("Self-development orchestrator is already running");
+                return Ok(());
+            }
+        }
         self.transition_state(DevelopmentState::Analyzing).await?;
 
         let orchestrator = self.clone();
@@ -272,6 +292,10 @@ impl SelfDevOrchestrator {
 
         self.coordinator.rollback_all().await?;
 
+        let mut metadata = HashMap::new();
+        metadata.insert("action".to_string(), "emergency_stop".to_string());
+        self.record_metrics_event("emergency_stop", true, 0, metadata).await;
+
         error!("Emergency stop completed");
         Ok(())
     }
@@ -279,6 +303,17 @@ impl SelfDevOrchestrator {
     pub async fn get_status(&self) -> Result<SelfDevStatus> {
         let state_machine = self.state_machine.lock().await;
         let config = self.config.read().await;
+        let metrics_snapshot = if let Some(metrics) = &self.metrics {
+            match metrics.get_current_snapshot().await {
+                Ok(snapshot) => Some(snapshot),
+                Err(err) => {
+                    debug!("Failed to fetch metrics snapshot: {}", err);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         Ok(SelfDevStatus {
             current_state: state_machine.current_state(),
@@ -288,6 +323,7 @@ impl SelfDevOrchestrator {
             active_components: self.coordinator.get_active_components().await,
             pending_changes: self.coordinator.get_pending_changes().await?,
             today_changes: self.coordinator.get_today_changes_count().await,
+            latest_metrics: metrics_snapshot,
         })
     }
 
@@ -297,26 +333,54 @@ impl SelfDevOrchestrator {
 
     pub async fn approve_change(&self, change_id: String) -> Result<()> {
         if let Some(change) = self.coordinator.lookup_change(&change_id).await? {
+            let mut metadata = HashMap::new();
+            metadata.insert("change_id".to_string(), change.id.clone());
+            metadata.insert("risk_level".to_string(), format!("{:?}", change.risk_level));
+            metadata.insert("current_status".to_string(), change.status.to_string());
+            metadata
+                .insert("required_components".to_string(), change.required_components.join(","));
+
             if !self.safety_monitor.validate_change(&change).await? {
+                self.record_metrics_event("change_approval", false, 0, metadata).await;
                 return Err(SelfDevError::SafetyViolation(format!(
                     "Change {} failed safety validation",
                     change_id
                 )));
             }
 
-            self.coordinator.approve_change(change_id).await
+            self.coordinator.approve_change(change_id.clone()).await?;
+            metadata.insert("result".to_string(), "approved".to_string());
+            self.record_metrics_event("change_approval", true, 0, metadata).await;
+            Ok(())
         } else {
             Err(SelfDevError::Coordination(format!("Change {} not found", change_id)))
         }
     }
 
     pub async fn reject_change(&self, change_id: String) -> Result<()> {
-        self.coordinator.reject_change(change_id).await
+        let mut metadata = HashMap::new();
+        metadata.insert("change_id".to_string(), change_id.clone());
+
+        let result = self.coordinator.reject_change(change_id.clone()).await;
+        let success = result.is_ok();
+        metadata.insert(
+            "result".to_string(),
+            if success { "rejected".to_string() } else { "error".to_string() },
+        );
+
+        self.record_metrics_event("change_rejection", success, 0, metadata).await;
+        result
     }
 
     pub async fn handle_control_command(&self, command: ControlCommand) -> Result<()> {
         let ticket = self.operator_interface.handle_command(command.clone()).await?;
-        let result = self.apply_control_command(command).await;
+        let result = self.apply_control_command(command.clone()).await;
+        let success = result.is_ok();
+
+        let mut metadata = HashMap::new();
+        metadata.insert("command".to_string(), format!("{:?}", command));
+        metadata.insert("ticket".to_string(), ticket.id().to_string());
+        self.record_metrics_event("control_command", success, 0, metadata).await;
 
         match &result {
             Ok(_) => {
@@ -547,6 +611,11 @@ impl SelfDevOrchestrator {
     async fn test_changes(&self) -> Result<()> {
         let test_results = self.coordinator.test_solution().await?;
 
+        let mut metadata = HashMap::new();
+        metadata.insert("failed_runs".to_string(), test_results.failed().to_string());
+        metadata.insert("total_runs".to_string(), test_results.runs().len().to_string());
+        self.record_metrics_event("test_cycle", test_results.failed() == 0, 0, metadata).await;
+
         if test_results.all_passed() {
             self.transition_state(DevelopmentState::Reviewing).await
         } else {
@@ -559,13 +628,20 @@ impl SelfDevOrchestrator {
         let changes = self.coordinator.get_pending_changes().await?;
 
         let mut all_safe = true;
+        let mut violations = 0u32;
         for change in changes.iter().filter(|c| c.status >= ChangeStatus::ReadyForReview) {
             if !self.safety_monitor.validate_change(change).await? {
                 warn!("Change {} failed safety validation", change.id);
                 all_safe = false;
                 self.coordinator.flag_safety_failure(&change.id).await;
+                violations += 1;
             }
         }
+
+        let mut metadata = HashMap::new();
+        metadata.insert("changes_reviewed".to_string(), changes.len().to_string());
+        metadata.insert("violations".to_string(), violations.to_string());
+        self.record_metrics_event("safety_review", all_safe, 0, metadata).await;
 
         if all_safe {
             let config = self.config.read().await;
@@ -587,7 +663,27 @@ impl SelfDevOrchestrator {
     }
 
     async fn deploy_changes(&self) -> Result<()> {
-        self.coordinator.deploy_approved_changes().await?;
+        let before = self.coordinator.get_today_changes_count().await;
+        if let Err(err) = self.coordinator.deploy_approved_changes().await {
+            let mut metadata = HashMap::new();
+            metadata.insert("deployed_changes".to_string(), "0".to_string());
+            metadata.insert("error".to_string(), err.to_string());
+            self.record_metrics_event("deployment_batch", false, 0, metadata).await;
+            return Err(err);
+        }
+
+        let after = self.coordinator.get_today_changes_count().await;
+        let deployed = after.saturating_sub(before);
+
+        let mut metadata = HashMap::new();
+        metadata.insert("deployed_changes".to_string(), deployed.to_string());
+        let max_per_day = {
+            let cfg = self.config.read().await;
+            cfg.max_changes_per_day
+        };
+        metadata.insert("max_per_day".to_string(), max_per_day.to_string());
+
+        self.record_metrics_event("deployment_batch", deployed > 0, 0, metadata).await;
         self.transition_state(DevelopmentState::Monitoring).await
     }
 
@@ -602,13 +698,75 @@ impl SelfDevOrchestrator {
     }
 
     async fn transition_state(&self, new_state: DevelopmentState) -> Result<()> {
-        let mut state_machine = self.state_machine.lock().await;
-        state_machine.transition_to(new_state)?;
+        let (from_state, duration_ms) = {
+            let mut state_machine = self.state_machine.lock().await;
+            let from = state_machine.current_state();
+            let duration_ms = state_machine.get_time_in_current_state().as_millis() as u64;
+            state_machine.transition_to(new_state)?;
+            (from, duration_ms)
+        };
+
+        self.record_transition_metric(from_state, new_state, duration_ms).await;
         Ok(())
+    }
+
+    async fn record_transition_metric(
+        &self,
+        from: DevelopmentState,
+        to: DevelopmentState,
+        duration_ms: u64,
+    ) {
+        if self.metrics.is_none() {
+            return;
+        }
+
+        let config_snapshot = {
+            let cfg = self.config.read().await;
+            cfg.clone()
+        };
+
+        let mut metadata = HashMap::new();
+        metadata.insert("from_state".to_string(), from.to_string());
+        metadata.insert("to_state".to_string(), to.to_string());
+        metadata.insert("mode".to_string(), format!("{:?}", config_snapshot.mode));
+        metadata.insert("safety_level".to_string(), format!("{:?}", config_snapshot.safety_level));
+        metadata.insert("auto_approve".to_string(), config_snapshot.auto_approve.to_string());
+
+        self.record_metrics_event("state_transition", true, duration_ms, metadata).await;
+    }
+
+    async fn record_metrics_event(
+        &self,
+        event_type: &str,
+        success: bool,
+        duration_ms: u64,
+        mut metadata: HashMap<String, String>,
+    ) {
+        if let Some(metrics) = &self.metrics {
+            metadata
+                .entry("project_root".to_string())
+                .or_insert(self.project_root.display().to_string());
+            metadata.entry("timestamp".to_string()).or_insert(Utc::now().to_rfc3339());
+
+            let event = MetricEvent {
+                timestamp: Utc::now(),
+                event_type: event_type.to_string(),
+                module: "self_dev".to_string(),
+                success,
+                duration_ms,
+                metadata,
+            };
+
+            if let Err(err) = metrics.record_event(event).await {
+                warn!("Failed to record metrics event {}: {}", event_type, err);
+            }
+        }
     }
 
     pub async fn execute_task(&self, task_description: &str) -> Result<()> {
         info!("Executing task: {}", task_description);
+
+        let task_start = Instant::now();
 
         self.transition_state(DevelopmentState::Analyzing).await?;
 
@@ -715,6 +873,14 @@ impl SelfDevOrchestrator {
 
         self.transition_state(DevelopmentState::Idle).await?;
 
+        let mut metadata = HashMap::new();
+        metadata.insert("task".to_string(), task_description.to_string());
+        metadata.insert("generated_files".to_string(), result.files_generated.len().to_string());
+        metadata.insert("applied_files".to_string(), applied_count.to_string());
+        let elapsed_ms = task_start.elapsed().as_millis() as u64;
+        metadata.insert("duration_ms".to_string(), elapsed_ms.to_string());
+        self.record_metrics_event("manual_task", applied_count > 0, elapsed_ms, metadata).await;
+
         info!("Task execution completed");
         Ok(())
     }
@@ -750,4 +916,5 @@ pub struct SelfDevStatus {
     pub active_components: Vec<String>,
     pub pending_changes: Vec<PendingChange>,
     pub today_changes: usize,
+    pub latest_metrics: Option<MetricsSnapshot>,
 }
