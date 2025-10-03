@@ -1,6 +1,6 @@
 # PRP: Self-Development Integration and Orchestration
 
-**Status**: PARTIAL (2025-09-27) - Orchestration module created but not integrated into CLI
+**Status**: COMPLETE (2025-09-27) - Orchestrator wired into CLI with metrics-driven observability
 
 ## Overview
 Integrate all self-development components into a cohesive system that enables auto-dev-rs to autonomously improve itself while maintaining stability, safety, and continuous operation.
@@ -65,6 +65,11 @@ Create orchestration in auto-dev-core/src/self_dev/
 3. **ComponentCoordinator** - Integrates components
 4. **SafetyMonitor** - Ensures safe operation
 5. **OperatorInterface** - Human control interface
+
+### Completion Notes
+- CLI start/status commands now operate the orchestrator directly, preventing duplicate runtimes and surfacing live metrics
+- Metrics collector integration records state transitions, test cycles, safety reviews, deployments, manual tasks, and operator commands
+- Status snapshots expose telemetry (success rate, modification velocity, coverage) to support observability requirements
 
 ### Implementation Tasks (in order)
 1. Create orchestrator framework
