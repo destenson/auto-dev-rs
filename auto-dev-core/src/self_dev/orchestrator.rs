@@ -1,6 +1,7 @@
 #![allow(unused)]
 //! Central orchestrator for self-development activities
 
+use super::monitor::SafetyAuthority;
 use super::{
     ComponentCoordinator, ControlCommand, DevelopmentState, DevelopmentStateMachine,
     OperatorInterface, Result, SafetyMonitor, SelfDevConfig, SelfDevError,
@@ -26,17 +27,21 @@ impl SelfDevOrchestrator {
     pub async fn new(config: SelfDevConfig) -> Result<Self> {
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
 
-        let state_machine = DevelopmentStateMachine::new(DevelopmentState::Idle);
-        let coordinator = ComponentCoordinator::new(config.clone());
-        let safety_monitor = SafetyMonitor::new(config.safety_level.clone());
-        let operator_interface = OperatorInterface::new();
+        let config = Arc::new(RwLock::new(config));
+        let state_machine =
+            Arc::new(Mutex::new(DevelopmentStateMachine::new(DevelopmentState::Idle)));
+        let coordinator = Arc::new(ComponentCoordinator::new(config.clone()).await?);
+        let initial_level = { config.read().await.safety_level.clone() };
+        let authority: Arc<dyn SafetyAuthority> = coordinator.clone();
+        let safety_monitor = Arc::new(SafetyMonitor::new(authority, initial_level));
+        let operator_interface = Arc::new(OperatorInterface::new());
 
         Ok(Self {
-            config: Arc::new(RwLock::new(config)),
-            state_machine: Arc::new(Mutex::new(state_machine)),
-            coordinator: Arc::new(coordinator),
-            safety_monitor: Arc::new(safety_monitor),
-            operator_interface: Arc::new(operator_interface),
+            config,
+            state_machine,
+            coordinator,
+            safety_monitor,
+            operator_interface,
             shutdown_tx,
             shutdown_rx: Arc::new(Mutex::new(shutdown_rx)),
         })
@@ -301,6 +306,10 @@ impl SelfDevOrchestrator {
     }
 
     pub async fn handle_control_command(&self, command: ControlCommand) -> Result<()> {
+        if let ControlCommand::SetSafetyLevel(level) = &command {
+            self.safety_monitor.set_manual_level(level.clone()).await?;
+        }
+
         self.operator_interface.handle_command(command).await
     }
 
