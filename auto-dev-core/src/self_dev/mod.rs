@@ -62,11 +62,29 @@ pub enum DevelopmentMode {
     FullyAutonomous,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SafetyLevel {
     Permissive,
     Standard,
     Strict,
+}
+
+impl From<u8> for SafetyLevel {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => SafetyLevel::Permissive,
+            1 => SafetyLevel::Standard,
+            2 => SafetyLevel::Strict,
+            _ => SafetyLevel::Standard, // Default to Standard for unknown values
+        }
+    }
+}
+
+impl Into<u8> for SafetyLevel {
+    fn into(self) -> u8 {
+        self as u8
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
