@@ -10,10 +10,13 @@ pub mod monitor;
 pub mod orchestrator;
 pub mod state_machine;
 
-pub use control::{ControlCommand, OperatorInterface};
+pub use control::{CommandResult, ControlCommand, OperatorInterface};
 pub use coordinator::ComponentCoordinator;
 pub use monitor::SafetyMonitor;
-pub use orchestrator::SelfDevOrchestrator;
+pub use orchestrator::{
+    ChangeMetrics, ChangeStatus, ChangeType, PendingChange, PlanDigest, PlanStep, RiskLevel,
+    SelfDevOrchestrator, SelfDevStatus, TestResults, TestRunSummary,
+};
 pub use state_machine::{DevelopmentState, DevelopmentStateMachine};
 
 use serde::{Deserialize, Serialize};
@@ -68,23 +71,6 @@ pub enum SafetyLevel {
     Permissive,
     Standard,
     Strict,
-}
-
-impl From<u8> for SafetyLevel {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => SafetyLevel::Permissive,
-            1 => SafetyLevel::Standard,
-            2 => SafetyLevel::Strict,
-            _ => SafetyLevel::Standard, // Default to Standard for unknown values
-        }
-    }
-}
-
-impl Into<u8> for SafetyLevel {
-    fn into(self) -> u8 {
-        self as u8
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

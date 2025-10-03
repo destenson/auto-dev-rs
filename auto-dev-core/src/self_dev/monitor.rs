@@ -1,93 +1,200 @@
 #![allow(unused)]
 //! Safety monitoring for self-development activities
 
-use super::{Result, SafetyLevel};
-use crate::safety::ValidationReport;
-use async_trait::async_trait;
-use std::sync::{
-    atomic::{AtomicU8, AtomicUsize, Ordering},
-    Arc,
-};
-use std::time::SystemTime;
+use super::orchestrator::{PendingChange, RiskLevel};
+use super::{Result, SafetyLevel, SelfDevError};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use std::collections::HashSet;
+use std::path::Path;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
-
-const FAILURE_ESCALATION_THRESHOLD: usize = 2;
-const SUCCESS_RELAXATION_THRESHOLD: usize = 4;
-const HISTORY_LIMIT: usize = 50;
-
-#[async_trait]
-pub trait SafetyAuthority: Send + Sync {
-    async fn validate_change(&self, change_id: &str) -> Result<ValidationReport>;
-    async fn update_safety_level(&self, level: SafetyLevel) -> Result<()>;
-    async fn current_safety_level(&self) -> Result<SafetyLevel>;
-}
+use tracing::{debug, error, info, warn};
 
 pub struct SafetyMonitor {
-    authority: Arc<dyn SafetyAuthority>,
-    safety_level: AtomicU8,
+    safety_level: Arc<RwLock<SafetyLevel>>,
+    blocked_patterns: Arc<RwLock<HashSet<String>>>,
+    allowed_directories: Arc<RwLock<HashSet<String>>>,
     validation_history: Arc<RwLock<Vec<ValidationRecord>>>,
-    consecutive_failures: AtomicUsize,
-    consecutive_successes: AtomicUsize,
-    failure_threshold: usize,
-    success_threshold: usize,
 }
 
 #[derive(Debug, Clone)]
 struct ValidationRecord {
     change_id: String,
-    timestamp: SystemTime,
-    report: ValidationReport,
+    timestamp: std::time::SystemTime,
+    passed: bool,
+    reason: Option<String>,
 }
 
 impl SafetyMonitor {
-    pub fn new(authority: Arc<dyn SafetyAuthority>, safety_level: SafetyLevel) -> Self {
+    pub fn new(safety_level: SafetyLevel) -> Self {
+        let (blocked, allowed) = Self::default_rules(&safety_level);
+
         Self {
-            authority,
-            safety_level: AtomicU8::new(safety_level.into()),
+            safety_level: Arc::new(RwLock::new(safety_level)),
+            blocked_patterns: Arc::new(RwLock::new(blocked)),
+            allowed_directories: Arc::new(RwLock::new(allowed)),
             validation_history: Arc::new(RwLock::new(Vec::new())),
-            consecutive_failures: AtomicUsize::new(0),
-            consecutive_successes: AtomicUsize::new(0),
-            failure_threshold: FAILURE_ESCALATION_THRESHOLD,
-            success_threshold: SUCCESS_RELAXATION_THRESHOLD,
         }
     }
 
-    pub async fn validate_change(&self, change_id: &str) -> Result<bool> {
-        debug!("Validating change: {}", change_id);
+    pub async fn set_safety_level(&self, safety_level: SafetyLevel) {
+        let (blocked, allowed) = Self::default_rules(&safety_level);
+        *self.safety_level.write().await = safety_level;
+        *self.blocked_patterns.write().await = blocked;
+        *self.allowed_directories.write().await = allowed;
+    }
 
-        let report = self.authority.validate_change(change_id).await?;
-        let passed = report.passed;
+    pub async fn validate_change(&self, change: &PendingChange) -> Result<bool> {
+        debug!("Validating change: {}", change.id);
 
-        self.record_history(change_id, report.clone()).await;
+        let validation_checks = vec![
+            ("file_patterns", self.check_file_patterns(change).await),
+            ("directory_permissions", self.check_directory_permissions(change).await),
+            ("risk_profile", self.check_risk_profile(change).await),
+            ("resource_limits", self.check_resource_limits(change).await),
+            ("dependency_safety", self.check_dependency_safety(change).await),
+        ];
 
-        if passed {
-            self.handle_success().await?;
-            info!("Change {} passed safety validation", change_id);
+        let mut all_passed = true;
+        let mut failure_reasons: Vec<String> = Vec::new();
+
+        for (name, result) in validation_checks {
+            match result {
+                Ok(true) => debug!("{} check passed for {}", name, change.id),
+                Ok(false) => {
+                    warn!("{} check failed for {}", name, change.id);
+                    all_passed = false;
+                    failure_reasons.push(name.to_string());
+                }
+                Err(e) => {
+                    error!("{} check error for {}: {}", name, change.id, e);
+                    all_passed = false;
+                    failure_reasons.push(format!("{} (error)", name));
+                }
+            }
+        }
+
+        let record = ValidationRecord {
+            change_id: change.id.clone(),
+            timestamp: std::time::SystemTime::now(),
+            passed: all_passed,
+            reason: if failure_reasons.is_empty() {
+                None
+            } else {
+                Some(failure_reasons.join(", "))
+            },
+        };
+
+        self.validation_history.write().await.push(record);
+
+        if all_passed {
+            info!("Change {} passed all safety validations", change.id);
         } else {
-            self.handle_failure(change_id, &report).await?;
+            warn!("Change {} failed safety validations", change.id);
         }
 
-        Ok(passed)
+        Ok(all_passed)
     }
 
-    pub async fn set_manual_level(&self, level: SafetyLevel) -> Result<()> {
-        self.authority.update_safety_level(level.clone()).await?;
-        self.safety_level.store(level.into(), Ordering::SeqCst);
-        self.reset_counters();
-        Ok(())
+    async fn check_file_patterns(&self, change: &PendingChange) -> Result<bool> {
+        let blocked = self.blocked_patterns.read().await.clone();
+        if blocked.is_empty() {
+            return Ok(true);
+        }
+
+        let mut builder = GlobSetBuilder::new();
+        for pattern in blocked {
+            if let Ok(glob) = Glob::new(&pattern) {
+                builder.add(glob);
+            }
+        }
+        let glob_set = builder.build().map_err(|e| {
+            SelfDevError::SafetyViolation(format!("Invalid blocked pattern: {}", e))
+        })?;
+
+        for path in &change.target_files {
+            if glob_set.is_match(path) {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 
-    pub async fn current_level(&self) -> SafetyLevel {
-        self.safety_level.load(Ordering::SeqCst).into()
+    async fn check_directory_permissions(&self, change: &PendingChange) -> Result<bool> {
+        let allowed = self.allowed_directories.read().await.clone();
+        if allowed.is_empty() {
+            return Ok(true);
+        }
+
+        for path in &change.target_files {
+            if let Some(component) = path.components().next() {
+                let component_str = component.as_os_str().to_string_lossy().to_string();
+                if !allowed.contains(&component_str) {
+                    return Ok(false);
+                }
+            }
+        }
+
+        Ok(true)
     }
 
-    pub async fn get_validation_history(&self) -> Vec<(String, bool)> {
+    async fn check_risk_profile(&self, change: &PendingChange) -> Result<bool> {
+        let safety_level = self.safety_level.read().await.clone();
+        match (safety_level, &change.risk_level) {
+            (SafetyLevel::Strict, RiskLevel::Critical) => Ok(false),
+            (SafetyLevel::Strict, RiskLevel::High) => {
+                Ok(!change.target_files.iter().any(|path| path.starts_with("docs")))
+            }
+            (SafetyLevel::Permissive, _) => Ok(true),
+            _ => Ok(true),
+        }
+    }
+
+    async fn check_resource_limits(&self, change: &PendingChange) -> Result<bool> {
+        let limit = match self.safety_level.read().await.clone() {
+            SafetyLevel::Strict => 4,
+            SafetyLevel::Standard => 8,
+            SafetyLevel::Permissive => 12,
+        };
+
+        Ok(change.target_files.len() <= limit)
+    }
+
+    async fn check_dependency_safety(&self, change: &PendingChange) -> Result<bool> {
+        let risky_paths = ["Cargo.lock", ".git", "target", "node_modules"];
+        for path in &change.target_files {
+            if let Some(path_str) = path.to_str() {
+                if risky_paths.iter().any(|blocked| path_str.contains(blocked)) {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    pub async fn add_blocked_pattern(&self, pattern: String) {
+        self.blocked_patterns.write().await.insert(pattern);
+    }
+
+    pub async fn remove_blocked_pattern(&self, pattern: &str) {
+        self.blocked_patterns.write().await.remove(pattern);
+    }
+
+    pub async fn add_allowed_directory(&self, directory: String) {
+        self.allowed_directories.write().await.insert(directory);
+    }
+
+    pub async fn remove_allowed_directory(&self, directory: &str) {
+        self.allowed_directories.write().await.remove(directory);
+    }
+
+    pub async fn get_validation_history(&self) -> Vec<(String, bool, Option<String>)> {
         self.validation_history
             .read()
             .await
             .iter()
-            .map(|r| (r.change_id.clone(), r.report.passed))
+            .map(|record| (record.change_id.clone(), record.passed, record.reason.clone()))
             .collect()
     }
 
@@ -95,187 +202,114 @@ impl SafetyMonitor {
         self.validation_history.write().await.clear();
     }
 
-    async fn record_history(&self, change_id: &str, report: ValidationReport) {
-        let mut history = self.validation_history.write().await;
-        history.push(ValidationRecord {
-            change_id: change_id.to_string(),
-            timestamp: SystemTime::now(),
-            report,
-        });
-
-        if history.len() > HISTORY_LIMIT {
-            let excess = history.len() - HISTORY_LIMIT;
-            history.drain(0..excess);
-        }
+    pub async fn safety_level(&self) -> SafetyLevel {
+        self.safety_level.read().await.clone()
     }
 
-    async fn handle_failure(&self, change_id: &str, report: &ValidationReport) -> Result<()> {
-        warn!(
-            "Change {} failed safety validation with risk {:?}: {:?}",
-            change_id, report.risk_level, report.recommendations
-        );
+    fn default_rules(level: &SafetyLevel) -> (HashSet<String>, HashSet<String>) {
+        let mut blocked = HashSet::new();
+        let mut allowed = HashSet::new();
 
-        self.consecutive_successes.store(0, Ordering::SeqCst);
+        match level {
+            SafetyLevel::Strict => {
+                blocked.extend([
+                    "**/*.exe".to_string(),
+                    "**/*.dll".to_string(),
+                    "**/*.so".to_string(),
+                    "**/*.dylib".to_string(),
+                    "**/Cargo.lock".to_string(),
+                    ".git/**".to_string(),
+                    "target/**".to_string(),
+                ]);
 
-        let failures = self.consecutive_failures.fetch_add(1, Ordering::SeqCst) + 1;
-
-        if failures >= self.failure_threshold {
-            self.escalate_safety_level().await?;
-            self.reset_counters();
+                allowed.extend([
+                    "src".to_string(),
+                    "auto-dev-core/src".to_string(),
+                    "auto-dev/src".to_string(),
+                    "docs".to_string(),
+                    "tests".to_string(),
+                ]);
+            }
+            SafetyLevel::Standard => {
+                blocked.extend(["**/*.exe".to_string(), ".git/**".to_string()]);
+                allowed.extend([
+                    "src".to_string(),
+                    "docs".to_string(),
+                    "tests".to_string(),
+                    "examples".to_string(),
+                    "benches".to_string(),
+                ]);
+            }
+            SafetyLevel::Permissive => {
+                blocked.insert(".git/**".to_string());
+            }
         }
 
-        Ok(())
-    }
-
-    async fn handle_success(&self) -> Result<()> {
-        self.consecutive_failures.store(0, Ordering::SeqCst);
-
-        let successes = self.consecutive_successes.fetch_add(1, Ordering::SeqCst) + 1;
-
-        if successes >= self.success_threshold {
-            self.relax_safety_level().await?;
-            self.reset_counters();
-        }
-
-        Ok(())
-    }
-
-    async fn escalate_safety_level(&self) -> Result<()> {
-        let current = (self.safety_level.load(Ordering::SeqCst)).into();
-        let new_level = match current {
-            SafetyLevel::Permissive => SafetyLevel::Standard,
-            SafetyLevel::Standard => SafetyLevel::Strict,
-            SafetyLevel::Strict => SafetyLevel::Strict,
-        };
-
-        if new_level != current {
-            warn!(
-                "Escalating safety level from {:?} to {:?} after repeated failures",
-                current, new_level
-            );
-            self.authority.update_safety_level(new_level.clone()).await?;
-            self.safety_level.store(new_level.into(), Ordering::SeqCst);
-            self.reset_counters();
-        }
-
-        Ok(())
-    }
-
-    async fn relax_safety_level(&self) -> Result<()> {
-        let current = self.safety_level.load(Ordering::SeqCst).into();
-        let new_level = match current {
-            SafetyLevel::Strict => SafetyLevel::Standard,
-            SafetyLevel::Standard => SafetyLevel::Permissive,
-            SafetyLevel::Permissive => SafetyLevel::Permissive,
-        };
-
-        if new_level != current {
-            info!(
-                "Relaxing safety level from {:?} to {:?} after sustained success",
-                current, new_level
-            );
-            self.authority.update_safety_level(new_level.clone()).await?;
-            self.safety_level.store(new_level.into(), Ordering::SeqCst);
-            self.reset_counters();
-        }
-
-        Ok(())
-    }
-
-    fn reset_counters(&self) {
-        self.consecutive_failures.store(0, Ordering::SeqCst);
-        self.consecutive_successes.store(0, Ordering::SeqCst);
+        (blocked, allowed)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::safety::{RiskLevel, ValidationReport};
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
+    use crate::self_dev::orchestrator::{
+        ChangeMetrics, ChangeStatus, ChangeType, PlanDigest, PlanStep,
+    };
 
-    struct MockAuthority {
-        level: Arc<RwLock<SafetyLevel>>,
-        report: Arc<RwLock<ValidationReport>>,
-    }
-
-    impl MockAuthority {
-        fn new(level: SafetyLevel, report: ValidationReport) -> Self {
-            Self { level: Arc::new(RwLock::new(level)), report: Arc::new(RwLock::new(report)) }
-        }
-
-        async fn set_report(&self, report: ValidationReport) {
-            *self.report.write().await = report;
-        }
-    }
-
-    #[async_trait]
-    impl SafetyAuthority for MockAuthority {
-        async fn validate_change(&self, _change_id: &str) -> Result<ValidationReport> {
-            Ok(self.report.read().await.clone())
-        }
-
-        async fn update_safety_level(&self, level: SafetyLevel) -> Result<()> {
-            *self.level.write().await = level;
-            Ok(())
-        }
-
-        async fn current_safety_level(&self) -> Result<SafetyLevel> {
-            Ok(self.level.read().await.clone())
-        }
-    }
-
-    fn passing_report() -> ValidationReport {
-        ValidationReport {
-            passed: true,
-            gate_results: vec![],
-            duration_ms: 0,
-            risk_level: RiskLevel::Low,
-            recommendations: vec![],
-        }
-    }
-
-    fn failing_report() -> ValidationReport {
-        ValidationReport {
-            passed: false,
-            gate_results: vec![],
-            duration_ms: 0,
-            risk_level: RiskLevel::High,
-            recommendations: vec!["Fix issues".to_string()],
+    fn sample_change(target: &str, risk: RiskLevel) -> PendingChange {
+        PendingChange {
+            id: "test_change".to_string(),
+            description: "Test change".to_string(),
+            summary: None,
+            file_path: "PRPs/999-test.md".to_string(),
+            change_type: ChangeType::Modify,
+            risk_level: risk,
+            status: ChangeStatus::ReadyForReview,
+            plan: Some(PlanDigest {
+                steps: vec![PlanStep {
+                    id: "1".into(),
+                    description: "Step".into(),
+                    depends_on: vec![],
+                    tests: vec![],
+                }],
+                estimated_duration: std::time::Duration::from_secs(60),
+                critical_path: vec![],
+            }),
+            target_files: vec![PathBuf::from(target)],
+            required_components: vec!["testing".to_string()],
+            last_updated: std::time::SystemTime::now(),
+            metrics: ChangeMetrics::default(),
         }
     }
 
     #[tokio::test]
     async fn test_safety_monitor_creation() {
-        let authority = Arc::new(MockAuthority::new(SafetyLevel::Standard, passing_report()));
-        let monitor = SafetyMonitor::new(authority, SafetyLevel::Standard);
-
-        assert!(matches!(monitor.current_level().await, SafetyLevel::Standard));
+        let monitor = SafetyMonitor::new(SafetyLevel::Standard);
+        assert!(matches!(monitor.safety_level().await, SafetyLevel::Standard));
     }
 
     #[tokio::test]
-    async fn test_validation_success_records_history() {
-        let authority = Arc::new(MockAuthority::new(SafetyLevel::Standard, passing_report()));
-        let monitor = SafetyMonitor::new(authority, SafetyLevel::Standard);
-
-        let result = monitor.validate_change("change_a").await.unwrap();
-        assert!(result);
-
-        let history = monitor.get_validation_history().await;
-        assert_eq!(history.len(), 1);
-        assert_eq!(history[0], ("change_a".to_string(), true));
+    async fn test_validation_pass() {
+        let monitor = SafetyMonitor::new(SafetyLevel::Standard);
+        let change = sample_change("src/lib.rs", RiskLevel::Low);
+        let result = monitor.validate_change(&change).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap());
     }
 
     #[tokio::test]
-    async fn test_failure_escalates_level() {
-        let authority = Arc::new(MockAuthority::new(SafetyLevel::Standard, failing_report()));
-        let monitor = SafetyMonitor::new(authority.clone(), SafetyLevel::Standard);
+    async fn test_blocked_pattern() {
+        let monitor = SafetyMonitor::new(SafetyLevel::Strict);
+        let change = sample_change("Cargo.lock", RiskLevel::Medium);
+        let result = monitor.validate_change(&change).await.unwrap();
+        assert!(!result);
+    }
 
-        monitor.validate_change("change_a").await.unwrap();
-        authority.set_report(failing_report()).await;
-        monitor.validate_change("change_b").await.unwrap();
-
-        assert!(matches!(monitor.current_level().await, SafetyLevel::Strict));
+    #[tokio::test]
+    async fn test_strict_risk_failure() {
+        let monitor = SafetyMonitor::new(SafetyLevel::Strict);
+        let change = sample_change("auto-dev-core/src/lib.rs", RiskLevel::Critical);
+        let result = monitor.validate_change(&change).await.unwrap();
+        assert!(!result);
     }
 }

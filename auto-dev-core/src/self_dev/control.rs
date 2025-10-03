@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ControlCommand {
@@ -25,25 +26,38 @@ pub enum ControlCommand {
     SetMaxChangesPerDay(usize),
 }
 
-pub struct OperatorInterface {
-    command_tx: mpsc::Sender<ControlCommand>,
-    command_rx: Arc<Mutex<mpsc::Receiver<ControlCommand>>>,
-    audit_log: Arc<Mutex<Vec<AuditEntry>>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CommandTicket(Uuid);
+
+impl CommandTicket {
+    fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.0
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandResult {
+    Pending,
+    Success,
+    Failure(String),
+}
+
 struct AuditEntry {
+    id: CommandTicket,
     timestamp: std::time::SystemTime,
     command: ControlCommand,
     operator: Option<String>,
     result: CommandResult,
 }
 
-#[derive(Debug, Clone)]
-enum CommandResult {
-    Success,
-    Failure(String),
-    Pending,
+pub struct OperatorInterface {
+    command_tx: mpsc::Sender<(CommandTicket, ControlCommand)>,
+    command_rx: Arc<Mutex<mpsc::Receiver<(CommandTicket, ControlCommand)>>>,
+    audit_log: Arc<Mutex<Vec<AuditEntry>>>,
 }
 
 impl OperatorInterface {
@@ -57,109 +71,66 @@ impl OperatorInterface {
         }
     }
 
-    pub async fn handle_command(&self, command: ControlCommand) -> Result<()> {
+    pub async fn handle_command(&self, command: ControlCommand) -> Result<CommandTicket> {
+        if !Self::validate_command(&command) {
+            return Err(SelfDevError::Control("Invalid control command".to_string()));
+        }
+
         info!("Handling operator command: {:?}", command);
+        let ticket = CommandTicket::new();
+        self.log_command(ticket, command.clone(), CommandResult::Pending).await;
+        Ok(ticket)
+    }
 
-        self.log_command(command.clone(), CommandResult::Pending).await;
-
-        match &command {
-            ControlCommand::Start => {
-                info!("Starting self-development via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::Stop => {
-                info!("Stopping self-development via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::Pause => {
-                info!("Pausing self-development via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::Resume => {
-                info!("Resuming self-development via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::EmergencyStop => {
-                warn!("Emergency stop triggered via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::GetStatus => {
-                debug!("Status request via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::ReviewChanges => {
-                debug!("Review changes request via operator command");
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::ApproveChange(id) => {
-                info!("Approving change {} via operator command", id);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::RejectChange(id) => {
-                info!("Rejecting change {} via operator command", id);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::SetMode(mode) => {
-                info!("Setting development mode to {:?} via operator command", mode);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::SetSafetyLevel(level) => {
-                info!("Setting safety level to {:?} via operator command", level);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::EnableComponent(component) => {
-                info!("Enabling component {} via operator command", component);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::DisableComponent(component) => {
-                info!("Disabling component {} via operator command", component);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
-            ControlCommand::SetMaxChangesPerDay(limit) => {
-                info!("Setting max changes per day to {} via operator command", limit);
-                self.log_command(command, CommandResult::Success).await;
-                Ok(())
-            }
+    pub async fn finalize_command(&self, ticket: CommandTicket, result: CommandResult) {
+        let mut log = self.audit_log.lock().await;
+        if let Some(entry) = log.iter_mut().find(|entry| entry.id == ticket) {
+            entry.result = result;
+            entry.timestamp = std::time::SystemTime::now();
         }
     }
 
-    pub async fn send_command(&self, command: ControlCommand) -> Result<()> {
+    pub async fn send_command(&self, command: ControlCommand) -> Result<CommandTicket> {
+        if !Self::validate_command(&command) {
+            return Err(SelfDevError::Control("Invalid control command".to_string()));
+        }
+
+        let ticket = CommandTicket::new();
+        self.log_command(ticket, command.clone(), CommandResult::Pending).await;
         self.command_tx
-            .send(command)
+            .send((ticket, command))
             .await
-            .map_err(|e| SelfDevError::Control(format!("Failed to send command: {}", e)))
+            .map_err(|e| SelfDevError::Control(format!("Failed to send command: {}", e)))?;
+        Ok(ticket)
     }
 
-    pub async fn receive_command(&self) -> Option<ControlCommand> {
+    pub async fn receive_command(&self) -> Option<(CommandTicket, ControlCommand)> {
         self.command_rx.lock().await.recv().await
     }
 
-    async fn log_command(&self, command: ControlCommand, result: CommandResult) {
-        let entry =
-            AuditEntry { timestamp: std::time::SystemTime::now(), command, operator: None, result };
+    async fn log_command(
+        &self,
+        ticket: CommandTicket,
+        command: ControlCommand,
+        result: CommandResult,
+    ) {
+        let entry = AuditEntry {
+            id: ticket,
+            timestamp: std::time::SystemTime::now(),
+            command,
+            operator: None,
+            result,
+        };
 
         self.audit_log.lock().await.push(entry);
     }
 
-    pub async fn get_audit_log(&self) -> Vec<(std::time::SystemTime, String)> {
+    pub async fn get_audit_log(&self) -> Vec<(std::time::SystemTime, String, CommandResult)> {
         self.audit_log
             .lock()
             .await
             .iter()
-            .map(|entry| (entry.timestamp, format!("{:?}", entry.command)))
+            .map(|entry| (entry.timestamp, format!("{:?}", entry.command), entry.result.clone()))
             .collect()
     }
 
@@ -195,20 +166,20 @@ mod tests {
     async fn test_command_handling() {
         let interface = OperatorInterface::new();
 
-        let result = interface.handle_command(ControlCommand::Start).await;
-        assert!(result.is_ok());
+        let ticket = interface.handle_command(ControlCommand::Start).await.unwrap();
+        interface.finalize_command(ticket, CommandResult::Success).await;
 
-        let result = interface.handle_command(ControlCommand::Pause).await;
-        assert!(result.is_ok());
+        let ticket = interface.handle_command(ControlCommand::Pause).await.unwrap();
+        interface.finalize_command(ticket, CommandResult::Success).await;
 
-        let result = interface.handle_command(ControlCommand::Resume).await;
-        assert!(result.is_ok());
+        let ticket = interface.handle_command(ControlCommand::Resume).await.unwrap();
+        interface.finalize_command(ticket, CommandResult::Success).await;
 
-        let result = interface.handle_command(ControlCommand::Stop).await;
-        assert!(result.is_ok());
+        let ticket = interface.handle_command(ControlCommand::Stop).await.unwrap();
+        interface.finalize_command(ticket, CommandResult::Success).await;
 
         let audit_log = interface.get_audit_log().await;
-        assert_eq!(audit_log.len(), 8);
+        assert_eq!(audit_log.len(), 4);
     }
 
     #[tokio::test]
@@ -223,10 +194,12 @@ mod tests {
     async fn test_send_receive_command() {
         let interface = OperatorInterface::new();
 
-        interface.send_command(ControlCommand::GetStatus).await.unwrap();
+        let ticket = interface.send_command(ControlCommand::GetStatus).await.unwrap();
 
         let received = interface.receive_command().await;
         assert!(received.is_some());
-        assert!(matches!(received.unwrap(), ControlCommand::GetStatus));
+        let (rx_ticket, command) = received.unwrap();
+        assert_eq!(command, ControlCommand::GetStatus);
+        assert_eq!(ticket.id(), rx_ticket.id());
     }
 }

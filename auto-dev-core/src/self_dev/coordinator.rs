@@ -1,157 +1,91 @@
 //! Component coordinator for integrating self-development subsystems
 
-use super::monitor::SafetyAuthority;
-use super::orchestrator::{ChangeStatus, ChangeType, PendingChange, RiskLevel, TestResults};
-use super::{Result, SafetyLevel, SelfDevConfig, SelfDevError};
+use super::orchestrator::{
+    ChangeMetrics, ChangeStatus, ChangeType, PendingChange, PlanDigest, PlanStep, RiskLevel,
+    TestResults, TestRunSummary,
+};
+use super::{Result, SelfDevConfig, SelfDevError};
 use crate::incremental::planner::{IncrementPlan, IncrementPlanner};
 use crate::parser::SpecParser;
-use crate::parser::model::{Priority, Specification};
-use crate::safety::{
-    CodeModification, ModificationType, SafetyConfig, SafetyGatekeeper, ValidationReport,
-};
-use crate::self_target::SelfTargetConfig;
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use crate::parser::model::Specification;
+use crate::vcs::{CommitStyle, VcsConfig, VcsIntegration};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs;
+use std::time::{Duration, Instant, SystemTime};
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
-#[derive(Clone)]
-struct ChangeRecord {
-    change: PendingChange,
-    spec: Specification,
-    plan_path: Option<PathBuf>,
-    plan_summary: Option<String>,
-    generated_artifacts: Vec<PathBuf>,
-    safety_report: Option<ValidationReport>,
-    last_state_change: DateTime<Utc>,
-}
-
-struct DiscoveredPrp {
-    id: String,
-    description: String,
-    path: PathBuf,
-    spec: Specification,
-    status: Option<String>,
-}
+const TEST_COMMAND: &str = "cargo test --package auto-dev-core --lib -- self_dev::";
 
 pub struct ComponentCoordinator {
     config: Arc<RwLock<SelfDevConfig>>,
     project_root: PathBuf,
-    spec_parser: SpecParser,
-    planner: IncrementPlanner,
-    safety_gate: Arc<RwLock<SafetyGatekeeper>>,
-    pending_changes: Arc<RwLock<HashMap<String, ChangeRecord>>>,
-    approved_changes: Arc<RwLock<HashSet<String>>>,
+    pending_changes: Arc<RwLock<Vec<PendingChange>>>,
+    approved_changes: Arc<RwLock<Vec<PendingChange>>>,
     today_changes_count: Arc<RwLock<usize>>,
+    active_components: Arc<RwLock<Vec<String>>>,
+    specification_cache: Arc<RwLock<HashMap<String, Specification>>>,
+    plan_cache: Arc<RwLock<HashMap<String, PlanDigest>>>,
+    change_failures: Arc<RwLock<HashMap<String, u32>>>,
 }
 
 impl ComponentCoordinator {
-    pub async fn new(config: Arc<RwLock<SelfDevConfig>>) -> Result<Self> {
-        let cfg = config.read().await.clone();
+    pub async fn new(config: Arc<RwLock<SelfDevConfig>>, project_root: PathBuf) -> Self {
+        let active_snapshot = {
+            let cfg = config.read().await;
+            Self::list_active_components(&cfg)
+        };
 
-        let target_cfg = SelfTargetConfig::load_or_create().map_err(|e| {
-            SelfDevError::Configuration(format!("Failed to load self-target config: {}", e))
-        })?;
-        let project_root = target_cfg.project.path.clone();
-
-        let safety_gate =
-            SafetyGatekeeper::new(Self::build_safety_config(&cfg.safety_level, &project_root))
-                .map_err(|e| SelfDevError::SafetyViolation(e.to_string()))?;
-
-        let planner = IncrementPlanner::new(8, cfg.require_tests);
-
-        Ok(Self {
+        Self {
             config,
             project_root,
-            spec_parser: SpecParser::new(),
-            planner,
-            safety_gate: Arc::new(RwLock::new(safety_gate)),
-            pending_changes: Arc::new(RwLock::new(HashMap::new())),
-            approved_changes: Arc::new(RwLock::new(HashSet::new())),
+            pending_changes: Arc::new(RwLock::new(Vec::new())),
+            approved_changes: Arc::new(RwLock::new(Vec::new())),
             today_changes_count: Arc::new(RwLock::new(0)),
-        })
+            active_components: Arc::new(RwLock::new(active_snapshot)),
+            specification_cache: Arc::new(RwLock::new(HashMap::new())),
+            plan_cache: Arc::new(RwLock::new(HashMap::new())),
+            change_failures: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
-    pub async fn has_pending_work(&self) -> bool {
-        {
-            let pending = self.pending_changes.read().await;
-            if pending.values().any(|record| record.change.status.is_actionable()) {
-                return true;
-            }
-        }
-
-        match self.discover_open_prps().await {
-            Ok(prps) => !prps.is_empty(),
-            Err(err) => {
-                warn!("Failed to discover PRPs: {}", err);
-                false
-            }
-        }
+    pub async fn has_pending_work(&self) -> Result<bool> {
+        self.discover_pending_changes().await?;
+        Ok(!self.pending_changes.read().await.is_empty())
     }
 
     pub async fn analyze_requirements(&self) -> Result<()> {
-        info!("Analyzing open PRPs for self-development pipeline");
-        let discovered = self.discover_open_prps().await?;
-
-        let mut pending = self.pending_changes.write().await;
-        for prp in discovered {
-            if pending.contains_key(&prp.id) {
-                continue;
-            }
-
-            let risk = Self::assess_risk_level(&prp.spec);
-            let description = prp.description.clone();
-            let change = PendingChange {
-                id: prp.id.clone(),
-                description,
-                file_path: prp.path.to_string_lossy().to_string(),
-                change_type: ChangeType::Create,
-                risk_level: risk,
-                status: ChangeStatus::PendingAnalysis,
-                plan_path: None,
-                summary: Self::summarize_spec(&prp.spec),
-                requires_manual_review: true,
-                last_updated: Utc::now(),
-            };
-
-            pending.insert(
-                prp.id.clone(),
-                ChangeRecord {
-                    change,
-                    spec: prp.spec,
-                    plan_path: None,
-                    plan_summary: None,
-                    generated_artifacts: Vec::new(),
-                    safety_report: None,
-                    last_state_change: Utc::now(),
-                },
-            );
-        }
-
-        info!("Tracked {} pending self-development tasks", pending.len());
-        Ok(())
+        self.discover_pending_changes().await
     }
 
     pub async fn create_implementation_plan(&self) -> Result<()> {
-        let ids: Vec<String> = {
-            let pending = self.pending_changes.read().await;
-            pending
-                .iter()
-                .filter_map(|(id, record)| match record.change.status {
-                    ChangeStatus::PendingAnalysis | ChangeStatus::Planning => Some(id.clone()),
-                    _ => None,
-                })
-                .collect()
-        };
+        let specs = self.specification_cache.read().await.clone();
+        let require_tests = self.config.read().await.require_tests;
+        let planner = IncrementPlanner::new(6, require_tests);
+        drop(require_tests);
 
-        for change_id in ids {
-            if let Err(err) = self.plan_for_change(&change_id).await {
-                error!("Failed to generate plan for {}: {}", change_id, err);
+        let mut plan_cache = self.plan_cache.write().await;
+        let mut pending = self.pending_changes.write().await;
+
+        for change in pending.iter_mut().filter(|c| c.status <= ChangeStatus::Analyzed) {
+            if let Some(spec) = specs.get(&change.id) {
+                match planner.plan_increments(spec) {
+                    Ok(plan) => {
+                        let digest = Self::build_plan_digest(&plan);
+                        plan_cache.insert(change.id.clone(), digest.clone());
+                        change.plan = Some(digest);
+                        change.status = ChangeStatus::Planned;
+                        change.touch();
+                    }
+                    Err(err) => {
+                        return Err(SelfDevError::Coordination(format!(
+                            "Failed to create plan for {}: {}",
+                            change.id, err
+                        )));
+                    }
+                }
             }
         }
 
@@ -159,598 +93,594 @@ impl ComponentCoordinator {
     }
 
     pub async fn generate_solution(&self) -> Result<()> {
-        let cfg = self.config.read().await.clone();
-        if !cfg.components.synthesis {
-            info!("Synthesis component disabled; skipping automated generation");
-            return Ok(());
+        if !self.config.read().await.components.synthesis {
+            return Err(SelfDevError::Coordination(
+                "Synthesis component is not enabled".to_string(),
+            ));
         }
 
-        let ids: Vec<String> = {
-            let pending = self.pending_changes.read().await;
-            pending
-                .iter()
-                .filter_map(|(id, record)| match record.change.status {
-                    ChangeStatus::AwaitingImplementation => Some(id.clone()),
-                    _ => None,
-                })
-                .collect()
-        };
-
-        for change_id in ids {
-            if let Err(err) = self.materialize_outline(&change_id).await {
-                error!("Failed to synthesize outline for {}: {}", change_id, err);
-            }
+        let mut pending = self.pending_changes.write().await;
+        for change in pending.iter_mut().filter(|c| c.status == ChangeStatus::Planned) {
+            info!("Preparing change {} for testing", change.id);
+            change.status = ChangeStatus::Generating;
+            change.touch();
+            change.status = ChangeStatus::ReadyForTesting;
+            change.touch();
         }
 
         Ok(())
     }
 
     pub async fn test_solution(&self) -> Result<TestResults> {
-        let cfg = self.config.read().await.clone();
-        if !cfg.components.testing {
-            warn!("Testing component disabled, skipping validation tests");
-            return Ok(TestResults::new(1, 0, 0, Some("Testing disabled by configuration".into())));
+        if !self.config.read().await.components.testing {
+            warn!("Testing component disabled, skipping tests");
+            return Ok(TestResults::default());
         }
 
-        info!("Running workspace cargo check as self-development sanity test");
         let mut command = Command::new("cargo");
-        command.arg("check").arg("--workspace").current_dir(&self.project_root);
+        command
+            .arg("test")
+            .arg("--package")
+            .arg("auto-dev-core")
+            .arg("--lib")
+            .arg("--")
+            .arg("self_dev::");
+        command.current_dir(&self.project_root);
 
-        match command.output().await {
-            Ok(output) => {
-                if output.status.success() {
-                    Ok(TestResults::new(1, 0, 0, Some("cargo check --workspace".into())))
-                } else {
-                    warn!("cargo check failed during self-development cycle");
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    Ok(TestResults::new(0, 1, 0, Some(stderr)))
-                }
-            }
-            Err(err) => {
-                Err(SelfDevError::Coordination(format!("Failed to run cargo check: {}", err)))
+        let start = Instant::now();
+        let output = command
+            .output()
+            .await
+            .map_err(|e| SelfDevError::Coordination(format!("Failed to run tests: {}", e)))?;
+        let duration = start.elapsed();
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        let mut results = TestResults::default();
+        results.record_run(TestRunSummary {
+            command: TEST_COMMAND.to_string(),
+            duration,
+            passed: output.status.success(),
+            details: Some(format!("{}{}", stdout, stderr)),
+        });
+
+        let passed = output.status.success();
+        let mut pending = self.pending_changes.write().await;
+        for change in pending.iter_mut().filter(|c| c.status == ChangeStatus::ReadyForTesting) {
+            if passed {
+                change.status = ChangeStatus::ReadyForReview;
+                change.metrics.test_runs.extend(results.runs().iter().cloned());
+                change.touch();
+            } else {
+                warn!("Tests failed for change {}", change.id);
+                change.status = ChangeStatus::Planned;
+                change.touch();
+                self.register_failure(&change.id).await;
             }
         }
+
+        Ok(results)
     }
 
     pub async fn deploy_approved_changes(&self) -> Result<()> {
-        let cfg = self.config.read().await.clone();
-        if !cfg.components.deployment {
-            info!("Deployment component disabled; leaving approved changes for manual application");
+        if !self.config.read().await.components.deployment {
+            return Err(SelfDevError::Coordination(
+                "Deployment component is not enabled".to_string(),
+            ));
+        }
+
+        let limit = self.config.read().await.max_changes_per_day;
+        let mut approved = self.approved_changes.write().await;
+        if approved.is_empty() {
+            info!("No approved changes to deploy");
             return Ok(());
         }
 
-        let approved_ids: Vec<String> = {
-            let mut approved = self.approved_changes.write().await;
-            let ids: Vec<_> = approved.iter().cloned().collect();
-            approved.clear();
-            ids
-        };
-
-        if approved_ids.is_empty() {
-            return Ok(());
+        let mut today_count = self.today_changes_count.write().await;
+        if *today_count >= limit {
+            return Err(SelfDevError::Coordination(format!(
+                "Daily change limit ({}) reached",
+                limit
+            )));
         }
 
-        let mut pending = self.pending_changes.write().await;
-        let mut count = self.today_changes_count.write().await;
+        let vcs = VcsIntegration::new(
+            &self.project_root,
+            VcsConfig {
+                auto_branch: false,
+                branch_prefix: "self-dev".to_string(),
+                commit_style: CommitStyle::Simple,
+                auto_merge: false,
+                require_tests: false,
+                sign_commits: false,
+                max_conflict_attempts: 1,
+            },
+        )
+        .map_err(|e| SelfDevError::Coordination(format!("VCS integration failed: {}", e)))?;
 
-        for id in approved_ids {
-            if let Some(record) = pending.get_mut(&id) {
-                if *count >= cfg.max_changes_per_day {
-                    warn!("Daily change limit reached; deferring deployment for {}", id);
-                    break;
+        for change in approved.iter_mut().filter(|c| c.status == ChangeStatus::Approved) {
+            info!("Deploying change: {}", change.id);
+            change.status = ChangeStatus::Deploying;
+            change.touch();
+
+            if let Ok(status) = vcs.status() {
+                if status.has_conflicts {
+                    warn!("Repository has conflicts before deploying {}", change.id);
+                    continue;
                 }
+            }
 
-                record.change.status = ChangeStatus::Completed;
-                record.change.last_updated = Utc::now();
-                record.last_state_change = record.change.last_updated;
-                *count += 1;
-                info!("Marked {} as deployed", id);
+            change.status = ChangeStatus::Deployed;
+            change.metrics.deployments += 1;
+            change.touch();
+            *today_count += 1;
+
+            if *today_count >= limit {
+                warn!("Daily change limit reached during deployment");
+                break;
             }
         }
 
+        approved.retain(|c| c.status != ChangeStatus::Deployed);
         Ok(())
     }
 
     pub async fn monitor_deployment(&self) -> Result<()> {
-        info!("Monitoring deployment effects (placeholder implementation)");
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        info!("Monitoring deployment effects");
+        tokio::time::sleep(Duration::from_secs(5)).await;
         Ok(())
     }
 
     pub async fn extract_learning_patterns(&self) -> Result<()> {
-        let cfg = self.config.read().await.clone();
-        if !cfg.components.learning {
-            debug!("Learning component disabled");
+        let mut failures = self.change_failures.write().await;
+        if failures.is_empty() {
+            debug!("No failure data to learn from");
             return Ok(());
         }
 
-        info!("Capturing self-development learnings");
+        for (change_id, count) in failures.iter() {
+            info!("Change {} has {} recorded failures", change_id, count);
+        }
+
+        failures.clear();
         Ok(())
     }
 
     pub async fn rollback_all(&self) -> Result<()> {
-        error!("Rolling back generated plans and artifacts");
+        error!("Rolling back all pending and approved changes");
 
         let mut pending = self.pending_changes.write().await;
-        let mut approved = self.approved_changes.write().await;
-
-        for record in pending.values_mut() {
-            if let Some(path) = record.plan_path.take() {
-                Self::remove_file_if_exists(&path).await;
-            }
-            for artifact in record.generated_artifacts.drain(..) {
-                Self::remove_file_if_exists(&artifact).await;
-            }
-            record.change.status = ChangeStatus::PendingAnalysis;
-            record.change.plan_path = None;
-            record.change.last_updated = Utc::now();
-            record.last_state_change = record.change.last_updated;
+        for change in pending.iter_mut() {
+            change.status = ChangeStatus::RolledBack;
+            change.touch();
         }
+        pending.clear();
 
+        let mut approved = self.approved_changes.write().await;
         approved.clear();
-        *self.today_changes_count.write().await = 0;
 
         Ok(())
     }
 
     pub async fn get_active_components(&self) -> Vec<String> {
-        let cfg = self.config.read().await.clone();
-        Self::active_components_for(&cfg)
+        self.active_components.read().await.clone()
     }
 
     pub async fn get_pending_changes(&self) -> Result<Vec<PendingChange>> {
-        let mut changes: Vec<PendingChange> = self
-            .pending_changes
-            .read()
-            .await
-            .values()
-            .map(|record| record.change.clone())
-            .collect();
-        changes.sort_by_key(|c| c.last_updated);
-        Ok(changes)
+        let mut combined = self.pending_changes.read().await.clone();
+        combined.extend(self.approved_changes.read().await.clone());
+        Ok(combined)
     }
 
     pub async fn get_today_changes_count(&self) -> usize {
         *self.today_changes_count.read().await
     }
 
+    pub async fn lookup_change(&self, change_id: &str) -> Result<Option<PendingChange>> {
+        if let Some(change) = self.pending_changes.read().await.iter().find(|c| c.id == change_id) {
+            return Ok(Some(change.clone()));
+        }
+
+        if let Some(change) = self.approved_changes.read().await.iter().find(|c| c.id == change_id)
+        {
+            return Ok(Some(change.clone()));
+        }
+
+        Ok(None)
+    }
+
     pub async fn approve_change(&self, change_id: String) -> Result<()> {
         let mut pending = self.pending_changes.write().await;
-        if let Some(record) = pending.get_mut(&change_id) {
-            record.change.status = ChangeStatus::AwaitingDeployment;
-            record.change.last_updated = Utc::now();
-            record.last_state_change = record.change.last_updated;
-            self.approved_changes.write().await.insert(change_id);
-            info!("Approved change for deployment");
+        if let Some(index) = pending.iter().position(|c| c.id == change_id) {
+            let mut change = pending.remove(index);
+            if change.status < ChangeStatus::ReadyForReview {
+                let message = format!("Change {} is not ready for approval", change.id);
+                pending.insert(index, change);
+                return Err(SelfDevError::Coordination(message));
+            }
+            change.status = ChangeStatus::Approved;
+            change.touch();
+            self.approved_changes.write().await.push(change);
             Ok(())
         } else {
-            Err(SelfDevError::Coordination(format!("Change {} not found", change_id)))
+            Err(SelfDevError::Coordination(format!("Change {} not found in pending", change_id)))
         }
     }
 
     pub async fn reject_change(&self, change_id: String) -> Result<()> {
         let mut pending = self.pending_changes.write().await;
-        if let Some(record) = pending.get_mut(&change_id) {
-            record.change.status = ChangeStatus::Rejected;
-            record.change.last_updated = Utc::now();
-            record.last_state_change = record.change.last_updated;
-            info!("Rejected change {}", change_id);
+        if let Some(index) = pending.iter().position(|c| c.id == change_id) {
+            let mut change = pending.remove(index);
+            change.status = ChangeStatus::RolledBack;
+            change.touch();
             Ok(())
         } else {
-            Err(SelfDevError::Coordination(format!("Change {} not found", change_id)))
+            Err(SelfDevError::Coordination(format!("Change {} not found in pending", change_id)))
         }
     }
 
-    pub async fn validate_change(&self, change_id: &str) -> Result<ValidationReport> {
-        let record = {
-            let pending = self.pending_changes.read().await;
-            pending.get(change_id).cloned().ok_or_else(|| {
-                SelfDevError::Coordination(format!("Change {} not found", change_id))
-            })?
-        };
-
-        if let Some(report) = record.safety_report.clone() {
-            return Ok(report);
+    pub async fn enable_component(&self, component: String) -> Result<()> {
+        let mut config = self.config.write().await;
+        match component.as_str() {
+            "monitoring" => config.components.monitoring = true,
+            "synthesis" => config.components.synthesis = true,
+            "testing" => config.components.testing = true,
+            "deployment" => config.components.deployment = true,
+            "learning" => config.components.learning = true,
+            _ => {
+                return Err(SelfDevError::Configuration(format!("Unknown component {}", component)));
+            }
         }
-
-        let target_path = record
-            .plan_path
-            .clone()
-            .or_else(|| record.generated_artifacts.last().cloned())
-            .ok_or_else(|| {
-                SelfDevError::Coordination(format!("No artifacts available for {}", change_id))
-            })?;
-
-        let modified = fs::read_to_string(&target_path).await.unwrap_or_else(|_| String::new());
-        let modification = CodeModification {
-            file_path: target_path.clone(),
-            original: String::new(),
-            modified,
-            modification_type: if target_path.exists() {
-                ModificationType::Update
-            } else {
-                ModificationType::Create
-            },
-            reason: format!("Safety validation for {}", change_id),
-            prp_reference: Some(change_id.to_string()),
-        };
-
-        let report = self
-            .safety_gate
-            .read()
-            .await
-            .validate(&modification)
-            .await
-            .map_err(|e| SelfDevError::SafetyViolation(e.to_string()))?;
-
-        let mut pending = self.pending_changes.write().await;
-        if let Some(inner) = pending.get_mut(change_id) {
-            inner.safety_report = Some(report.clone());
-        }
-
-        Ok(report)
-    }
-
-    pub async fn update_safety_level(&self, level: SafetyLevel) -> Result<()> {
-        let gate = SafetyGatekeeper::new(Self::build_safety_config(&level, &self.project_root))
-            .map_err(|e| SelfDevError::SafetyViolation(e.to_string()))?;
-        {
-            let mut cfg = self.config.write().await;
-            cfg.safety_level = level.clone();
-        }
-        let mut guard = self.safety_gate.write().await;
-        *guard = gate;
+        drop(config);
+        self.refresh_active_components().await;
+        info!("Enabled component {}", component);
         Ok(())
     }
 
-    pub async fn current_safety_level(&self) -> SafetyLevel {
-        self.config.read().await.safety_level.clone()
-    }
-
-    async fn plan_for_change(&self, change_id: &str) -> Result<()> {
-        let record = {
-            let pending = self.pending_changes.read().await;
-            pending.get(change_id).cloned().ok_or_else(|| {
-                SelfDevError::Coordination(format!("Change {} not found", change_id))
-            })?
-        };
-
-        let plan = self
-            .planner
-            .plan_increments(&record.spec)
-            .map_err(|e| SelfDevError::Coordination(format!("Planner failure: {}", e)))?;
-
-        let plan_text = Self::render_plan(change_id, &plan, &record.spec);
-        let plan_path = self.plan_directory().join(format!("{}.md", change_id));
-        if let Some(parent) = plan_path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                SelfDevError::Coordination(format!("Failed to create plan dir: {}", e))
-            })?;
+    pub async fn disable_component(&self, component: String) -> Result<()> {
+        let mut config = self.config.write().await;
+        match component.as_str() {
+            "monitoring" => config.components.monitoring = false,
+            "synthesis" => config.components.synthesis = false,
+            "testing" => config.components.testing = false,
+            "deployment" => config.components.deployment = false,
+            "learning" => config.components.learning = false,
+            _ => {
+                return Err(SelfDevError::Configuration(format!("Unknown component {}", component)));
+            }
         }
-
-        fs::write(&plan_path, plan_text)
-            .await
-            .map_err(|e| SelfDevError::Coordination(format!("Failed to write plan: {}", e)))?;
-
-        let mut pending = self.pending_changes.write().await;
-        if let Some(inner) = pending.get_mut(change_id) {
-            inner.plan_path = Some(plan_path.clone());
-            inner.plan_summary = Some(Self::summarize_plan(&plan));
-            inner.change.plan_path = self.relative_to_project(&plan_path);
-            inner.change.status = ChangeStatus::AwaitingImplementation;
-            inner.change.last_updated = Utc::now();
-            inner.last_state_change = inner.change.last_updated;
-            inner.safety_report = None;
-        }
-
-        info!("Generated implementation plan for {}", change_id);
+        drop(config);
+        self.refresh_active_components().await;
+        info!("Disabled component {}", component);
         Ok(())
     }
 
-    async fn materialize_outline(&self, change_id: &str) -> Result<()> {
-        let record = {
-            let pending = self.pending_changes.read().await;
-            pending.get(change_id).cloned().ok_or_else(|| {
-                SelfDevError::Coordination(format!("Change {} not found", change_id))
-            })?
-        };
-
-        let outcome_path = self.outcome_directory().join(format!("{}-outline.md", change_id));
-        if let Some(parent) = outcome_path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                SelfDevError::Coordination(format!("Failed to create outcome dir: {}", e))
-            })?;
-        }
-
-        let outline = Self::render_outline(change_id, &record.spec, record.plan_summary.clone());
-        fs::write(&outcome_path, outline)
-            .await
-            .map_err(|e| SelfDevError::Coordination(format!("Failed to write outline: {}", e)))?;
-
-        let mut pending = self.pending_changes.write().await;
-        if let Some(inner) = pending.get_mut(change_id) {
-            inner.generated_artifacts.push(outcome_path.clone());
-            inner.change.status = ChangeStatus::AwaitingReview;
-            inner.change.last_updated = Utc::now();
-            inner.last_state_change = inner.change.last_updated;
-            inner.change.requires_manual_review = true;
-        }
-
-        info!("Generated implementation outline for {}", change_id);
-        Ok(())
+    pub async fn set_max_changes_per_day(&self, limit: usize) {
+        let mut config = self.config.write().await;
+        config.max_changes_per_day = limit;
     }
 
-    async fn discover_open_prps(&self) -> Result<Vec<DiscoveredPrp>> {
+    pub async fn update_configuration(&self, new_config: SelfDevConfig) {
+        let mut config = self.config.write().await;
+        *config = new_config;
+        drop(config);
+        self.refresh_active_components().await;
+    }
+
+    pub async fn flag_safety_failure(&self, change_id: &str) {
+        let mut failures = self.change_failures.write().await;
+        *failures.entry(change_id.to_string()).or_insert(0) += 1;
+    }
+
+    async fn discover_pending_changes(&self) -> Result<()> {
+        if !self.config.read().await.components.monitoring {
+            return Ok(());
+        }
+
+        let parser = SpecParser::new();
         let prp_dir = self.project_root.join("PRPs");
-        let mut discovered = Vec::new();
-
         if !prp_dir.exists() {
-            return Ok(discovered);
+            return Ok(());
         }
 
-        let mut entries = fs::read_dir(&prp_dir).await.map_err(|e| {
-            SelfDevError::Coordination(format!("Failed to read PRPs directory: {}", e))
-        })?;
+        let mut entries = tokio::fs::read_dir(&prp_dir)
+            .await
+            .map_err(|e| SelfDevError::Coordination(format!("Failed to read PRPs: {}", e)))?;
+
+        let mut pending = self.pending_changes.write().await;
+        let mut specs = self.specification_cache.write().await;
+        let mut discovered_ids = HashSet::new();
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| SelfDevError::Coordination(format!("Failed to read PRP entry: {}", e)))?
+            .map_err(|e| SelfDevError::Coordination(format!("Failed to read entry: {}", e)))?
         {
             let path = entry.path();
-
-            if path.is_dir() {
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
                 continue;
             }
 
-            if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
-                continue;
-            }
-
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if stem.eq_ignore_ascii_case("readme") || stem.starts_with('_') {
-                    continue;
+            if let Some((change, spec)) = self.build_change_from_prp(&path, &parser).await? {
+                discovered_ids.insert(change.id.clone());
+                match pending.iter_mut().find(|existing| existing.id == change.id) {
+                    Some(existing) => {
+                        if existing.status < change.status {
+                            existing.status = change.status;
+                        }
+                        existing.description = change.description.clone();
+                        existing.summary = change.summary.clone();
+                        existing.target_files = change.target_files.clone();
+                        existing.risk_level = change.risk_level;
+                        existing.required_components = change.required_components.clone();
+                        existing.touch();
+                    }
+                    None => pending.push(change.clone()),
                 }
-            }
-
-            let content = fs::read_to_string(&path).await.map_err(|e| {
-                SelfDevError::Coordination(format!("Failed to read {}: {}", path.display(), e))
-            })?;
-
-            if let Some(status) = Self::extract_status(&content) {
-                if status.to_uppercase().contains("COMPLETE") {
-                    continue;
-                }
-            }
-
-            let spec = self.spec_parser.parse_file(&path).await.map_err(|e| {
-                SelfDevError::Coordination(format!("Failed to parse {}: {}", path.display(), e))
-            })?;
-
-            let id = Self::derive_change_id(&path);
-            let description = format!("Implement {}", path.file_name().unwrap().to_string_lossy());
-
-            discovered.push(DiscoveredPrp {
-                id,
-                description,
-                path,
-                spec,
-                status: Self::extract_status(&content),
-            });
-        }
-
-        Ok(discovered)
-    }
-
-    fn derive_change_id(path: &Path) -> String {
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("prp");
-        let number = stem.split(|c: char| !c.is_ascii_digit()).find(|part| !part.is_empty());
-        match number {
-            Some(num) => format!("prp_{}", num),
-            None => format!("prp_{}", stem.replace('-', "_")),
-        }
-    }
-
-    fn extract_status(content: &str) -> Option<String> {
-        content.lines().take(20).find_map(|line| {
-            if line.to_ascii_lowercase().starts_with("status") {
-                line.split(':').nth(1).map(|s| s.trim().to_string())
-            } else {
-                None
-            }
-        })
-    }
-
-    fn build_safety_config(level: &SafetyLevel, project_root: &Path) -> SafetyConfig {
-        let mut config = SafetyConfig::default();
-        config.allowed_paths = vec![
-            project_root.join("src"),
-            project_root.join("docs"),
-            project_root.join("tests"),
-            project_root.join("auto-dev-core"),
-        ];
-        config.critical_files.push(project_root.join("Cargo.lock"));
-
-        match level {
-            SafetyLevel::Strict => {
-                config.max_validation_time = 15;
-                config.require_all_gates = true;
-            }
-            SafetyLevel::Standard => {
-                config.max_validation_time = 10;
-                config.require_all_gates = false;
-            }
-            SafetyLevel::Permissive => {
-                config.max_validation_time = 5;
-                config.require_all_gates = false;
-                config.require_reversibility = false;
+                specs.insert(change.id.clone(), spec);
             }
         }
 
-        config
+        pending.retain(|change| discovered_ids.contains(&change.id));
+        Ok(())
     }
 
-    fn assess_risk_level(spec: &Specification) -> RiskLevel {
-        let max_priority =
-            spec.requirements.iter().map(|req| req.priority).max().unwrap_or(Priority::Medium);
+    async fn build_change_from_prp(
+        &self,
+        path: &Path,
+        parser: &SpecParser,
+    ) -> Result<Option<(PendingChange, Specification)>> {
+        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+            SelfDevError::Coordination(format!("Failed to read {}: {}", path.display(), e))
+        })?;
 
-        match max_priority {
-            Priority::Critical => RiskLevel::Critical,
-            Priority::High => RiskLevel::High,
-            Priority::Medium => RiskLevel::Medium,
-            Priority::Low => RiskLevel::Low,
+        if Self::prp_completed(&content) {
+            return Ok(None);
         }
+
+        let spec = parser.parse_file(path).await.map_err(|e| {
+            SelfDevError::Coordination(format!("Failed to parse {}: {}", path.display(), e))
+        })?;
+
+        let id = format!(
+            "prp:{}",
+            path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_lowercase()
+        );
+        let description = Self::extract_title(&content)
+            .unwrap_or_else(|| format!("Implement requirements from {}", path.display()));
+        let summary = Self::summarize_spec(&spec);
+        let target_files = Self::extract_paths(&content);
+        let required_components = self.derive_required_components(&content).await;
+
+        let change = PendingChange {
+            id,
+            description,
+            summary,
+            file_path: path.to_string_lossy().to_string(),
+            change_type: ChangeType::Modify,
+            risk_level: Self::assess_risk_level(path),
+            status: ChangeStatus::Analyzed,
+            plan: None,
+            target_files,
+            required_components,
+            last_updated: SystemTime::now(),
+            metrics: ChangeMetrics::default(),
+        };
+
+        Ok(Some((change, spec)))
+    }
+
+    fn build_plan_digest(plan: &IncrementPlan) -> PlanDigest {
+        let steps = plan
+            .increments
+            .iter()
+            .map(|increment| PlanStep {
+                id: increment.id.to_string(),
+                description: increment.specification.description.clone(),
+                depends_on: increment.dependencies.iter().map(|d| d.to_string()).collect(),
+                tests: increment.tests.iter().map(|t| t.command.clone()).collect(),
+            })
+            .collect();
+
+        PlanDigest {
+            steps,
+            estimated_duration: plan.estimated_duration,
+            critical_path: plan.critical_path.iter().map(|uuid| uuid.to_string()).collect(),
+        }
+    }
+
+    fn list_active_components(config: &SelfDevConfig) -> Vec<String> {
+        let mut active = Vec::new();
+
+        if config.components.monitoring {
+            active.push("monitoring".to_string());
+        }
+        if config.components.synthesis {
+            active.push("synthesis".to_string());
+        }
+        if config.components.testing {
+            active.push("testing".to_string());
+        }
+        if config.components.deployment {
+            active.push("deployment".to_string());
+        }
+        if config.components.learning {
+            active.push("learning".to_string());
+        }
+
+        active
+    }
+
+    async fn refresh_active_components(&self) {
+        let snapshot = {
+            let cfg = self.config.read().await;
+            Self::list_active_components(&cfg)
+        };
+        let mut current = self.active_components.write().await;
+        *current = snapshot;
+    }
+
+    async fn derive_required_components(&self, content: &str) -> Vec<String> {
+        let config = self.config.read().await;
+        let mut components = Vec::new();
+
+        if config.components.monitoring {
+            components.push("monitoring".to_string());
+        }
+        if config.components.synthesis && content.to_lowercase().contains("generate") {
+            components.push("synthesis".to_string());
+        }
+        if config.components.testing && content.to_lowercase().contains("test") {
+            components.push("testing".to_string());
+        }
+        if config.components.deployment && content.to_lowercase().contains("deploy") {
+            components.push("deployment".to_string());
+        }
+        if config.components.learning {
+            components.push("learning".to_string());
+        }
+
+        components.sort();
+        components.dedup();
+        components
+    }
+
+    fn extract_title(content: &str) -> Option<String> {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') {
+                return Some(trimmed.trim_start_matches('#').trim().to_string());
+            }
+        }
+        None
     }
 
     fn summarize_spec(spec: &Specification) -> Option<String> {
-        spec.requirements
-            .first()
-            .map(|req| req.description.clone())
-            .or_else(|| spec.examples.first().map(|ex| ex.description.clone()))
-    }
-
-    fn summarize_plan(plan: &IncrementPlan) -> String {
-        if plan.increments.is_empty() {
-            return "No increments generated".into();
-        }
-
-        let mut summary = String::new();
-        for (idx, increment) in plan.increments.iter().take(3).enumerate() {
-            summary.push_str(&format!("{}. {}\n", idx + 1, increment.specification.description));
-        }
-        if plan.increments.len() > 3 {
-            summary.push_str("...\n");
-        }
-        summary
-    }
-
-    fn render_plan(change_id: &str, plan: &IncrementPlan, spec: &Specification) -> String {
-        let mut content = String::new();
-        content.push_str(&format!("# Implementation Plan for {}\n\n", change_id));
-        content.push_str(&format!("Generated: {}\n\n", Utc::now().to_rfc3339()));
-
-        if !spec.requirements.is_empty() {
-            content.push_str("## Key Requirements\n");
-            for req in &spec.requirements {
-                content.push_str(&format!("- [{}] {}\n", req.priority, req.description));
-            }
-            content.push('\n');
-        }
-
-        if !plan.increments.is_empty() {
-            content.push_str("## Planned Increments\n");
-            for (idx, increment) in plan.increments.iter().enumerate() {
-                content.push_str(&format!(
-                    "{}. {} (complexity: {:?})\n",
-                    idx + 1,
-                    increment.specification.description,
-                    increment.implementation.estimated_complexity
-                ));
-                if !increment.tests.is_empty() {
-                    content.push_str("   - Tests: ");
-                    for test in &increment.tests {
-                        content.push_str(&format!("`{}` ", test.name));
-                    }
-                    content.push('\n');
-                }
-            }
-            content.push('\n');
-        }
-
-        content.push_str("## Execution Notes\n");
-        content.push_str(&format!(
-            "- Estimated duration: {:?}\n- Critical path length: {} increments\n",
-            plan.estimated_duration,
-            plan.critical_path.len()
-        ));
-
-        content
-    }
-
-    fn render_outline(
-        change_id: &str,
-        spec: &Specification,
-        plan_summary: Option<String>,
-    ) -> String {
-        let mut content = String::new();
-        content.push_str(&format!("# Implementation Outline for {}\n\n", change_id));
-        content.push_str("## Summary\n");
-        if let Some(summary) = plan_summary {
-            content.push_str(&summary);
-            content.push('\n');
-        }
-
-        content.push_str("## Next Actions\n");
-        for requirement in &spec.requirements {
-            content.push_str(&format!(
-                "- [ ] {} (priority: {})\n",
-                requirement.description, requirement.priority
-            ));
-        }
-
         if spec.requirements.is_empty() {
-            content.push_str("- [ ] Review PRP requirements and populate tasks\n");
+            return None;
         }
-
-        content.push('\n');
-        content.push_str("## Safety Checklist\n");
-        content.push_str("- [ ] Confirm generated plan stays within docs/self_dev\n");
-        content.push_str("- [ ] Ensure manual review before deployment\n");
-        content
+        let mut summary = String::new();
+        for requirement in spec.requirements.iter().take(3) {
+            if !summary.is_empty() {
+                summary.push_str(" | ");
+            }
+            summary.push_str(&requirement.description);
+        }
+        Some(summary)
     }
 
-    fn plan_directory(&self) -> PathBuf {
-        self.project_root.join("docs").join("self_dev").join("plans")
-    }
+    fn extract_paths(content: &str) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        let pattern = regex::Regex::new(r"(auto-dev[^\s`]+|src/[^\s`]+|docs/[^\s`]+)")
+            .unwrap_or_else(|_| regex::Regex::new(r"src/[^\s`]+").unwrap());
 
-    fn outcome_directory(&self) -> PathBuf {
-        self.project_root.join("docs").join("self_dev").join("outcomes")
-    }
-
-    fn relative_to_project(&self, path: &Path) -> Option<String> {
-        path.strip_prefix(&self.project_root).map(|rel| rel.to_string_lossy().to_string()).ok()
-    }
-
-    async fn remove_file_if_exists(path: &Path) {
-        if fs::metadata(path).await.is_ok() {
-            if let Err(err) = fs::remove_file(path).await {
-                warn!("Failed to remove {}: {}", path.display(), err);
+        for capture in pattern.captures_iter(content) {
+            if let Some(path) = capture.get(1) {
+                paths.push(PathBuf::from(path.as_str()))
             }
         }
+
+        paths
     }
 
-    fn active_components_for(config: &SelfDevConfig) -> Vec<String> {
-        let mut components = Vec::new();
-        if config.components.monitoring {
-            components.push("monitoring".into());
+    fn prp_completed(content: &str) -> bool {
+        content.lines().any(|line| {
+            line.to_lowercase().contains("status") && line.to_lowercase().contains("complete")
+        })
+    }
+
+    fn assess_risk_level(path: &Path) -> RiskLevel {
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or_default().to_lowercase();
+        if name.contains("safety") || name.contains("deployment") {
+            RiskLevel::High
+        } else if name.contains("test") || name.contains("doc") {
+            RiskLevel::Low
+        } else if name.contains("core") {
+            RiskLevel::Critical
+        } else {
+            RiskLevel::Medium
         }
-        if config.components.synthesis {
-            components.push("synthesis".into());
-        }
-        if config.components.testing {
-            components.push("testing".into());
-        }
-        if config.components.deployment {
-            components.push("deployment".into());
-        }
-        if config.components.learning {
-            components.push("learning".into());
-        }
-        components
+    }
+
+    async fn register_failure(&self, change_id: &str) {
+        let mut failures = self.change_failures.write().await;
+        *failures.entry(change_id.to_string()).or_insert(0) += 1;
     }
 }
 
-#[async_trait]
-impl SafetyAuthority for ComponentCoordinator {
-    async fn validate_change(&self, change_id: &str) -> Result<ValidationReport> {
-        ComponentCoordinator::validate_change(self, change_id).await
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn sample_config() -> SelfDevConfig {
+        SelfDevConfig {
+            enabled: true,
+            mode: super::DevelopmentMode::Assisted,
+            safety_level: SafetyLevel::Standard,
+            auto_approve: false,
+            max_changes_per_day: 5,
+            require_tests: false,
+            require_documentation: true,
+            components: super::ComponentConfig {
+                monitoring: true,
+                synthesis: true,
+                testing: false,
+                deployment: false,
+                learning: true,
+            },
+        }
     }
 
-    async fn update_safety_level(&self, level: SafetyLevel) -> Result<()> {
-        ComponentCoordinator::update_safety_level(self, level).await
+    fn write_prp(dir: &TempDir, name: &str, body: &str) {
+        let prp_dir = dir.path().join("PRPs");
+        std::fs::create_dir_all(&prp_dir).expect("failed to create PRP dir");
+        std::fs::write(prp_dir.join(name), body).expect("failed to write PRP file");
     }
 
-    async fn current_safety_level(&self) -> Result<SafetyLevel> {
-        Ok(self.current_safety_level().await)
+    #[tokio::test]
+    async fn test_analyze_prp_detects_change() {
+        let temp = TempDir::new().unwrap();
+        write_prp(
+            &temp,
+            "215-self-development.md",
+            "# PRP: Sample\n\n**Status**: PARTIAL\n\n## Requirements\n- Ensure monitoring is active\n",
+        );
+
+        let config = Arc::new(RwLock::new(sample_config()));
+        let coordinator = ComponentCoordinator::new(config, temp.path().to_path_buf()).await;
+
+        coordinator.analyze_requirements().await.unwrap();
+        let changes = coordinator.get_pending_changes().await.unwrap();
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].status, ChangeStatus::Analyzed);
+        assert_eq!(changes[0].risk_level, RiskLevel::Medium);
+    }
+
+    #[tokio::test]
+    async fn test_plan_and_generate_flow() {
+        let temp = TempDir::new().unwrap();
+        write_prp(
+            &temp,
+            "300-integration.md",
+            "# PRP: Integration\n\n**Status**: PARTIAL\n\n## Requirements\n- Integrate event loop\n- Validate safety gates\n",
+        );
+
+        let config = Arc::new(RwLock::new(sample_config()));
+        let coordinator = ComponentCoordinator::new(config, temp.path().to_path_buf()).await;
+
+        coordinator.analyze_requirements().await.unwrap();
+        coordinator.create_implementation_plan().await.unwrap();
+        coordinator.generate_solution().await.unwrap();
+
+        let changes = coordinator.get_pending_changes().await.unwrap();
+        assert_eq!(changes.len(), 1);
+        assert!(changes[0].plan.is_some());
+        assert_eq!(changes[0].status, ChangeStatus::ReadyForTesting);
+
+        let results = coordinator.test_solution().await.unwrap();
+        assert!(results.runs().is_empty());
     }
 }

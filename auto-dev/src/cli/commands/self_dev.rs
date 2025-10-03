@@ -237,7 +237,17 @@ async fn show_status() -> Result<()> {
         if !status.pending_changes.is_empty() {
             println!("\nPending Changes:");
             for change in &status.pending_changes {
-                println!("  - {} ({:?}): {}", change.id, change.change_type, change.description);
+                println!(
+                    "  - {} | {:?} | {:?}: {}",
+                    change.id, change.status, change.risk_level, change.description
+                );
+                if let Some(plan) = &change.plan {
+                    println!(
+                        "      Steps: {} | Critical path: {}",
+                        plan.steps.len(),
+                        plan.critical_path.len()
+                    );
+                }
             }
         }
     } else {
@@ -263,6 +273,10 @@ async fn review_changes() -> Result<()> {
                 println!("File: {}", change.file_path);
                 println!("Type: {:?}", change.change_type);
                 println!("Risk: {:?}", change.risk_level);
+                println!("Status: {:?}", change.status);
+                if let Some(plan) = &change.plan {
+                    println!("Plan steps: {}", plan.steps.len());
+                }
                 println!("---");
             }
             println!(
