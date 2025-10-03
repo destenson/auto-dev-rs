@@ -4,7 +4,10 @@
 use super::{Result, SafetyLevel};
 use crate::safety::ValidationReport;
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU8, AtomicUsize, Ordering},
+    Arc,
+};
 use std::time::SystemTime;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -22,10 +25,10 @@ pub trait SafetyAuthority: Send + Sync {
 
 pub struct SafetyMonitor {
     authority: Arc<dyn SafetyAuthority>,
-    safety_level: Arc<RwLock<SafetyLevel>>,
+    safety_level: AtomicU8,
     validation_history: Arc<RwLock<Vec<ValidationRecord>>>,
-    consecutive_failures: Arc<RwLock<usize>>,
-    consecutive_successes: Arc<RwLock<usize>>,
+    consecutive_failures: AtomicUsize,
+    consecutive_successes: AtomicUsize,
     failure_threshold: usize,
     success_threshold: usize,
 }
@@ -41,10 +44,10 @@ impl SafetyMonitor {
     pub fn new(authority: Arc<dyn SafetyAuthority>, safety_level: SafetyLevel) -> Self {
         Self {
             authority,
-            safety_level: Arc::new(RwLock::new(safety_level)),
+            safety_level: AtomicU8::new(safety_level.into()),
             validation_history: Arc::new(RwLock::new(Vec::new())),
-            consecutive_failures: Arc::new(RwLock::new(0)),
-            consecutive_successes: Arc::new(RwLock::new(0)),
+            consecutive_failures: AtomicUsize::new(0),
+            consecutive_successes: AtomicUsize::new(0),
             failure_threshold: FAILURE_ESCALATION_THRESHOLD,
             success_threshold: SUCCESS_RELAXATION_THRESHOLD,
         }
@@ -70,13 +73,13 @@ impl SafetyMonitor {
 
     pub async fn set_manual_level(&self, level: SafetyLevel) -> Result<()> {
         self.authority.update_safety_level(level.clone()).await?;
-        *self.safety_level.write().await = level;
-        self.reset_counters().await;
+        self.safety_level.store(level.into(), Ordering::SeqCst);
+        self.reset_counters();
         Ok(())
     }
 
     pub async fn current_level(&self) -> SafetyLevel {
-        self.safety_level.read().await.clone()
+        self.safety_level.load(Ordering::SeqCst).into()
     }
 
     pub async fn get_validation_history(&self) -> Vec<(String, bool)> {
@@ -112,84 +115,76 @@ impl SafetyMonitor {
             change_id, report.risk_level, report.recommendations
         );
 
-        {
-            let mut successes = self.consecutive_successes.write().await;
-            *successes = 0;
-        }
+        self.consecutive_successes.store(0, Ordering::SeqCst);
 
-        let mut failures = self.consecutive_failures.write().await;
-        *failures += 1;
+        let failures = self.consecutive_failures.fetch_add(1, Ordering::SeqCst) + 1;
 
-        if *failures >= self.failure_threshold {
+        if failures >= self.failure_threshold {
             self.escalate_safety_level().await?;
-            *failures = 0;
+            self.reset_counters();
         }
 
         Ok(())
     }
 
     async fn handle_success(&self) -> Result<()> {
-        {
-            let mut failures = self.consecutive_failures.write().await;
-            *failures = 0;
-        }
+        self.consecutive_failures.store(0, Ordering::SeqCst);
 
-        let mut successes = self.consecutive_successes.write().await;
-        *successes += 1;
+        let successes = self.consecutive_successes.fetch_add(1, Ordering::SeqCst) + 1;
 
-        if *successes >= self.success_threshold {
+        if successes >= self.success_threshold {
             self.relax_safety_level().await?;
-            *successes = 0;
+            self.reset_counters();
         }
 
         Ok(())
     }
 
     async fn escalate_safety_level(&self) -> Result<()> {
-        let mut level = self.safety_level.write().await;
-        let new_level = match *level {
+        let current = (self.safety_level.load(Ordering::SeqCst)).into();
+        let new_level = match current {
             SafetyLevel::Permissive => SafetyLevel::Standard,
             SafetyLevel::Standard => SafetyLevel::Strict,
             SafetyLevel::Strict => SafetyLevel::Strict,
         };
 
-        if new_level != *level {
+        if new_level != current {
             warn!(
                 "Escalating safety level from {:?} to {:?} after repeated failures",
-                *level, new_level
+                current, new_level
             );
             self.authority.update_safety_level(new_level.clone()).await?;
-            *level = new_level;
-            self.reset_counters().await;
+            self.safety_level.store(new_level.into(), Ordering::SeqCst);
+            self.reset_counters();
         }
 
         Ok(())
     }
 
     async fn relax_safety_level(&self) -> Result<()> {
-        let mut level = self.safety_level.write().await;
-        let new_level = match *level {
+        let current = self.safety_level.load(Ordering::SeqCst).into();
+        let new_level = match current {
             SafetyLevel::Strict => SafetyLevel::Standard,
             SafetyLevel::Standard => SafetyLevel::Permissive,
             SafetyLevel::Permissive => SafetyLevel::Permissive,
         };
 
-        if new_level != *level {
+        if new_level != current {
             info!(
                 "Relaxing safety level from {:?} to {:?} after sustained success",
-                *level, new_level
+                current, new_level
             );
             self.authority.update_safety_level(new_level.clone()).await?;
-            *level = new_level;
-            self.reset_counters().await;
+            self.safety_level.store(new_level.into(), Ordering::SeqCst);
+            self.reset_counters();
         }
 
         Ok(())
     }
 
-    async fn reset_counters(&self) {
-        *self.consecutive_failures.write().await = 0;
-        *self.consecutive_successes.write().await = 0;
+    fn reset_counters(&self) {
+        self.consecutive_failures.store(0, Ordering::SeqCst);
+        self.consecutive_successes.store(0, Ordering::SeqCst);
     }
 }
 
