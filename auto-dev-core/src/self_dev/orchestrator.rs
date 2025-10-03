@@ -8,6 +8,7 @@ use super::{
 };
 use crate::parser::SpecParser;
 use crate::parser::model::{Priority, Requirement, RequirementType, SourceLocation, Specification};
+use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock, mpsc};
@@ -487,6 +488,11 @@ pub struct PendingChange {
     pub file_path: String,
     pub change_type: ChangeType,
     pub risk_level: RiskLevel,
+    pub status: ChangeStatus,
+    pub plan_path: Option<String>,
+    pub summary: Option<String>,
+    pub requires_manual_review: bool,
+    pub last_updated: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -495,6 +501,30 @@ pub enum ChangeType {
     Modify,
     Delete,
     Refactor,
+}
+
+#[derive(Debug, Clone)]
+pub enum ChangeStatus {
+    PendingAnalysis,
+    Planning,
+    AwaitingImplementation,
+    AwaitingReview,
+    AwaitingDeployment,
+    Completed,
+    Rejected,
+}
+
+impl ChangeStatus {
+    pub fn is_actionable(&self) -> bool {
+        matches!(
+            self,
+            ChangeStatus::PendingAnalysis
+                | ChangeStatus::Planning
+                | ChangeStatus::AwaitingImplementation
+                | ChangeStatus::AwaitingReview
+                | ChangeStatus::AwaitingDeployment
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -509,14 +539,19 @@ pub struct TestResults {
     passed: usize,
     failed: usize,
     skipped: usize,
+    notes: Option<String>,
 }
 
 impl TestResults {
-    pub fn new(passed: usize, failed: usize, skipped: usize) -> Self {
-        Self { passed, failed, skipped }
+    pub fn new(passed: usize, failed: usize, skipped: usize, notes: Option<String>) -> Self {
+        Self { passed, failed, skipped, notes }
     }
 
     pub fn all_passed(&self) -> bool {
         self.failed == 0 && self.passed > 0
+    }
+
+    pub fn notes(&self) -> Option<&String> {
+        self.notes.as_ref()
     }
 }
