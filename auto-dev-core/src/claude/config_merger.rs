@@ -2,7 +2,7 @@
 //!
 //! Provides type-specific merge strategies for different configuration elements.
 
-use crate::claude::{ClaudeCommand, CommandRegistry, ClaudeMdContent};
+use crate::claude::{ClaudeCommand, ClaudeMdContent, CommandRegistry};
 use std::collections::{HashMap, HashSet};
 use tracing::debug;
 
@@ -13,11 +13,7 @@ impl ConfigMerger {
     /// Merge CLAUDE.md content from multiple sources
     pub fn merge_claude_md(contents: Vec<ClaudeMdContent>) -> ClaudeMdContent {
         if contents.is_empty() {
-            return ClaudeMdContent {
-                content: String::new(),
-                sources: vec![],
-                total_size: 0,
-            };
+            return ClaudeMdContent { content: String::new(), sources: vec![], total_size: 0 };
         }
 
         if contents.len() == 1 {
@@ -35,16 +31,12 @@ impl ConfigMerger {
                 }
                 merged_content.push_str(&content.content);
             }
-            
+
             all_sources.extend(content.sources.clone());
             total_size += content.total_size;
         }
 
-        ClaudeMdContent {
-            content: merged_content,
-            sources: all_sources,
-            total_size,
-        }
+        ClaudeMdContent { content: merged_content, sources: all_sources, total_size }
     }
 
     /// Merge command registries with priority
@@ -53,7 +45,7 @@ impl ConfigMerger {
         project_registry: Option<CommandRegistry>,
     ) -> CommandRegistry {
         let mut merged = CommandRegistry::new();
-        
+
         // Add global commands first
         if let Some(global) = global_registry {
             for cmd in global.all_commands() {
@@ -81,7 +73,7 @@ impl ConfigMerger {
         override_map: HashMap<String, String>,
     ) -> HashMap<String, String> {
         let mut merged = base;
-        
+
         for (key, value) in override_map {
             debug!("Overriding config key '{}' with new value", key);
             merged.insert(key, value);
@@ -122,7 +114,7 @@ impl ConfigMerger {
         let overlay_value = serde_json::to_value(overlay).unwrap();
 
         Self::merge_json_values(&mut base_value, overlay_value);
-        
+
         // Convert back to original type
         serde_json::from_value(base_value).unwrap()
     }
@@ -173,18 +165,12 @@ pub enum MergeAction {
 impl MergeContext {
     /// Create a new merge context
     pub fn new() -> Self {
-        Self {
-            decisions: Vec::new(),
-        }
+        Self { decisions: Vec::new() }
     }
 
     /// Record a merge decision
     pub fn record(&mut self, field: String, action: MergeAction, reason: String) {
-        self.decisions.push(MergeDecision {
-            field,
-            action,
-            reason,
-        });
+        self.decisions.push(MergeDecision { field, action, reason });
     }
 
     /// Get all decisions made
@@ -229,7 +215,7 @@ mod tests {
         };
 
         let merged = ConfigMerger::merge_claude_md(vec![content1, content2]);
-        
+
         assert!(merged.content.contains("Global instructions"));
         assert!(merged.content.contains("Project instructions"));
         assert!(merged.content.contains("---"));
@@ -259,15 +245,13 @@ mod tests {
             "Project version".to_string(),
         ));
 
-        let merged = ConfigMerger::merge_command_registries(
-            Some(global_registry),
-            Some(project_registry),
-        );
+        let merged =
+            ConfigMerger::merge_command_registries(Some(global_registry), Some(project_registry));
 
         assert!(merged.contains("global-cmd"));
         assert!(merged.contains("project-cmd"));
         assert!(merged.contains("shared-cmd"));
-        
+
         // Project version should override
         let shared = merged.get("shared-cmd").unwrap();
         assert_eq!(shared.description, "Project version");
@@ -306,13 +290,13 @@ mod tests {
     #[test]
     fn test_merge_context() {
         let mut context = MergeContext::new();
-        
+
         context.record(
             "commands".to_string(),
             MergeAction::Override,
             "Project overrides global".to_string(),
         );
-        
+
         context.record(
             "settings".to_string(),
             MergeAction::Merge,
@@ -320,7 +304,7 @@ mod tests {
         );
 
         assert_eq!(context.decisions().len(), 2);
-        
+
         let first = &context.decisions()[0];
         assert_eq!(first.field, "commands");
         matches!(first.action, MergeAction::Override);

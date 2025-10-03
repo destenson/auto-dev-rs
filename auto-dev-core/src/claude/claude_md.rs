@@ -50,16 +50,12 @@ pub struct ClaudeMdLoader {
 impl ClaudeMdLoader {
     /// Create a new CLAUDE.md loader
     pub fn new() -> Self {
-        Self {
-            max_file_size: MAX_FILE_SIZE,
-        }
+        Self { max_file_size: MAX_FILE_SIZE }
     }
 
     /// Create a loader with custom max file size
     pub fn with_max_file_size(max_size: u64) -> Self {
-        Self {
-            max_file_size: max_size,
-        }
+        Self { max_file_size: max_size }
     }
 
     /// Load and merge CLAUDE.md files from multiple paths
@@ -102,11 +98,7 @@ impl ClaudeMdLoader {
             contents.join(MERGE_SEPARATOR)
         };
 
-        Ok(Some(ClaudeMdContent {
-            content: merged,
-            sources,
-            total_size,
-        }))
+        Ok(Some(ClaudeMdContent { content: merged, sources, total_size }))
     }
 
     /// Load a single CLAUDE.md file
@@ -157,32 +149,19 @@ impl ClaudeMdLoader {
     /// Validate CLAUDE.md content
     fn validate_content(&self, content: &str) -> Result<()> {
         // Check for suspicious patterns that might indicate code execution attempts
-        let suspicious_patterns = [
-            "<script",
-            "javascript:",
-            "eval(",
-            "exec(",
-            "__import__",
-            "subprocess",
-            "os.system",
-        ];
+        let suspicious_patterns =
+            ["<script", "javascript:", "eval(", "exec(", "__import__", "subprocess", "os.system"];
 
         for pattern in &suspicious_patterns {
             if content.to_lowercase().contains(pattern) {
-                return Err(anyhow::anyhow!(
-                    "CLAUDE.md contains suspicious pattern: {}",
-                    pattern
-                ));
+                return Err(anyhow::anyhow!("CLAUDE.md contains suspicious pattern: {}", pattern));
             }
         }
 
         // Check for reasonable line count (prevent abuse)
         let line_count = content.lines().count();
         if line_count > 10000 {
-            return Err(anyhow::anyhow!(
-                "CLAUDE.md has too many lines ({} > 10000)",
-                line_count
-            ));
+            return Err(anyhow::anyhow!("CLAUDE.md has too many lines ({} > 10000)", line_count));
         }
 
         Ok(())
@@ -214,13 +193,13 @@ mod tests {
     async fn test_load_single_file() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         let content = "# User Instructions\n\nAlways be helpful.";
         fs::write(&claude_md, content).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await.unwrap();
-        
+
         assert!(result.is_some());
         assert_eq!(result.unwrap(), content);
     }
@@ -229,10 +208,10 @@ mod tests {
     async fn test_load_missing_file() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await.unwrap();
-        
+
         assert!(result.is_none());
     }
 
@@ -240,14 +219,14 @@ mod tests {
     async fn test_load_with_utf8_bom() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         // Write with UTF-8 BOM
         let content_with_bom = "\u{FEFF}# Instructions\nTest content";
         fs::write(&claude_md, content_with_bom).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await.unwrap();
-        
+
         assert!(result.is_some());
         assert_eq!(result.unwrap(), "# Instructions\nTest content");
     }
@@ -255,16 +234,16 @@ mod tests {
     #[tokio::test]
     async fn test_merge_multiple_files() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let file1 = temp_dir.path().join("global.md");
         let file2 = temp_dir.path().join("project.md");
-        
+
         fs::write(&file1, "Global instructions").await.unwrap();
         fs::write(&file2, "Project instructions").await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_and_merge(&[file1.clone(), file2.clone()]).await.unwrap();
-        
+
         assert!(result.is_some());
         let content = result.unwrap();
         assert!(content.content.contains("Global instructions"));
@@ -277,14 +256,14 @@ mod tests {
     async fn test_file_size_limit() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         // Create content larger than 10 bytes
         let large_content = "a".repeat(20);
         fs::write(&claude_md, &large_content).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::with_max_file_size(10);
         let result = loader.load_file(&claude_md).await;
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("exceeds maximum size"));
     }
@@ -293,13 +272,13 @@ mod tests {
     async fn test_suspicious_content_validation() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         let suspicious_content = "Instructions\n<script>alert('xss')</script>";
         fs::write(&claude_md, suspicious_content).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await;
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("suspicious pattern"));
     }
@@ -308,12 +287,12 @@ mod tests {
     async fn test_empty_file() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         fs::write(&claude_md, "").await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await.unwrap();
-        
+
         assert!(result.is_some());
         assert_eq!(result.unwrap(), "");
     }
@@ -323,10 +302,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("CLAUDE.md");
         fs::create_dir(&dir_path).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&dir_path).await.unwrap();
-        
+
         assert!(result.is_none());
     }
 
@@ -334,13 +313,13 @@ mod tests {
     async fn test_windows_line_endings() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         let content = "Line 1\r\nLine 2\r\nLine 3";
         fs::write(&claude_md, content).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_file(&claude_md).await.unwrap();
-        
+
         assert!(result.is_some());
         assert_eq!(result.unwrap(), content);
     }
@@ -350,17 +329,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let claude_dir = temp_dir.path().join(".claude");
         fs::create_dir(&claude_dir).await.unwrap();
-        
+
         let claude_md = claude_dir.join("CLAUDE.md");
         fs::write(&claude_md, "Test instructions").await.unwrap();
-        
+
         use crate::claude::discovery::ClaudeConfigDiscovery;
         let discovery = ClaudeConfigDiscovery::with_working_dir(temp_dir.path().to_path_buf());
         let paths = discovery.discover().await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_from_discovery(&paths).await.unwrap();
-        
+
         assert!(result.is_some());
         let content = result.unwrap();
         assert_eq!(content.content, "Test instructions");
@@ -371,13 +350,13 @@ mod tests {
     async fn test_content_metadata() {
         let temp_dir = TempDir::new().unwrap();
         let claude_md = temp_dir.path().join("CLAUDE.md");
-        
+
         let test_content = "Test content";
         fs::write(&claude_md, test_content).await.unwrap();
-        
+
         let loader = ClaudeMdLoader::new();
         let result = loader.load_and_merge(&[claude_md.clone()]).await.unwrap().unwrap();
-        
+
         assert_eq!(result.as_str(), test_content);
         assert!(!result.is_empty());
         assert_eq!(result.source_count(), 1);

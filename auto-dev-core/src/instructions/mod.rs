@@ -2,13 +2,13 @@
 //!
 //! Reads project specifications from various formats and extracts structured requirements.
 
-mod parser;
-mod formats;
 mod extractor;
+mod formats;
+mod parser;
 
-pub use parser::{InstructionParser, ParsedInstruction};
+pub use extractor::{MetadataExtractor, ProjectMetadata};
 pub use formats::{Format, detect_format};
-pub use extractor::{ProjectMetadata, MetadataExtractor};
+pub use parser::{InstructionParser, ParsedInstruction};
 
 use anyhow::Result;
 use std::path::Path;

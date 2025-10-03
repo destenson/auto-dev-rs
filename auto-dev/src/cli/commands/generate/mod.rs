@@ -7,7 +7,7 @@ pub mod init;
 /// Handle code generation commands
 pub async fn execute(args: crate::cli::app::GenerateArgs) -> Result<()> {
     info!("Starting project generation with args: {:?}", args);
-    
+
     // Determine instructions source
     let (instruction_text, instruction_file) = if let Some(file) = args.file {
         // Explicit file provided
@@ -25,26 +25,22 @@ pub async fn execute(args: crate::cli::app::GenerateArgs) -> Result<()> {
             "No instructions provided. Use 'auto-dev generate \"instructions\"' or 'auto-dev generate -f file.md'"
         ));
     };
-    
+
     if args.dry_run {
         println!("🔍 Dry run mode - no files will be created");
     }
-    
+
     // Initialize project with instructions
-    init::init_with_instructions(
-        instruction_text,
-        instruction_file,
-        args.output,
-    ).await?;
-    
+    init::init_with_instructions(instruction_text, instruction_file, args.output).await?;
+
     // TODO: Implement remaining steps (PRPs 301-306)
     if !args.dry_run {
         println!("✨ Project generation started!");
         println!("📝 Next steps will be implemented in upcoming PRPs:");
         println!("  - Code implementation (PRP 302)");
-        println!("  - Local model integration (PRP 303)"); 
+        println!("  - Local model integration (PRP 303)");
         println!("  - Build-fix loop (PRP 304)");
     }
-    
+
     Ok(())
 }

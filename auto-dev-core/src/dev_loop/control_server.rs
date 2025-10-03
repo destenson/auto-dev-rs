@@ -40,9 +40,9 @@ impl ControlServer {
                 warn!("Could not create .auto-dev/loop directory: {} (continuing anyway)", e);
             }
         }
-        
+
         let port_file = port_dir.join("control.port");
-        
+
         // Try to write port file, but don't fail if we can't
         if let Err(e) = tokio::fs::write(&port_file, self.port.to_string()).await {
             warn!("Could not write port file: {} (continuing anyway)", e);
@@ -170,7 +170,7 @@ impl ControlClient {
 
         // Check for port file in .auto-dev/loop
         let port_file = PathBuf::from(".auto-dev/loop/control.port");
-        
+
         if port_file.exists() {
             if let Ok(content) = tokio::fs::read_to_string(&port_file).await {
                 if let Ok(port) = content.trim().parse::<u16>() {
@@ -179,7 +179,7 @@ impl ControlClient {
                 }
             }
         }
-        
+
         Err(anyhow::anyhow!("Control server not running (port file not found)"))
     }
 

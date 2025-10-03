@@ -3,14 +3,14 @@
 //! Monitors .claude directories for changes and triggers reloads.
 
 use crate::claude::{ClaudeContextProvider, CommandParser, CommandRegistrySystem, CommandSource};
-use crate::monitor::{FileWatcher, WatcherConfig, FileChange, ChangeType, MonitorConfig};
+use crate::monitor::{ChangeType, FileChange, FileWatcher, MonitorConfig, WatcherConfig};
 use anyhow::{Context, Result};
 use notify::{Event, EventKind, RecursiveMode, Watcher as NotifyWatcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, info, warn};
 
 /// Events that can occur in Claude configuration
@@ -40,10 +40,7 @@ impl ReloadHandler {
         context_provider: Arc<ClaudeContextProvider>,
         command_registry: Arc<CommandRegistrySystem>,
     ) -> Self {
-        Self {
-            context_provider,
-            command_registry,
-        }
+        Self { context_provider, command_registry }
     }
 
     /// Handle a file change event
@@ -74,11 +71,10 @@ impl ReloadHandler {
     async fn reload_command(&self, path: &Path) -> Result<()> {
         let mut parser = CommandParser::new();
         parser.parse_file(path)?;
-        
+
         // Determine source based on path
         let source = if path.to_string_lossy().contains(".claude") {
-            if path.to_string_lossy().contains("home") 
-                || path.to_string_lossy().contains("Users") {
+            if path.to_string_lossy().contains("home") || path.to_string_lossy().contains("Users") {
                 CommandSource::Global
             } else {
                 CommandSource::Project
@@ -114,10 +110,7 @@ struct DebounceBuffer {
 
 impl DebounceBuffer {
     fn new(window_ms: u64) -> Self {
-        Self {
-            changes: HashMap::new(),
-            window: Duration::from_millis(window_ms),
-        }
+        Self { changes: HashMap::new(), window: Duration::from_millis(window_ms) }
     }
 
     /// Add a change to the buffer
@@ -129,7 +122,7 @@ impl DebounceBuffer {
     fn take_ready(&mut self) -> Vec<ClaudeFileChange> {
         let now = Instant::now();
         let mut ready = Vec::new();
-        
+
         self.changes.retain(|_path, (change, time)| {
             if now.duration_since(*time) >= self.window {
                 ready.push(change.clone());
@@ -168,7 +161,7 @@ impl ClaudeConfigWatcher {
     ) -> Self {
         let (tx, _rx) = mpsc::unbounded_channel();
         let reload_handler = Arc::new(ReloadHandler::new(context_provider, command_registry));
-        
+
         Self {
             watch_paths: Vec::new(),
             tx,
@@ -207,7 +200,7 @@ impl ClaudeConfigWatcher {
     /// Start watching for changes
     pub async fn start(self) -> Result<mpsc::UnboundedReceiver<ClaudeFileChange>> {
         let (tx, rx) = mpsc::unbounded_channel();
-        
+
         if self.watch_paths.is_empty() {
             warn!("No Claude configuration directories to watch");
             return Ok(rx);
@@ -221,11 +214,7 @@ impl ClaudeConfigWatcher {
             paths: self.watch_paths.clone(),
             recursive: true,
             monitor_config: MonitorConfig {
-                ignore_patterns: vec![
-                    "*.swp".to_string(),
-                    "*.tmp".to_string(),
-                    "~*".to_string(),
-                ],
+                ignore_patterns: vec!["*.swp".to_string(), "*.tmp".to_string(), "~*".to_string()],
                 ..Default::default()
             },
         };
@@ -256,7 +245,7 @@ impl ClaudeConfigWatcher {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(100)).await;
-                
+
                 let mut buffer = debounce_clone.write().await;
                 let ready = buffer.take_ready();
                 drop(buffer);
@@ -305,9 +294,7 @@ async fn classify_change(change: &FileChange) -> Option<ClaudeFileChange> {
                     None
                 }
             }
-            ChangeType::Deleted => {
-                Some(ClaudeFileChange::CommandDeleted(path.clone()))
-            }
+            ChangeType::Deleted => Some(ClaudeFileChange::CommandDeleted(path.clone())),
             _ => None,
         }
     } else if path.is_dir() {
@@ -321,25 +308,25 @@ async fn classify_change(change: &FileChange) -> Option<ClaudeFileChange> {
 mod tests {
     use super::*;
     use crate::claude::ClaudeConfigDiscovery;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_debounce_buffer() {
         let mut buffer = DebounceBuffer::new(100);
-        
+
         let path1 = PathBuf::from("/test1");
         let path2 = PathBuf::from("/test2");
-        
+
         buffer.add(path1.clone(), ClaudeFileChange::ClaudeMdChanged(path1.clone()));
         buffer.add(path2.clone(), ClaudeFileChange::CommandChanged(path2.clone()));
-        
+
         assert!(buffer.has_pending());
-        
+
         // Immediately, nothing is ready
         let ready = buffer.take_ready();
         assert!(ready.is_empty());
-        
+
         // After waiting, changes are ready
         std::thread::sleep(Duration::from_millis(150));
         let ready = buffer.take_ready();
@@ -398,10 +385,10 @@ mod tests {
 
         let context_provider = Arc::new(ClaudeContextProvider::new().unwrap());
         let registry = Arc::new(CommandRegistrySystem::new());
-        
+
         let mut watcher = ClaudeConfigWatcher::new(context_provider, registry);
         watcher.discover_watch_paths().await.unwrap();
-        
+
         assert!(watcher.is_watching());
     }
 }

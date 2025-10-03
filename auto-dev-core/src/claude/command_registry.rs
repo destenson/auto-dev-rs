@@ -84,10 +84,7 @@ impl CommandRegistrySystem {
         if let Some(existing) = commands.get(&command.name) {
             if existing.source == CommandSource::Global && source == CommandSource::Project {
                 // Project overrides global
-                tracing::debug!(
-                    "Command '{}' from project overrides global version",
-                    command.name
-                );
+                tracing::debug!("Command '{}' from project overrides global version", command.name);
                 overridden.insert(command.name.clone(), existing.clone());
             } else if existing.source == CommandSource::Project && source == CommandSource::Global {
                 // Global doesn't override project
@@ -104,7 +101,11 @@ impl CommandRegistrySystem {
     }
 
     /// Register multiple commands at once
-    pub fn register_commands(&self, commands: Vec<ClaudeCommand>, source: CommandSource) -> Result<()> {
+    pub fn register_commands(
+        &self,
+        commands: Vec<ClaudeCommand>,
+        source: CommandSource,
+    ) -> Result<()> {
         for command in commands {
             self.register_command(command, source)?;
         }
@@ -114,7 +115,7 @@ impl CommandRegistrySystem {
     /// Get a command by exact name
     pub fn get_command(&self, name: &str) -> Option<ClaudeCommand> {
         let mut commands = self.commands.write().unwrap();
-        
+
         if let Some(registered) = commands.get_mut(name) {
             // Update usage statistics
             registered.usage_count += 1;
@@ -140,37 +141,30 @@ impl CommandRegistrySystem {
     /// List commands by source
     pub fn list_commands_by_source(&self, source: CommandSource) -> Vec<String> {
         let commands = self.commands.read().unwrap();
-        commands
-            .iter()
-            .filter(|(_, r)| r.source == source)
-            .map(|(name, _)| name.clone())
-            .collect()
+        commands.iter().filter(|(_, r)| r.source == source).map(|(name, _)| name.clone()).collect()
     }
 
     /// Search commands by partial name
     pub fn search_commands(&self, query: &str) -> Vec<String> {
         let commands = self.commands.read().unwrap();
         let query_lower = query.to_lowercase();
-        
-        commands
-            .keys()
-            .filter(|name| name.to_lowercase().contains(&query_lower))
-            .cloned()
-            .collect()
+
+        commands.keys().filter(|name| name.to_lowercase().contains(&query_lower)).cloned().collect()
     }
 
     /// Search commands with fuzzy matching
     pub fn fuzzy_search(&self, query: &str) -> Vec<(String, f32)> {
         let commands = self.commands.read().unwrap();
         let mut results = Vec::new();
-        
+
         for name in commands.keys() {
             let score = calculate_similarity(query, name);
-            if score > 0.3 {  // Minimum similarity threshold
+            if score > 0.3 {
+                // Minimum similarity threshold
                 results.push((name.clone(), score));
             }
         }
-        
+
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         results
     }
@@ -185,7 +179,7 @@ impl CommandRegistrySystem {
     pub fn get_stats(&self) -> CommandStats {
         let commands = self.commands.read().unwrap();
         let overridden = self.overridden.read().unwrap();
-        
+
         let mut stats = CommandStats {
             total_commands: commands.len(),
             global_commands: 0,
@@ -193,24 +187,24 @@ impl CommandRegistrySystem {
             overridden_commands: overridden.len(),
             top_commands: Vec::new(),
         };
-        
+
         let mut usage_map = Vec::new();
-        
+
         for (name, registered) in commands.iter() {
             match registered.source {
                 CommandSource::Global => stats.global_commands += 1,
                 CommandSource::Project => stats.project_commands += 1,
             }
-            
+
             if registered.usage_count > 0 {
                 usage_map.push((name.clone(), registered.usage_count));
             }
         }
-        
+
         // Get top 5 most used commands
         usage_map.sort_by(|a, b| b.1.cmp(&a.1));
         stats.top_commands = usage_map.into_iter().take(5).collect();
-        
+
         stats
     }
 
@@ -245,27 +239,25 @@ impl CommandRegistrySystem {
 fn calculate_similarity(s1: &str, s2: &str) -> f32 {
     let s1_lower = s1.to_lowercase();
     let s2_lower = s2.to_lowercase();
-    
+
     // Exact match
     if s1_lower == s2_lower {
         return 1.0;
     }
-    
+
     // Prefix match
     if s2_lower.starts_with(&s1_lower) {
         return 0.8;
     }
-    
+
     // Contains match
     if s2_lower.contains(&s1_lower) {
         return 0.6;
     }
-    
+
     // Character-based similarity
-    let common = s1_lower.chars()
-        .filter(|c| s2_lower.contains(*c))
-        .count() as f32;
-    
+    let common = s1_lower.chars().filter(|c| s2_lower.contains(*c)).count() as f32;
+
     let max_len = s1_lower.len().max(s2_lower.len()) as f32;
     common / max_len
 }
@@ -289,9 +281,9 @@ mod tests {
     fn test_register_and_get() {
         let registry = CommandRegistrySystem::new();
         let cmd = create_test_command("test");
-        
+
         registry.register_command(cmd.clone(), CommandSource::Global).unwrap();
-        
+
         let retrieved = registry.get_command("test");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().name, "test");
@@ -300,17 +292,17 @@ mod tests {
     #[test]
     fn test_project_overrides_global() {
         let registry = CommandRegistrySystem::new();
-        
+
         let global_cmd = create_test_command("cmd");
         let project_cmd = ClaudeCommand::new("cmd".to_string(), "Project version".to_string());
-        
+
         registry.register_command(global_cmd, CommandSource::Global).unwrap();
         registry.register_command(project_cmd.clone(), CommandSource::Project).unwrap();
-        
+
         let retrieved = registry.get_command("cmd");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().description, "Project version");
-        
+
         // Check overridden list
         let overridden = registry.get_overridden_commands();
         assert!(overridden.contains(&"cmd".to_string()));
@@ -319,13 +311,13 @@ mod tests {
     #[test]
     fn test_global_doesnt_override_project() {
         let registry = CommandRegistrySystem::new();
-        
+
         let project_cmd = ClaudeCommand::new("cmd".to_string(), "Project version".to_string());
         let global_cmd = create_test_command("cmd");
-        
+
         registry.register_command(project_cmd.clone(), CommandSource::Project).unwrap();
         registry.register_command(global_cmd, CommandSource::Global).unwrap();
-        
+
         let retrieved = registry.get_command("cmd");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().description, "Project version");
@@ -334,11 +326,11 @@ mod tests {
     #[test]
     fn test_search_commands() {
         let registry = CommandRegistrySystem::new();
-        
+
         registry.register_command(create_test_command("test-one"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("test-two"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("other"), CommandSource::Global).unwrap();
-        
+
         let results = registry.search_commands("test");
         assert_eq!(results.len(), 2);
         assert!(results.contains(&"test-one".to_string()));
@@ -348,14 +340,14 @@ mod tests {
     #[test]
     fn test_fuzzy_search() {
         let registry = CommandRegistrySystem::new();
-        
+
         registry.register_command(create_test_command("generate"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("gen-code"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("test"), CommandSource::Global).unwrap();
-        
+
         let results = registry.fuzzy_search("gen");
         assert!(!results.is_empty());
-        
+
         // "generate" should have high score for "gen" query
         let generate_result = results.iter().find(|(name, _)| name == "generate");
         assert!(generate_result.is_some());
@@ -365,14 +357,14 @@ mod tests {
     fn test_usage_tracking() {
         let registry = CommandRegistrySystem::new();
         let cmd = create_test_command("tracked");
-        
+
         registry.register_command(cmd, CommandSource::Global).unwrap();
-        
+
         // Access the command multiple times
         registry.get_command("tracked");
         registry.get_command("tracked");
         registry.get_command("tracked");
-        
+
         let registered = registry.get_registered_command("tracked").unwrap();
         assert_eq!(registered.usage_count, 3);
         assert!(registered.last_accessed.is_some());
@@ -381,16 +373,16 @@ mod tests {
     #[test]
     fn test_stats() {
         let registry = CommandRegistrySystem::new();
-        
+
         registry.register_command(create_test_command("global1"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("global2"), CommandSource::Global).unwrap();
         registry.register_command(create_test_command("project1"), CommandSource::Project).unwrap();
-        
+
         // Use some commands
         registry.get_command("global1");
         registry.get_command("global1");
         registry.get_command("project1");
-        
+
         let stats = registry.get_stats();
         assert_eq!(stats.total_commands, 3);
         assert_eq!(stats.global_commands, 2);
@@ -401,11 +393,11 @@ mod tests {
     #[test]
     fn test_concurrent_access() {
         use std::thread;
-        
+
         let registry = CommandRegistrySystem::new();
         let registry_clone1 = registry.clone();
         let registry_clone2 = registry.clone();
-        
+
         // Register from multiple threads
         let handle1 = thread::spawn(move || {
             for i in 0..10 {
@@ -413,17 +405,17 @@ mod tests {
                 registry_clone1.register_command(cmd, CommandSource::Global).unwrap();
             }
         });
-        
+
         let handle2 = thread::spawn(move || {
             for i in 0..10 {
                 let cmd = create_test_command(&format!("thread2-{}", i));
                 registry_clone2.register_command(cmd, CommandSource::Project).unwrap();
             }
         });
-        
+
         handle1.join().unwrap();
         handle2.join().unwrap();
-        
+
         let all_commands = registry.list_commands();
         assert_eq!(all_commands.len(), 20);
     }

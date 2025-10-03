@@ -125,24 +125,12 @@ impl ClaudeCommand {
 impl CommandArgument {
     /// Create a new required argument
     pub fn required(name: String, description: String) -> Self {
-        Self {
-            name,
-            arg_type: None,
-            required: true,
-            description,
-            default: None,
-        }
+        Self { name, arg_type: None, required: true, description, default: None }
     }
 
     /// Create a new optional argument
     pub fn optional(name: String, description: String, default: Option<String>) -> Self {
-        Self {
-            name,
-            arg_type: None,
-            required: false,
-            description,
-            default,
-        }
+        Self { name, arg_type: None, required: false, description, default }
     }
 
     /// Set the argument type
@@ -167,35 +155,32 @@ mod tests {
     #[test]
     fn test_registry_operations() {
         let mut registry = CommandRegistry::new();
-        
+
         let cmd1 = ClaudeCommand::new("cmd1".to_string(), "Command 1".to_string());
         let cmd2 = ClaudeCommand::new("cmd2".to_string(), "Command 2".to_string());
-        
+
         registry.add_command(cmd1);
         registry.add_command(cmd2);
-        
+
         assert_eq!(registry.metadata.command_count, 2);
         assert!(registry.contains("cmd1"));
         assert!(registry.contains("cmd2"));
         assert!(!registry.contains("cmd3"));
-        
+
         let names = registry.command_names();
         assert_eq!(names.len(), 2);
     }
 
     #[test]
     fn test_argument_types() {
-        let required = CommandArgument::required(
-            "input".to_string(),
-            "Input file".to_string()
-        );
+        let required = CommandArgument::required("input".to_string(), "Input file".to_string());
         assert!(required.required);
         assert!(required.default.is_none());
-        
+
         let optional = CommandArgument::optional(
             "output".to_string(),
             "Output file".to_string(),
-            Some("output.txt".to_string())
+            Some("output.txt".to_string()),
         );
         assert!(!optional.required);
         assert_eq!(optional.default, Some("output.txt".to_string()));

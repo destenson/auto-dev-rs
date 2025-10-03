@@ -3,7 +3,9 @@
 //! This module provides integration between CLAUDE.md configuration
 //! and the LLM context management system.
 
-use crate::claude::{ClaudeMdLoader, ClaudeMdContent, ClaudeConfigDiscovery, CommandParser, CommandRegistry};
+use crate::claude::{
+    ClaudeConfigDiscovery, ClaudeMdContent, ClaudeMdLoader, CommandParser, CommandRegistry,
+};
 use crate::llm::context_manager::ContextManager;
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -26,7 +28,7 @@ impl ClaudeContextProvider {
     pub fn new() -> Result<Self> {
         let discovery = ClaudeConfigDiscovery::new();
         let loader = ClaudeMdLoader::new();
-        
+
         Ok(Self {
             claude_md: Arc::new(RwLock::new(None)),
             commands: Arc::new(RwLock::new(CommandRegistry::new())),
@@ -39,7 +41,7 @@ impl ClaudeContextProvider {
     pub async fn initialize(&self) -> Result<()> {
         // Discover configuration paths
         let paths = self.discovery.discover().await?;
-        
+
         // Load CLAUDE.md content
         let claude_md_paths = paths.claude_md_paths();
         if !claude_md_paths.is_empty() {
@@ -48,25 +50,26 @@ impl ClaudeContextProvider {
                 *claude_md = Some(content);
             }
         }
-        
+
         // Load commands if directory exists
         let commands_dirs = paths.commands_dirs();
         for commands_dir in commands_dirs {
             self.load_commands(&commands_dir)?;
         }
-        
+
         Ok(())
     }
 
     /// Load commands from a directory
     fn load_commands(&self, commands_dir: &Path) -> Result<()> {
         let mut parser = CommandParser::new();
-        parser.parse_directory(commands_dir)
+        parser
+            .parse_directory(commands_dir)
             .with_context(|| format!("Failed to parse commands from {}", commands_dir.display()))?;
-        
+
         let mut commands = self.commands.write().unwrap();
         *commands = parser.into_registry();
-        
+
         Ok(())
     }
 
@@ -78,7 +81,7 @@ impl ClaudeContextProvider {
     /// Get formatted context for inclusion in LLM prompts
     pub fn get_formatted_context(&self) -> Option<String> {
         let claude_md = self.claude_md.read().unwrap();
-        
+
         if let Some(content) = claude_md.as_ref() {
             Some(format_claude_context(content))
         } else {
@@ -89,7 +92,7 @@ impl ClaudeContextProvider {
     /// Get command context if any commands are loaded
     pub fn get_command_context(&self) -> Option<String> {
         let commands = self.commands.read().unwrap();
-        
+
         if commands.metadata.command_count > 0 {
             Some(format_command_context(&*commands))
         } else {
@@ -100,27 +103,23 @@ impl ClaudeContextProvider {
     /// Get complete Claude context
     pub fn get_complete_context(&self) -> Option<String> {
         let mut parts = Vec::new();
-        
+
         if let Some(claude_context) = self.get_formatted_context() {
             parts.push(claude_context);
         }
-        
+
         if let Some(command_context) = self.get_command_context() {
             parts.push(command_context);
         }
-        
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts.join("\n\n---\n\n"))
-        }
+
+        if parts.is_empty() { None } else { Some(parts.join("\n\n---\n\n")) }
     }
 
     /// Check if any configuration is loaded
     pub fn has_configuration(&self) -> bool {
         let claude_md = self.claude_md.read().unwrap();
         let commands = self.commands.read().unwrap();
-        
+
         claude_md.is_some() || commands.metadata.command_count > 0
     }
 }
@@ -128,12 +127,12 @@ impl ClaudeContextProvider {
 /// Format CLAUDE.md content for inclusion in prompts
 fn format_claude_context(content: &ClaudeMdContent) -> String {
     let mut formatted = String::new();
-    
+
     formatted.push_str("=== User Configuration (CLAUDE.md) ===\n\n");
-    
+
     formatted.push_str(&content.content);
     formatted.push_str("\n\n");
-    
+
     if !content.sources.is_empty() {
         formatted.push_str("Sources: ");
         for (i, source) in content.sources.iter().enumerate() {
@@ -144,24 +143,24 @@ fn format_claude_context(content: &ClaudeMdContent) -> String {
         }
         formatted.push_str("\n\n");
     }
-    
+
     formatted.push_str("=== End User Configuration ===\n");
-    
+
     formatted
 }
 
 /// Format command registry for inclusion in prompts
 fn format_command_context(registry: &CommandRegistry) -> String {
     let mut formatted = String::new();
-    
+
     formatted.push_str("=== Available Claude Commands ===\n\n");
-    
+
     for command in registry.all_commands() {
         formatted.push_str(&format!("/{}: {}\n", command.name, command.description));
     }
-    
+
     formatted.push_str("\n=== End Claude Commands ===\n");
-    
+
     formatted
 }
 
@@ -169,7 +168,7 @@ fn format_command_context(registry: &CommandRegistry) -> String {
 pub trait ClaudeContextExtension {
     /// Add Claude configuration as priority context
     fn with_claude_context(&mut self, provider: &ClaudeContextProvider);
-    
+
     /// Format context with Claude configuration included
     fn build_context_with_claude(
         &self,
@@ -184,24 +183,24 @@ impl ClaudeContextExtension for ContextManager {
             self.add_priority_context(context);
         }
     }
-    
+
     fn build_context_with_claude(
         &self,
         primary_content: &str,
         claude_provider: Option<&ClaudeContextProvider>,
     ) -> String {
         let mut context_parts = Vec::new();
-        
+
         // Add Claude context first if available
         if let Some(provider) = claude_provider {
             if let Some(claude_context) = provider.get_complete_context() {
                 context_parts.push(claude_context);
             }
         }
-        
+
         // Then add the regular context
         context_parts.push(self.build_context(primary_content, None));
-        
+
         context_parts.join("\n\n---\n\n")
     }
 }
@@ -232,7 +231,7 @@ mod tests {
             sources: vec![PathBuf::from("/test/CLAUDE.md")],
             total_size: 100,
         };
-        
+
         let formatted = format_claude_context(&content);
         assert!(formatted.contains("User Configuration"));
         assert!(formatted.contains("Test instructions"));
@@ -242,13 +241,11 @@ mod tests {
     #[test]
     fn test_format_command_context() {
         use crate::claude::command_types::ClaudeCommand;
-        
+
         let mut registry = CommandRegistry::new();
-        registry.add_command(ClaudeCommand::new(
-            "test-cmd".to_string(),
-            "Test command".to_string()
-        ));
-        
+        registry
+            .add_command(ClaudeCommand::new("test-cmd".to_string(), "Test command".to_string()));
+
         let formatted = format_command_context(&registry);
         assert!(formatted.contains("/test-cmd: Test command"));
     }
@@ -258,63 +255,63 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let claude_dir = temp_dir.path().join(".claude");
         fs::create_dir(&claude_dir)?;
-        
+
         // Create CLAUDE.md
         let claude_md = claude_dir.join("CLAUDE.md");
         fs::write(&claude_md, "# Test Instructions\n\nFollow these rules.")?;
-        
+
         // Create commands directory
         let commands_dir = claude_dir.join("commands");
         fs::create_dir(&commands_dir)?;
-        
+
         // Create a test command
         let cmd_file = commands_dir.join("test.md");
         fs::write(&cmd_file, "# Test\n\nA test command.")?;
-        
+
         // Initialize provider with test directory as working dir
         std::env::set_current_dir(temp_dir.path())?;
-        
+
         let provider = ClaudeContextProvider::new()?;
         provider.initialize().await?;
-        
+
         assert!(provider.has_configuration());
         assert!(provider.get_formatted_context().is_some());
         assert!(provider.get_command_context().is_some());
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_reload_functionality() -> Result<()> {
         let provider = ClaudeContextProvider::new()?;
-        
+
         // Initial state
         assert!(!provider.has_configuration());
-        
+
         // Reload should work without error even with no config
         provider.reload().await?;
-        
+
         Ok(())
     }
 
     #[test]
     fn test_complete_context() {
         let provider = ClaudeContextProvider::new().unwrap();
-        
+
         // Without any configuration
         assert!(provider.get_complete_context().is_none());
-        
+
         // With CLAUDE.md loaded
         let content = ClaudeMdContent {
             content: "Test instructions".to_string(),
             sources: vec![],
             total_size: 16,
         };
-        
+
         let mut claude_md = provider.claude_md.write().unwrap();
         *claude_md = Some(content);
         drop(claude_md);
-        
+
         let complete = provider.get_complete_context();
         assert!(complete.is_some());
         assert!(complete.unwrap().contains("User Configuration"));

@@ -82,14 +82,14 @@ pub enum Commands {
     /// View and analyze self-improvement metrics
     #[command(name = "metrics", about = "Track and analyze self-improvement progress")]
     Metrics(super::commands::metrics::MetricsCommand),
-    
+
     /// Execute Claude user-defined commands
     #[command(name = "claude", about = "Execute Claude user-defined commands")]
     Claude {
         /// Name of the Claude command to execute
         #[arg(help = "Command name")]
         command: String,
-        
+
         /// Arguments to pass to the command
         #[arg(help = "Command arguments", trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -101,23 +101,23 @@ pub struct GenerateArgs {
     /// Instructions for project generation (string or file path)
     #[arg(help = "Instructions as a string or path to instruction file")]
     pub instructions: Option<String>,
-    
+
     /// Output directory for generated project
     #[arg(short, long, help = "Output directory (defaults to project name or 'new-project')")]
     pub output: Option<PathBuf>,
-    
+
     /// Path to instruction file (alternative to positional argument)
     #[arg(short = 'f', long, help = "Path to instruction file")]
     pub file: Option<PathBuf>,
-    
+
     /// Use local model for enhanced generation
     #[arg(long, help = "Use local Qwen model for code generation")]
     pub use_local_model: bool,
-    
+
     /// Dry run - show what would be done without doing it
     #[arg(long, help = "Show what would be generated without creating files")]
     pub dry_run: bool,
-    
+
     /// Maximum iterations for build-fix loop
     #[arg(long, default_value = "3", help = "Maximum build-fix iterations")]
     pub max_iterations: usize,

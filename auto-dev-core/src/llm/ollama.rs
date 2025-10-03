@@ -10,15 +10,15 @@ use crate::llm::config::OllamaConfig;
 use crate::llm::errors::LLMError;
 use async_trait::async_trait;
 use futures::stream::Stream;
-use ollama_rs::generation::chat::{ChatMessage, request::ChatMessageRequest};
-use ollama_rs::generation::embeddings::request::{GenerateEmbeddingsRequest, EmbeddingsInput};
-use ollama_rs::generation::embeddings::GenerateEmbeddingsResponse;
-use ollama_rs::models::ModelOptions;
 use ollama_rs::Ollama;
+use ollama_rs::generation::chat::{ChatMessage, request::ChatMessageRequest};
+use ollama_rs::generation::embeddings::GenerateEmbeddingsResponse;
+use ollama_rs::generation::embeddings::request::{EmbeddingsInput, GenerateEmbeddingsRequest};
+use ollama_rs::models::ModelOptions;
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 /// Ollama provider implementation
 pub struct OllamaProvider {
@@ -36,7 +36,7 @@ impl OllamaProvider {
         // TODO: check that Ollama::new() expects the url to contain the port
         let url = format!("{}://{}:{}", protocol, config.host, config.port);
         let client = Ollama::new(url, config.port);
-        
+
         Self {
             client: Arc::new(client),
             config: config.clone(),
@@ -59,11 +59,11 @@ impl OllamaProvider {
     /// Auto-detect local Ollama installation
     pub async fn detect_local() -> Option<Self> {
         let default_config = OllamaConfig::default();
-        
+
         // Try to connect to default local endpoint
         let url = format!("http://{}:{}", default_config.host, default_config.port);
         let client = Ollama::new(url, default_config.port);
-        
+
         // Try to list models to verify connection
         match client.list_local_models().await {
             Ok(_) => Some(Self::new(default_config)),
@@ -84,29 +84,26 @@ impl OllamaProvider {
     /// Convert Ollama options from our CompletionOptions
     fn convert_options(&self, options: &CompletionOptions) -> ModelOptions {
         let mut model_options = ModelOptions::default();
-        
+
         if let Some(temp) = options.temperature {
             model_options = model_options.temperature(temp);
         }
-        
+
         if let Some(max_tokens) = options.max_tokens {
             // Convert usize to i32, clamping to i32::MAX if needed
-            let max_tokens_i32 = if max_tokens > i32::MAX as usize {
-                i32::MAX
-            } else {
-                max_tokens as i32
-            };
+            let max_tokens_i32 =
+                if max_tokens > i32::MAX as usize { i32::MAX } else { max_tokens as i32 };
             model_options = model_options.num_predict(max_tokens_i32);
         }
-        
+
         if let Some(top_p) = options.top_p {
             model_options = model_options.top_p(top_p as f32);
         }
-        
+
         if let Some(stop) = &options.stop {
             model_options = model_options.stop(stop.clone());
         }
-        
+
         model_options
     }
 
@@ -124,9 +121,7 @@ impl OllamaProvider {
             self.client
                 .pull_model(model.to_string(), false)
                 .await
-                .map_err(|_e| LLMError::ModelNotFound {
-                    model: model.to_string(),
-                })?;
+                .map_err(|_e| LLMError::ModelNotFound { model: model.to_string() })?;
         }
         Ok(())
     }
@@ -136,13 +131,12 @@ impl OllamaProvider {
 impl OllamaProvider {
     /// List available models
     pub async fn list_models(&self) -> Result<Vec<String>, LLMError> {
-        let models = self.client
+        let models = self
+            .client
             .list_local_models()
             .await
-            .map_err(|e| LLMError::NetworkError {
-                message: e.to_string(),
-            })?;
-        
+            .map_err(|e| LLMError::NetworkError { message: e.to_string() })?;
+
         Ok(models.into_iter().map(|m| m.name).collect())
     }
 
@@ -152,19 +146,14 @@ impl OllamaProvider {
             .pull_model(model.to_string(), false)
             .await
             .map(|_status| ()) // Convert PullModelStatus to ()
-            .map_err(|_e| LLMError::ModelNotFound {
-                model: model.to_string(),
-            })
+            .map_err(|_e| LLMError::ModelNotFound { model: model.to_string() })
     }
 
     /// Delete a model
     pub async fn delete_model(&self, model: &str) -> Result<(), LLMError> {
-        self.client
-            .delete_model(model.to_string())
-            .await
-            .map_err(|e| LLMError::NetworkError {
-                message: format!("Failed to delete model: {}", e),
-            })
+        self.client.delete_model(model.to_string()).await.map_err(|e| LLMError::NetworkError {
+            message: format!("Failed to delete model: {}", e),
+        })
     }
 }
 
@@ -190,19 +179,16 @@ impl LLMProvider for OllamaProvider {
         }
 
         // Get model details from Ollama
-        let models = self.client
+        let models = self
+            .client
             .list_local_models()
             .await
-            .map_err(|e| LLMError::NetworkError {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| LLMError::NetworkError { message: e.to_string() })?;
 
         let _model = models
             .iter()
             .find(|m| m.name == self.model_name)
-            .ok_or_else(|| LLMError::ModelNotFound {
-                model: self.model_name.clone(),
-            })?;
+            .ok_or_else(|| LLMError::ModelNotFound { model: self.model_name.clone() })?;
 
         let info = ModelInfo {
             id: self.model_name.clone(),
@@ -231,32 +217,28 @@ impl LLMProvider for OllamaProvider {
         self.ensure_model(&self.model_name).await?;
 
         // Convert messages
-        let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| self.convert_message(m)).collect();
+        let chat_messages: Vec<ChatMessage> =
+            messages.iter().map(|m| self.convert_message(m)).collect();
 
         // Create request
-        let request = ChatMessageRequest::new(
-            self.model_name.clone(),
-            chat_messages,
-        ).options(self.convert_options(&options));
+        let request = ChatMessageRequest::new(self.model_name.clone(), chat_messages)
+            .options(self.convert_options(&options));
 
         // Send request
-        let response = self.client
+        let response = self
+            .client
             .send_chat_messages(request)
             .await
-            .map_err(|e| LLMError::NetworkError {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| LLMError::NetworkError { message: e.to_string() })?;
 
         // Extract content from response
         let content = response.message.content;
 
         // Extract usage information if available
-        let usage = response.final_data.as_ref().map(|data| {
-            Usage {
-                prompt_tokens: data.eval_count as usize,
-                completion_tokens: data.prompt_eval_count as usize,
-                total_tokens: (data.eval_count + data.prompt_eval_count) as usize,
-            }
+        let usage = response.final_data.as_ref().map(|data| Usage {
+            prompt_tokens: data.eval_count as usize,
+            completion_tokens: data.prompt_eval_count as usize,
+            total_tokens: (data.eval_count + data.prompt_eval_count) as usize,
         });
 
         // Convert response
@@ -287,27 +269,25 @@ impl LLMProvider for OllamaProvider {
         self.ensure_model(&self.model_name).await?;
 
         // Convert messages
-        let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| self.convert_message(m)).collect();
+        let chat_messages: Vec<ChatMessage> =
+            messages.iter().map(|m| self.convert_message(m)).collect();
 
         // Create request
-        let request = ChatMessageRequest::new(
-            self.model_name.clone(),
-            chat_messages,
-        ).options(self.convert_options(&options));
+        let request = ChatMessageRequest::new(self.model_name.clone(), chat_messages)
+            .options(self.convert_options(&options));
 
         // Note: Ollama-rs requires the "stream" feature to be enabled for streaming
         // For now, we'll return a simple non-streaming implementation wrapped in a stream
-        let response = self.client
+        let response = self
+            .client
             .send_chat_messages(request)
             .await
-            .map_err(|e| LLMError::NetworkError {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| LLMError::NetworkError { message: e.to_string() })?;
 
         // Create a single-item stream with the full response
         let model_name = self.model_name.clone();
         let content = response.message.content;
-        
+
         let converted_stream = async_stream::stream! {
             yield Ok(StreamChunk {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -331,7 +311,7 @@ impl LLMProvider for OllamaProvider {
     async fn embed(&self, request: EmbeddingRequest) -> Result<EmbeddingResponse, LLMError> {
         // Use embedding model if specified, otherwise use default
         let model = request.model.unwrap_or_else(|| "nomic-embed-text".to_string());
-        
+
         // Ensure embedding model is available
         self.ensure_model(&model).await?;
 
@@ -343,31 +323,25 @@ impl LLMProvider for OllamaProvider {
         };
 
         // Create Ollama embedding request
-        let ollama_request = GenerateEmbeddingsRequest::new(
-            model.clone(),
-            embeddings_input,
-        );
+        let ollama_request = GenerateEmbeddingsRequest::new(model.clone(), embeddings_input);
 
         // Send request
-        let response: GenerateEmbeddingsResponse = self.client
-            .generate_embeddings(ollama_request)
-            .await
-            .map_err(|e| LLMError::NetworkError {
-                message: format!("Embedding generation failed: {}", e),
+        let response: GenerateEmbeddingsResponse =
+            self.client.generate_embeddings(ollama_request).await.map_err(|e| {
+                LLMError::NetworkError { message: format!("Embedding generation failed: {}", e) }
             })?;
 
         // Convert response - Ollama returns Vec<Vec<f32>>, we need the first one
-        let embedding = response.embeddings.first()
+        let embedding = response
+            .embeddings
+            .first()
             .ok_or_else(|| LLMError::NetworkError {
                 message: "No embeddings returned".to_string(),
             })?
             .clone();
 
         Ok(EmbeddingResponse {
-            data: vec![Embedding {
-                embedding,
-                index: 0,
-            }],
+            data: vec![Embedding { embedding, index: 0 }],
             model,
             usage: Usage {
                 prompt_tokens: request.input.iter().map(|s| s.len() / 4).sum(), // Rough token estimate
@@ -404,10 +378,7 @@ pub struct OllamaProviderBuilder {
 
 impl OllamaProviderBuilder {
     pub fn new() -> Self {
-        Self {
-            config: OllamaConfig::default(),
-            model: None,
-        }
+        Self { config: OllamaConfig::default(), model: None }
     }
 
     pub fn host(mut self, host: String) -> Self {
@@ -476,7 +447,7 @@ mod tests {
             .port(11434)
             .model("llama3.2".to_string())
             .build();
-        
+
         assert!(provider.is_ok());
         if let Ok(p) = provider {
             assert_eq!(p.model(), "llama3.2");

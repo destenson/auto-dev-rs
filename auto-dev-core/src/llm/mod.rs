@@ -42,7 +42,7 @@ use serde::{Deserialize, Serialize};
 // Re-export commonly used types
 pub use errors::{LLMError, LLMResult};
 pub use ollama::{OllamaProvider, OllamaProviderBuilder};
-pub use ollama_models::{ModelRegistry, ModelCategory, ModelProfile, auto_select_model};
+pub use ollama_models::{ModelCategory, ModelProfile, ModelRegistry, auto_select_model};
 pub use openai_async::{AsyncOpenAIConfig, AsyncOpenAIProvider};
 pub use openrouter::{OpenRouterConfig, OpenRouterProvider};
 pub use token_manager::{ConversationManager, TokenManager};

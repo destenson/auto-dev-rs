@@ -2,10 +2,10 @@
 //!
 //! Manages precedence and layering of configuration from different sources.
 
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use tracing::{debug, info};
-use serde::{Deserialize, Serialize};
 
 /// Priority levels for configuration sources
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -54,20 +54,12 @@ pub struct ConfigLayer<T> {
 impl<T> ConfigLayer<T> {
     /// Create a new configuration layer
     pub fn new(value: T, priority: ConfigPriority) -> Self {
-        Self {
-            value,
-            priority,
-            source: None,
-        }
+        Self { value, priority, source: None }
     }
 
     /// Create with source information
     pub fn with_source(value: T, priority: ConfigPriority, source: String) -> Self {
-        Self {
-            value,
-            priority,
-            source: Some(source),
-        }
+        Self { value, priority, source: Some(source) }
     }
 }
 
@@ -104,9 +96,7 @@ pub struct ConfigResolver {
 impl ConfigResolver {
     /// Create a new configuration resolver
     pub fn new() -> Self {
-        Self {
-            log_overrides: true,
-        }
+        Self { log_overrides: true }
     }
 
     /// Set whether to log override decisions
@@ -116,7 +106,11 @@ impl ConfigResolver {
     }
 
     /// Resolve configuration layers into a single value
-    pub fn resolve<T>(&self, layers: Vec<ConfigLayer<T>>, strategy: MergeStrategy) -> ResolvedConfig<T>
+    pub fn resolve<T>(
+        &self,
+        layers: Vec<ConfigLayer<T>>,
+        strategy: MergeStrategy,
+    ) -> ResolvedConfig<T>
     where
         T: Clone + std::fmt::Debug,
     {
@@ -129,10 +123,8 @@ impl ConfigResolver {
         sorted_layers.sort_by(|a, b| b.priority.cmp(&a.priority));
 
         // Track sources
-        let sources: Vec<_> = sorted_layers
-            .iter()
-            .map(|l| (l.priority, l.source.clone()))
-            .collect();
+        let sources: Vec<_> =
+            sorted_layers.iter().map(|l| (l.priority, l.source.clone())).collect();
 
         // Apply strategy
         let value = match strategy {
@@ -155,11 +147,7 @@ impl ConfigResolver {
             }
         };
 
-        ResolvedConfig {
-            value,
-            sources,
-            strategy,
-        }
+        ResolvedConfig { value, sources, strategy }
     }
 
     /// Resolve string configurations with merge
@@ -198,11 +186,7 @@ impl ConfigResolver {
             }
         }
 
-        ResolvedConfig {
-            value: merged,
-            sources,
-            strategy: MergeStrategy::Merge,
-        }
+        ResolvedConfig { value: merged, sources, strategy: MergeStrategy::Merge }
     }
 
     /// Resolve with explicit priority override
@@ -214,10 +198,7 @@ impl ConfigResolver {
     where
         T: Clone + std::fmt::Debug,
     {
-        let filtered: Vec<_> = layers
-            .into_iter()
-            .filter(|l| l.priority >= min_priority)
-            .collect();
+        let filtered: Vec<_> = layers.into_iter().filter(|l| l.priority >= min_priority).collect();
 
         if filtered.is_empty() {
             None
@@ -235,12 +216,7 @@ impl ConfigInspector {
     pub fn inspect<T: std::fmt::Debug>(layers: &[ConfigLayer<T>]) {
         info!("Configuration layers ({} total):", layers.len());
         for layer in layers {
-            info!(
-                "  [{}] {:?} from {:?}",
-                layer.priority.name(),
-                layer.value,
-                layer.source
-            );
+            info!("  [{}] {:?} from {:?}", layer.priority.name(), layer.value, layer.source);
         }
     }
 
@@ -292,7 +268,7 @@ mod tests {
         let layer_with_source = ConfigLayer::with_source(
             "test",
             ConfigPriority::Project,
-            "/project/.claude".to_string()
+            "/project/.claude".to_string(),
         );
         assert!(layer_with_source.source.is_some());
     }
@@ -300,7 +276,7 @@ mod tests {
     #[test]
     fn test_resolve_replace_strategy() {
         let resolver = ConfigResolver::new();
-        
+
         let layers = vec![
             ConfigLayer::new("default", ConfigPriority::Default),
             ConfigLayer::new("user", ConfigPriority::User),
@@ -315,7 +291,7 @@ mod tests {
     #[test]
     fn test_resolve_strings_merge() {
         let resolver = ConfigResolver::new();
-        
+
         let layers = vec![
             ConfigLayer::new("Default config".to_string(), ConfigPriority::Default),
             ConfigLayer::new("User config".to_string(), ConfigPriority::User),
@@ -332,7 +308,7 @@ mod tests {
     #[test]
     fn test_resolve_with_override() {
         let resolver = ConfigResolver::new();
-        
+
         let layers = vec![
             ConfigLayer::new("default", ConfigPriority::Default),
             ConfigLayer::new("user", ConfigPriority::User),

@@ -7,9 +7,9 @@ use std::collections::HashMap;
 pub enum ProjectType {
     Rust,
     Python,
-    JavaScript,      // Node.js projects
-    TypeScript,      // Node.js with TypeScript  
-    Deno,           // JavaScript/TypeScript with Deno runtime
+    JavaScript, // Node.js projects
+    TypeScript, // Node.js with TypeScript
+    Deno,       // JavaScript/TypeScript with Deno runtime
     DotNet,
     Go,
     Java,
@@ -23,61 +23,147 @@ pub struct ProjectDetector {
 impl ProjectDetector {
     pub fn new() -> Self {
         let mut keywords = HashMap::new();
-        
+
         // Rust keywords
-        keywords.insert(ProjectType::Rust, vec![
-            "rust", "cargo", "crate", "actix", "axum", "tokio", "async", "wasm",
-            "rustc", "clippy", "rustfmt", "serde", "rocket", "bevy"
-        ]);
-        
-        // Python keywords  
-        keywords.insert(ProjectType::Python, vec![
-            "python", "pip", "uv", "django", "flask", "fastapi", "pandas", "numpy",
-            "pytest", "poetry", "virtualenv", "requirements.txt", "scikit", "tensorflow"
-        ]);
-        
+        keywords.insert(
+            ProjectType::Rust,
+            vec![
+                "rust", "cargo", "crate", "actix", "axum", "tokio", "async", "wasm", "rustc",
+                "clippy", "rustfmt", "serde", "rocket", "bevy",
+            ],
+        );
+
+        // Python keywords
+        keywords.insert(
+            ProjectType::Python,
+            vec![
+                "python",
+                "pip",
+                "uv",
+                "django",
+                "flask",
+                "fastapi",
+                "pandas",
+                "numpy",
+                "pytest",
+                "poetry",
+                "virtualenv",
+                "requirements.txt",
+                "scikit",
+                "tensorflow",
+            ],
+        );
+
         // JavaScript keywords
-        keywords.insert(ProjectType::JavaScript, vec![
-            "javascript", "js", "node", "npm", "express", "react", "vue", "angular",
-            "webpack", "babel", "jest", "mocha", "package.json", "yarn"
-        ]);
-        
+        keywords.insert(
+            ProjectType::JavaScript,
+            vec![
+                "javascript",
+                "js",
+                "node",
+                "npm",
+                "express",
+                "react",
+                "vue",
+                "angular",
+                "webpack",
+                "babel",
+                "jest",
+                "mocha",
+                "package.json",
+                "yarn",
+            ],
+        );
+
         // TypeScript keywords
-        keywords.insert(ProjectType::TypeScript, vec![
-            "typescript", "ts", "tsx", "tsc", "tsconfig", "nestjs", "next.js",
-            "type-safe", "typed", "interface", "enum", "decorator"
-        ]);
-        
+        keywords.insert(
+            ProjectType::TypeScript,
+            vec![
+                "typescript",
+                "ts",
+                "tsx",
+                "tsc",
+                "tsconfig",
+                "nestjs",
+                "next.js",
+                "type-safe",
+                "typed",
+                "interface",
+                "enum",
+                "decorator",
+            ],
+        );
+
         // Deno keywords
-        keywords.insert(ProjectType::Deno, vec![
-            "deno", "deno.land", "fresh", "oak", "deno.json", "import_map"
-        ]);
-        
+        keywords.insert(
+            ProjectType::Deno,
+            vec!["deno", "deno.land", "fresh", "oak", "deno.json", "import_map"],
+        );
+
         // .NET keywords
-        keywords.insert(ProjectType::DotNet, vec![
-            "c#", "csharp", ".net", "dotnet", "asp.net", "blazor", "entity framework",
-            "nuget", "visual studio", "msbuild", "xamarin", "maui"
-        ]);
-        
+        keywords.insert(
+            ProjectType::DotNet,
+            vec![
+                "c#",
+                "csharp",
+                ".net",
+                "dotnet",
+                "asp.net",
+                "blazor",
+                "entity framework",
+                "nuget",
+                "visual studio",
+                "msbuild",
+                "xamarin",
+                "maui",
+            ],
+        );
+
         // Go keywords
-        keywords.insert(ProjectType::Go, vec![
-            "go", "golang", "gin", "echo", "fiber", "gorilla", "go.mod", "gofmt",
-            "goroutine", "channel", "interface{}", "package main"
-        ]);
-        
+        keywords.insert(
+            ProjectType::Go,
+            vec![
+                "go",
+                "golang",
+                "gin",
+                "echo",
+                "fiber",
+                "gorilla",
+                "go.mod",
+                "gofmt",
+                "goroutine",
+                "channel",
+                "interface{}",
+                "package main",
+            ],
+        );
+
         // Java keywords
-        keywords.insert(ProjectType::Java, vec![
-            "java", "spring", "maven", "gradle", "junit", "hibernate", "servlet",
-            "jvm", "jar", "classpath", "lombok", "jackson"
-        ]);
-        
+        keywords.insert(
+            ProjectType::Java,
+            vec![
+                "java",
+                "spring",
+                "maven",
+                "gradle",
+                "junit",
+                "hibernate",
+                "servlet",
+                "jvm",
+                "jar",
+                "classpath",
+                "lombok",
+                "jackson",
+            ],
+        );
+
         Self { keywords }
     }
-    
+
     pub fn detect(&self, instructions: &InstructionDocument) -> ProjectType {
         let text = instructions.raw_content.to_lowercase();
         let mut scores: HashMap<ProjectType, usize> = HashMap::new();
-        
+
         // Score each project type based on keyword matches
         for (project_type, keywords) in &self.keywords {
             let mut score = 0;
@@ -96,7 +182,7 @@ impl ProjectDetector {
                 scores.insert(project_type.clone(), score);
             }
         }
-        
+
         // Check explicit language in metadata
         if let Some(lang) = &instructions.metadata.language {
             let lang_lower = lang.to_lowercase();
@@ -119,7 +205,10 @@ impl ProjectDetector {
                     return ProjectType::Deno;
                 }
                 return ProjectType::JavaScript;
-            } else if lang_lower.contains("c#") || lang_lower.contains("csharp") || lang_lower.contains(".net") {
+            } else if lang_lower.contains("c#")
+                || lang_lower.contains("csharp")
+                || lang_lower.contains(".net")
+            {
                 return ProjectType::DotNet;
             } else if lang_lower.contains("go") {
                 return ProjectType::Go;
@@ -127,9 +216,10 @@ impl ProjectDetector {
                 return ProjectType::Java;
             }
         }
-        
+
         // Return highest scoring type, or Generic if no matches
-        scores.into_iter()
+        scores
+            .into_iter()
             .max_by_key(|(_, score)| *score)
             .map(|(project_type, _)| project_type)
             .unwrap_or(ProjectType::Generic)

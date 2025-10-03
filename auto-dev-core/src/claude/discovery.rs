@@ -137,10 +137,7 @@ impl ClaudeConfigDiscovery {
         // Update cache
         {
             let mut cache = self.cache.write().await;
-            *cache = Some(CacheEntry {
-                paths: paths.clone(),
-                timestamp: Instant::now(),
-            });
+            *cache = Some(CacheEntry { paths: paths.clone(), timestamp: Instant::now() });
         }
 
         Ok(paths)
@@ -168,13 +165,13 @@ impl ClaudeConfigDiscovery {
         if let Some(dir) = project_dir {
             debug!("Found project .claude directory: {:?}", dir);
             paths.project_dir = Some(dir.clone());
-            
+
             // Check for CLAUDE.md
             let claude_md = dir.join("CLAUDE.md");
             if self.is_readable_file(&claude_md).await {
                 paths.project_claude_md = Some(claude_md);
             }
-            
+
             // Check for commands directory
             let commands_dir = dir.join("commands");
             if self.is_readable_dir(&commands_dir).await {
@@ -187,13 +184,13 @@ impl ClaudeConfigDiscovery {
         if let Some(dir) = global_dir {
             debug!("Found global .claude directory: {:?}", dir);
             paths.global_dir = Some(dir.clone());
-            
+
             // Check for CLAUDE.md
             let claude_md = dir.join("CLAUDE.md");
             if self.is_readable_file(&claude_md).await {
                 paths.global_claude_md = Some(claude_md);
             }
-            
+
             // Check for commands directory
             let commands_dir = dir.join("commands");
             if self.is_readable_dir(&commands_dir).await {
@@ -214,7 +211,7 @@ impl ClaudeConfigDiscovery {
         };
 
         let mut current = start_dir.as_path();
-        
+
         loop {
             let claude_dir = current.join(".claude");
             if self.is_readable_dir(&claude_dir).await {
@@ -226,13 +223,19 @@ impl ClaudeConfigDiscovery {
             if self.working_dir.is_some() {
                 // Check if we're at a temp directory root (contains "tmp" or "temp" in path)
                 let path_str = current.to_string_lossy().to_lowercase();
-                if path_str.contains("\\tmp") || path_str.contains("/tmp") || 
-                   path_str.contains("\\temp") || path_str.contains("/temp") {
+                if path_str.contains("\\tmp")
+                    || path_str.contains("/tmp")
+                    || path_str.contains("\\temp")
+                    || path_str.contains("/temp")
+                {
                     // If next parent would exit temp dir, stop searching
                     if let Some(parent) = current.parent() {
                         let parent_str = parent.to_string_lossy().to_lowercase();
-                        if !parent_str.contains("\\tmp") && !parent_str.contains("/tmp") &&
-                           !parent_str.contains("\\temp") && !parent_str.contains("/temp") {
+                        if !parent_str.contains("\\tmp")
+                            && !parent_str.contains("/tmp")
+                            && !parent_str.contains("\\temp")
+                            && !parent_str.contains("/temp")
+                        {
                             break;
                         }
                     }
@@ -255,16 +258,12 @@ impl ClaudeConfigDiscovery {
         if self.working_dir.is_some() {
             return Ok(None);
         }
-        
+
         let home_dir = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-        
+
         let claude_dir = home_dir.join(".claude");
-        if self.is_readable_dir(&claude_dir).await {
-            Ok(Some(claude_dir))
-        } else {
-            Ok(None)
-        }
+        if self.is_readable_dir(&claude_dir).await { Ok(Some(claude_dir)) } else { Ok(None) }
     }
 
     /// Check if a path is a readable directory
@@ -326,10 +325,10 @@ mod tests {
         // Create a nested directory to ensure we don't find parent .claude dirs
         let test_dir = temp_dir.path().join("test").join("nested");
         tokio::fs::create_dir_all(&test_dir).await.unwrap();
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(test_dir)
             .with_cache_ttl(Duration::from_secs(0));
-        
+
         let paths = discovery.discover().await.unwrap();
         assert_eq!(paths.location(), ClaudeConfigLocation::None);
         assert!(paths.project_dir.is_none());
@@ -341,18 +340,18 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let claude_dir = temp_dir.path().join(".claude");
         fs::create_dir(&claude_dir).await.unwrap();
-        
+
         // Create CLAUDE.md
         let claude_md = claude_dir.join("CLAUDE.md");
         fs::write(&claude_md, "# Test instructions").await.unwrap();
-        
+
         // Create commands directory
         let commands_dir = claude_dir.join("commands");
         fs::create_dir(&commands_dir).await.unwrap();
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(temp_dir.path().to_path_buf())
             .with_cache_ttl(Duration::from_secs(0));
-        
+
         let paths = discovery.discover().await.unwrap();
         assert_eq!(paths.location(), ClaudeConfigLocation::Project);
         assert!(paths.project_dir.is_some());
@@ -366,24 +365,24 @@ mod tests {
         // Use nested directory to avoid finding parent .claude
         let test_dir = temp_dir.path().join("test");
         fs::create_dir(&test_dir).await.unwrap();
-        
+
         let claude_dir = test_dir.join(".claude");
         fs::create_dir(&claude_dir).await.unwrap();
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(test_dir.clone())
             .with_cache_ttl(Duration::from_secs(60));
-        
+
         // First discovery
         let paths1 = discovery.discover().await.unwrap();
         assert_eq!(paths1.location(), ClaudeConfigLocation::Project);
-        
+
         // Delete the directory
         fs::remove_dir_all(&claude_dir).await.unwrap();
-        
+
         // Second discovery should use cache
         let paths2 = discovery.discover().await.unwrap();
         assert_eq!(paths2.location(), ClaudeConfigLocation::Project);
-        
+
         // Clear cache and discover again
         discovery.clear_cache().await;
         let paths3 = discovery.discover().await.unwrap();
@@ -395,23 +394,23 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let project_claude = temp_dir.path().join(".claude");
         fs::create_dir(&project_claude).await.unwrap();
-        
+
         let project_claude_md = project_claude.join("CLAUDE.md");
         fs::write(&project_claude_md, "# Project").await.unwrap();
-        
+
         let project_commands = project_claude.join("commands");
         fs::create_dir(&project_commands).await.unwrap();
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(temp_dir.path().to_path_buf())
             .with_cache_ttl(Duration::from_secs(0));
-        
+
         let paths = discovery.discover().await.unwrap();
-        
+
         // Check priority order (project should come first)
         let claude_md_paths = paths.claude_md_paths();
         assert!(!claude_md_paths.is_empty());
         assert!(claude_md_paths[0].to_string_lossy().contains(".claude"));
-        
+
         let commands_dirs = paths.commands_dirs();
         assert!(!commands_dirs.is_empty());
         assert!(commands_dirs[0].to_string_lossy().contains("commands"));
@@ -422,14 +421,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let claude_dir = temp_dir.path().join(".claude");
         fs::create_dir(&claude_dir).await.unwrap();
-        
+
         // Create nested directory
         let nested = temp_dir.path().join("src").join("nested");
         fs::create_dir_all(&nested).await.unwrap();
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(nested.clone())
             .with_cache_ttl(Duration::from_secs(0));
-        
+
         let paths = discovery.discover().await.unwrap();
         assert_eq!(paths.location(), ClaudeConfigLocation::Project);
         assert!(paths.project_dir.is_some());
@@ -441,11 +440,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let claude_dir = temp_dir.path().join(".claude");
         fs::create_dir(&claude_dir).await.unwrap();
-        
+
         // Create file with restricted permissions (platform-specific)
         let claude_md = claude_dir.join("CLAUDE.md");
         fs::write(&claude_md, "test").await.unwrap();
-        
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -453,14 +452,14 @@ mod tests {
             perms.set_mode(0o000);
             fs::set_permissions(&claude_md, perms).await.unwrap();
         }
-        
+
         let discovery = ClaudeConfigDiscovery::with_working_dir(temp_dir.path().to_path_buf())
             .with_cache_ttl(Duration::from_secs(0));
-        
+
         let paths = discovery.discover().await.unwrap();
         // Should find directory but may not be able to read file
         assert_eq!(paths.location(), ClaudeConfigLocation::Project);
-        
+
         // Restore permissions for cleanup
         #[cfg(unix)]
         {

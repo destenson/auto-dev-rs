@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
-use tracing::{debug, warn, info};
+use tracing::{debug, info, warn};
 
 /// Rate limiter for API calls
 #[derive(Debug, Clone)]
@@ -23,19 +23,16 @@ struct RateLimiter {
 
 impl RateLimiter {
     fn new(max_rpm: usize) -> Self {
-        Self {
-            max_rpm,
-            request_times: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { max_rpm, request_times: Arc::new(Mutex::new(Vec::new())) }
     }
 
     async fn wait_if_needed(&self) {
         let mut times = self.request_times.lock().await;
         let now = Instant::now();
-        
+
         // Remove timestamps older than 1 minute
         times.retain(|&t| now.duration_since(t) < Duration::from_secs(60));
-        
+
         // If we've hit the rate limit, wait
         if times.len() >= self.max_rpm {
             if let Some(&oldest) = times.first() {
@@ -46,7 +43,7 @@ impl RateLimiter {
                 }
             }
         }
-        
+
         times.push(now);
     }
 }
@@ -61,9 +58,7 @@ pub struct ClaudeProvider {
 
 impl ClaudeProvider {
     pub fn new(config: ClaudeConfig) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(config.timeout_secs)).build()?;
 
         let model_tier = match config.model.as_str() {
             "claude-3-haiku-20240307" => ModelTier::Small,
@@ -75,12 +70,7 @@ impl ClaudeProvider {
 
         let rate_limiter = RateLimiter::new(config.max_requests_per_minute);
 
-        Ok(Self {
-            client,
-            config,
-            model_tier,
-            rate_limiter,
-        })
+        Ok(Self { client, config, model_tier, rate_limiter })
     }
 
     /// Create a message with retry logic
@@ -97,7 +87,7 @@ impl ClaudeProvider {
                 Ok(response) => return Ok(response),
                 Err(e) => {
                     let error_str = e.to_string();
-                    
+
                     // Check if it's a rate limit error
                     if error_str.contains("429") || error_str.contains("rate_limit") {
                         warn!("Rate limit error, backing off");
@@ -109,14 +99,15 @@ impl ClaudeProvider {
                         backoff *= 2; // Exponential backoff
                         continue;
                     }
-                    
+
                     // Check if it's a temporary error worth retrying
-                    if error_str.contains("timeout") || 
-                       error_str.contains("connection") ||
-                       error_str.contains("500") ||
-                       error_str.contains("502") ||
-                       error_str.contains("503") ||
-                       error_str.contains("504") {
+                    if error_str.contains("timeout")
+                        || error_str.contains("connection")
+                        || error_str.contains("500")
+                        || error_str.contains("502")
+                        || error_str.contains("503")
+                        || error_str.contains("504")
+                    {
                         attempt += 1;
                         if attempt > max_retries {
                             return Err(e);
@@ -126,7 +117,7 @@ impl ClaudeProvider {
                         backoff = (backoff * 2).min(Duration::from_secs(30)); // Cap at 30 seconds
                         continue;
                     }
-                    
+
                     // Non-retryable error
                     return Err(e);
                 }
@@ -136,8 +127,8 @@ impl ClaudeProvider {
 
     /// Internal message creation without retry logic
     async fn create_message_internal(&self, messages: Vec<Message>) -> Result<String> {
-        let api_key = std::env::var(&self.config.api_key_env)
-            .context("Anthropic API key not found")?;
+        let api_key =
+            std::env::var(&self.config.api_key_env).context("Anthropic API key not found")?;
 
         let request = MessageRequest {
             model: self.config.model.clone(),
@@ -165,10 +156,8 @@ impl ClaudeProvider {
             return Err(anyhow::anyhow!("Claude API error ({}): {}", status, error_text));
         }
 
-        let result: MessageResponse = response
-            .json()
-            .await
-            .context("Failed to parse Claude response")?;
+        let result: MessageResponse =
+            response.json().await.context("Failed to parse Claude response")?;
 
         result
             .content
@@ -184,8 +173,8 @@ impl ClaudeProvider {
         &self,
         messages: Vec<Message>,
     ) -> Result<impl Stream<Item = Result<String>>> {
-        let api_key = std::env::var(&self.config.api_key_env)
-            .context("Anthropic API key not found")?;
+        let api_key =
+            std::env::var(&self.config.api_key_env).context("Anthropic API key not found")?;
 
         let request = StreamingMessageRequest {
             model: self.config.model.clone(),
@@ -227,7 +216,7 @@ impl ClaudeProvider {
                         if json_str == "[DONE]" {
                             return Ok(String::new());
                         }
-                        
+
                         if let Ok(event) = serde_json::from_str::<StreamEvent>(json_str) {
                             if let Some(delta) = event.delta {
                                 return Ok(delta.text);
@@ -309,10 +298,7 @@ impl LLMProvider for ClaudeProvider {
             context.language
         );
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: prompt }];
 
         let response = if options.streaming {
             // For now, collect the stream into a single response
@@ -363,10 +349,7 @@ impl LLMProvider for ClaudeProvider {
             code, spec.content
         );
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: prompt }];
 
         let response = self.create_message(messages).await?;
 
@@ -401,10 +384,7 @@ impl LLMProvider for ClaudeProvider {
             code, req_list
         );
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: prompt }];
 
         let response = self.create_message(messages).await?;
 
@@ -444,19 +424,11 @@ impl LLMProvider for ClaudeProvider {
             }
         }
 
-        Ok(ReviewResult {
-            issues,
-            suggestions,
-            meets_requirements,
-            confidence: 0.9,
-        })
+        Ok(ReviewResult { issues, suggestions, meets_requirements, confidence: 0.9 })
     }
 
     async fn answer_question(&self, question: &str) -> Result<Option<String>> {
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: question.to_string(),
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: question.to_string() }];
 
         let response = self.create_message(messages).await?;
         Ok(Some(response))
@@ -473,10 +445,7 @@ impl LLMProvider for ClaudeProvider {
             &content[..content.len().min(500)]
         );
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: prompt }];
 
         let response = self.create_message(messages).await?;
 
@@ -491,10 +460,7 @@ impl LLMProvider for ClaudeProvider {
                 is_documentation: parsed["is_doc"].as_bool().unwrap_or(false),
                 is_test: parsed["is_test"].as_bool().unwrap_or(false),
                 is_config: parsed["is_config"].as_bool().unwrap_or(false),
-                language: parsed["language"]
-                    .as_str()
-                    .filter(|s| *s != "null")
-                    .map(String::from),
+                language: parsed["language"].as_str().filter(|s| *s != "null").map(String::from),
                 confidence: 0.95,
             });
         }
@@ -523,10 +489,7 @@ impl LLMProvider for ClaudeProvider {
             task
         );
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![Message { role: "user".to_string(), content: prompt }];
 
         let response = self.create_message(messages).await?;
         let lower = response.to_lowercase();
@@ -769,12 +732,12 @@ fn test_main() {
     #[tokio::test]
     async fn test_rate_limiter() {
         let limiter = RateLimiter::new(5); // 5 requests per minute
-        
+
         // Should allow 5 quick requests
         for _ in 0..5 {
             limiter.wait_if_needed().await;
         }
-        
+
         // The 6th request should wait
         let start = Instant::now();
         limiter.wait_if_needed().await;
@@ -794,9 +757,7 @@ mod integration_tests {
         let config = ClaudeConfig::default();
         let provider = ClaudeProvider::new(config).unwrap();
 
-        let result = provider
-            .answer_question("What is 2+2? Reply with just the number.")
-            .await;
+        let result = provider.answer_question("What is 2+2? Reply with just the number.").await;
 
         assert!(result.is_ok());
         let answer = result.unwrap().unwrap();
@@ -809,10 +770,8 @@ mod integration_tests {
         let config = ClaudeConfig::default();
         let provider = ClaudeProvider::new(config).unwrap();
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: "Count from 1 to 5".to_string(),
-        }];
+        let messages =
+            vec![Message { role: "user".to_string(), content: "Count from 1 to 5".to_string() }];
 
         let mut stream = provider.create_message_stream(messages).await.unwrap();
         let mut collected = String::new();

@@ -17,10 +17,12 @@ pub mod discovery;
 pub use claude_md::{ClaudeMdContent, ClaudeMdLoader};
 pub use command_executor::{CommandExecutor, CommandOutput};
 pub use command_parser::CommandParser;
-pub use command_registry::{CommandRegistrySystem, CommandSource, RegisteredCommand, CommandStats};
+pub use command_registry::{CommandRegistrySystem, CommandSource, CommandStats, RegisteredCommand};
 pub use command_types::{ClaudeCommand, CommandArgument, CommandRegistry};
 pub use config_merger::{ConfigMerger, MergeContext};
-pub use config_priority::{ConfigPriority, ConfigLayer, ConfigResolver, ResolvedConfig, MergeStrategy};
+pub use config_priority::{
+    ConfigLayer, ConfigPriority, ConfigResolver, MergeStrategy, ResolvedConfig,
+};
 pub use config_watcher::{ClaudeConfigWatcher, ClaudeFileChange, ReloadHandler};
-pub use context_integration::{ClaudeContextProvider, ClaudeContextExtension};
+pub use context_integration::{ClaudeContextExtension, ClaudeContextProvider};
 pub use discovery::{ClaudeConfigDiscovery, ClaudeConfigLocation, ClaudeConfigPaths};

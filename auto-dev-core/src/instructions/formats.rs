@@ -31,44 +31,49 @@ pub fn detect_format(path: &Path, content: &str) -> Result<Format> {
             _ => {}
         }
     }
-    
+
     // Try to detect from content
     let trimmed = content.trim();
-    
+
     // Check for JSON
-    if (trimmed.starts_with('{') && trimmed.ends_with('}')) ||
-       (trimmed.starts_with('[') && trimmed.ends_with(']')) {
+    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    {
         if serde_json::from_str::<JsonValue>(trimmed).is_ok() {
             return Ok(Format::Json);
         }
     }
-    
+
     // Check for YAML (simple heuristic)
     if trimmed.contains(":\n") || trimmed.contains(": ") {
         if serde_yaml::from_str::<YamlValue>(trimmed).is_ok() {
             return Ok(Format::Yaml);
         }
     }
-    
+
     // Check for Markdown
-    if trimmed.contains("# ") || trimmed.contains("## ") || 
-       trimmed.contains("```") || trimmed.contains("- ") {
+    if trimmed.contains("# ")
+        || trimmed.contains("## ")
+        || trimmed.contains("```")
+        || trimmed.contains("- ")
+    {
         return Ok(Format::Markdown);
     }
-    
+
     // Default to text
     Ok(Format::Text)
 }
 
 /// Parse JSON format
-pub fn parse_json(content: &str) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
-    let value: JsonValue = serde_json::from_str(content)
-        .context("Failed to parse JSON")?;
-    
+pub fn parse_json(
+    content: &str,
+) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
+    let value: JsonValue = serde_json::from_str(content).context("Failed to parse JSON")?;
+
     let mut sections = Vec::new();
     let mut metadata = HashMap::new();
     let mut instruction_text = String::new();
-    
+
     match &value {
         JsonValue::Object(map) => {
             // Extract known fields
@@ -83,7 +88,7 @@ pub fn parse_json(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
                     instruction_text = s.clone();
                 }
             }
-            
+
             // Extract metadata
             for (key, val) in map {
                 if let JsonValue::String(s) = val {
@@ -92,25 +97,23 @@ pub fn parse_json(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
                     metadata.insert(key.clone(), val.to_string());
                 }
             }
-            
+
             // Extract sections if present
             if let Some(JsonValue::Array(arr)) = map.get("sections") {
                 for (i, item) in arr.iter().enumerate() {
                     if let JsonValue::Object(section_map) = item {
-                        let title = section_map.get("title")
+                        let title = section_map
+                            .get("title")
                             .and_then(|v| v.as_str())
                             .unwrap_or(&format!("Section {}", i + 1))
                             .to_string();
-                        let content = section_map.get("content")
+                        let content = section_map
+                            .get("content")
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
-                        
-                        sections.push(InstructionSection {
-                            title,
-                            content,
-                            level: 1,
-                        });
+
+                        sections.push(InstructionSection { title, content, level: 1 });
                     }
                 }
             }
@@ -119,28 +122,30 @@ pub fn parse_json(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
             instruction_text = serde_json::to_string_pretty(&value)?;
         }
     }
-    
+
     // If no instruction text but we have metadata, combine it
     if instruction_text.is_empty() && !metadata.is_empty() {
-        instruction_text = metadata.iter()
+        instruction_text = metadata
+            .iter()
             .filter(|(k, _)| !k.starts_with('_'))
             .map(|(k, v)| format!("{}: {}", k, v))
             .collect::<Vec<_>>()
             .join("\n");
     }
-    
+
     Ok((sections, metadata, instruction_text))
 }
 
 /// Parse YAML format
-pub fn parse_yaml(content: &str) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
-    let value: YamlValue = serde_yaml::from_str(content)
-        .context("Failed to parse YAML")?;
-    
+pub fn parse_yaml(
+    content: &str,
+) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
+    let value: YamlValue = serde_yaml::from_str(content).context("Failed to parse YAML")?;
+
     let mut sections = Vec::new();
     let mut metadata = HashMap::new();
     let mut instruction_text = String::new();
-    
+
     if let YamlValue::Mapping(map) = &value {
         // Extract known fields
         for (key, val) in map {
@@ -160,20 +165,18 @@ pub fn parse_yaml(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
                         if let YamlValue::Sequence(seq) = val {
                             for (i, item) in seq.iter().enumerate() {
                                 if let YamlValue::Mapping(section_map) = item {
-                                    let title = section_map.get(&YamlValue::String("title".to_string()))
+                                    let title = section_map
+                                        .get(&YamlValue::String("title".to_string()))
                                         .and_then(|v| v.as_str())
                                         .unwrap_or(&format!("Section {}", i + 1))
                                         .to_string();
-                                    let content = section_map.get(&YamlValue::String("content".to_string()))
+                                    let content = section_map
+                                        .get(&YamlValue::String("content".to_string()))
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("")
                                         .to_string();
-                                    
-                                    sections.push(InstructionSection {
-                                        title,
-                                        content,
-                                        level: 1,
-                                    });
+
+                                    sections.push(InstructionSection { title, content, level: 1 });
                                 }
                             }
                         }
@@ -191,31 +194,34 @@ pub fn parse_yaml(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
     } else {
         instruction_text = serde_yaml::to_string(&value)?;
     }
-    
+
     // If no instruction text but we have metadata, combine it
     if instruction_text.is_empty() && !metadata.is_empty() {
-        instruction_text = metadata.iter()
+        instruction_text = metadata
+            .iter()
             .filter(|(k, _)| !k.starts_with('_'))
             .map(|(k, v)| format!("{}: {}", k, v))
             .collect::<Vec<_>>()
             .join("\n");
     }
-    
+
     Ok((sections, metadata, instruction_text))
 }
 
 /// Parse Markdown format
-pub fn parse_markdown(content: &str) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
+pub fn parse_markdown(
+    content: &str,
+) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
     let mut sections = Vec::new();
     let mut metadata = HashMap::new();
     let mut instruction_text = String::new();
-    
+
     let parser = Parser::new(content);
     let mut current_section: Option<(String, usize, Vec<String>)> = None;
     let mut in_code_block = false;
     let mut in_heading = false;
     let mut full_text = Vec::new();
-    
+
     for event in parser {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
@@ -228,7 +234,8 @@ pub fn parse_markdown(content: &str) -> Result<(Vec<InstructionSection>, HashMap
                     });
                 }
                 in_heading = true;
-                current_section = Some((String::new(), heading_level_to_usize(level) as usize, Vec::new()));
+                current_section =
+                    Some((String::new(), heading_level_to_usize(level) as usize, Vec::new()));
             }
             Event::End(TagEnd::Heading(_)) => {
                 in_heading = false;
@@ -269,7 +276,7 @@ pub fn parse_markdown(content: &str) -> Result<(Vec<InstructionSection>, HashMap
             _ => {}
         }
     }
-    
+
     // Save last section if exists
     if let Some((title, level, content)) = current_section {
         sections.push(InstructionSection {
@@ -278,9 +285,9 @@ pub fn parse_markdown(content: &str) -> Result<(Vec<InstructionSection>, HashMap
             level: level as usize,
         });
     }
-    
+
     instruction_text = full_text.join(" ").trim().to_string();
-    
+
     // Try to extract metadata from sections
     for section in &sections {
         let lower_title = section.title.to_lowercase();
@@ -297,7 +304,7 @@ pub fn parse_markdown(content: &str) -> Result<(Vec<InstructionSection>, HashMap
             }
         }
     }
-    
+
     Ok((sections, metadata, instruction_text))
 }
 
@@ -313,20 +320,27 @@ fn heading_level_to_usize(level: HeadingLevel) -> u8 {
 }
 
 /// Parse plain text format
-pub fn parse_text(content: &str) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
+pub fn parse_text(
+    content: &str,
+) -> Result<(Vec<InstructionSection>, HashMap<String, String>, String)> {
     let mut sections = Vec::new();
     let mut metadata = HashMap::new();
-    
+
     // Simple heuristics for text files
     let lines: Vec<&str> = content.lines().collect();
     let mut current_section: Option<(String, Vec<String>)> = None;
-    
+
     for line in &lines {
         let trimmed = line.trim();
-        
+
         // Check for section-like headers (all caps, followed by colon, etc.)
-        if trimmed.len() > 3 && trimmed.ends_with(':') && 
-           trimmed.chars().take(trimmed.len() - 1).all(|c| c.is_uppercase() || c.is_whitespace() || c == '_') {
+        if trimmed.len() > 3
+            && trimmed.ends_with(':')
+            && trimmed
+                .chars()
+                .take(trimmed.len() - 1)
+                .all(|c| c.is_uppercase() || c.is_whitespace() || c == '_')
+        {
             // Save previous section
             if let Some((title, content)) = current_section.take() {
                 sections.push(InstructionSection {
@@ -335,17 +349,17 @@ pub fn parse_text(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
                     level: 1,
                 });
             }
-            current_section = Some((trimmed[..trimmed.len()-1].to_string(), Vec::new()));
+            current_section = Some((trimmed[..trimmed.len() - 1].to_string(), Vec::new()));
         } else if let Some((_, ref mut content)) = current_section {
             content.push(line.to_string());
         }
-        
+
         // Look for metadata patterns (key: value)
         if trimmed.contains(": ") && !trimmed.contains("://") {
             if let Some(colon_pos) = trimmed.find(": ") {
                 let key = trimmed[..colon_pos].trim();
                 let value = trimmed[colon_pos + 2..].trim();
-                
+
                 // Simple heuristic: keys should be relatively short and not contain spaces
                 if key.len() < 30 && !key.contains(' ') {
                     metadata.insert(key.to_string(), value.to_string());
@@ -353,7 +367,7 @@ pub fn parse_text(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
             }
         }
     }
-    
+
     // Save last section
     if let Some((title, content)) = current_section {
         sections.push(InstructionSection {
@@ -362,16 +376,16 @@ pub fn parse_text(content: &str) -> Result<(Vec<InstructionSection>, HashMap<Str
             level: 1,
         });
     }
-    
+
     let instruction_text = content.trim().to_string();
-    
+
     Ok((sections, metadata, instruction_text))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_detect_format() {
         assert_eq!(detect_format(Path::new("test.json"), "{}").unwrap(), Format::Json);
@@ -379,7 +393,7 @@ mod tests {
         assert_eq!(detect_format(Path::new("test.md"), "# Title").unwrap(), Format::Markdown);
         assert_eq!(detect_format(Path::new("test.txt"), "plain text").unwrap(), Format::Text);
     }
-    
+
     #[test]
     fn test_parse_json() {
         let json = r#"{
@@ -387,13 +401,13 @@ mod tests {
             "language": "rust",
             "framework": "actix"
         }"#;
-        
+
         let (sections, metadata, text) = parse_json(json).unwrap();
         assert_eq!(text, "Build a web app");
         assert_eq!(metadata.get("language"), Some(&"rust".to_string()));
         assert_eq!(metadata.get("framework"), Some(&"actix".to_string()));
     }
-    
+
     #[test]
     fn test_parse_yaml() {
         let yaml = r#"
@@ -403,12 +417,12 @@ dependencies:
   - clap
   - tokio
 "#;
-        
+
         let (_, metadata, text) = parse_yaml(yaml).unwrap();
         assert_eq!(text, "Create a CLI tool");
         assert_eq!(metadata.get("language"), Some(&"rust".to_string()));
     }
-    
+
     #[test]
     fn test_parse_markdown() {
         let md = r#"# Project Instructions
@@ -423,7 +437,7 @@ Build a web server with the following features:
 - actix-web
 - serde
 "#;
-        
+
         let (sections, _, text) = parse_markdown(md).unwrap();
         assert!(!sections.is_empty());
         assert!(text.contains("Build a web server"));

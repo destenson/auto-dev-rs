@@ -355,7 +355,7 @@ use toml;
 /// Get or create a path under .auto-dev if it exists, otherwise use temp directory
 pub async fn get_storage_path(subdir: &str) -> PathBuf {
     let auto_dev_dir = PathBuf::from(".auto-dev");
-    
+
     // If .auto-dev exists, use it (and create subdir if needed)
     if auto_dev_dir.exists() {
         let path = auto_dev_dir.join(subdir);
@@ -366,7 +366,7 @@ pub async fn get_storage_path(subdir: &str) -> PathBuf {
         }
         return path;
     }
-    
+
     // Otherwise use system temp directory (no persistence)
     std::env::temp_dir().join("auto-dev").join(subdir)
 }
@@ -390,9 +390,9 @@ pub async fn run_default(target_self: bool) -> Result<()> {
 /// Initialize auto-dev project structure (completely optional - creates config template)
 pub async fn init_project() -> Result<()> {
     info!("Creating optional .auto-dev configuration directory");
-    
+
     let auto_dev_dir = PathBuf::from(".auto-dev");
-    
+
     // Create the directory structure for users who want persistent config
     if !auto_dev_dir.exists() {
         tokio::fs::create_dir_all(&auto_dev_dir).await?;
@@ -401,19 +401,23 @@ pub async fn init_project() -> Result<()> {
 
     // Create subdirectories that will be used if they exist
     let dirs = ["cache", "history", "metrics", "patterns", "templates"];
-    
+
     for subdir in &dirs {
         let path = auto_dev_dir.join(subdir);
         if !path.exists() {
             tokio::fs::create_dir_all(&path).await?;
-            println!("Created .auto-dev/{} for {}", subdir, match subdir {
-                &"cache" => "caching analysis results",
-                &"history" => "persisting command history",
-                &"metrics" => "tracking performance metrics",
-                &"patterns" => "custom code patterns",
-                &"templates" => "project templates",
-                _ => "data storage"
-            });
+            println!(
+                "Created .auto-dev/{} for {}",
+                subdir,
+                match subdir {
+                    &"cache" => "caching analysis results",
+                    &"history" => "persisting command history",
+                    &"metrics" => "tracking performance metrics",
+                    &"patterns" => "custom code patterns",
+                    &"templates" => "project templates",
+                    _ => "data storage",
+                }
+            );
         }
     }
 

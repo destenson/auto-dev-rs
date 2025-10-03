@@ -49,29 +49,32 @@ impl MetadataExtractor {
     /// Extract metadata from parsed instructions
     pub fn extract(instruction: &ParsedInstruction) -> Result<ProjectMetadata> {
         let mut metadata = ProjectMetadata::default();
-        
+
         // Extract from explicit metadata
         metadata.extract_from_metadata(&instruction.metadata);
-        
+
         // Extract from content using patterns
         metadata.extract_from_content(instruction.get_main_content());
-        
+
         // Extract from sections
         metadata.extract_from_sections(&instruction.sections);
-        
+
         // Infer project type if not explicitly set
         if metadata.project_type.is_none() {
             metadata.project_type = Some(Self::infer_project_type(&metadata, instruction));
         }
-        
+
         debug!("Extracted metadata: {:?}", metadata);
         Ok(metadata)
     }
-    
+
     /// Infer project type from available information
-    fn infer_project_type(metadata: &ProjectMetadata, instruction: &ParsedInstruction) -> ProjectType {
+    fn infer_project_type(
+        metadata: &ProjectMetadata,
+        instruction: &ParsedInstruction,
+    ) -> ProjectType {
         let content = instruction.get_main_content().to_lowercase();
-        
+
         // Check for specific keywords
         let type_keywords = [
             ("web app", ProjectType::WebApplication),
@@ -95,25 +98,28 @@ impl MetadataExtractor {
             ("service", ProjectType::SystemService),
             ("daemon", ProjectType::SystemService),
         ];
-        
+
         for (keyword, project_type) in type_keywords {
             if content.contains(keyword) {
                 return project_type;
             }
         }
-        
+
         // Check frameworks for hints
         for framework in &metadata.frameworks {
             let framework_lower = framework.to_lowercase();
-            if framework_lower.contains("actix") || framework_lower.contains("rocket") ||
-               framework_lower.contains("express") || framework_lower.contains("flask") {
+            if framework_lower.contains("actix")
+                || framework_lower.contains("rocket")
+                || framework_lower.contains("express")
+                || framework_lower.contains("flask")
+            {
                 return ProjectType::WebApplication;
             }
             if framework_lower.contains("clap") || framework_lower.contains("structopt") {
                 return ProjectType::CliTool;
             }
         }
-        
+
         ProjectType::Unknown
     }
 }
@@ -125,11 +131,11 @@ impl ProjectMetadata {
         if let Some(name) = metadata.get("name").or_else(|| metadata.get("project_name")) {
             self.name = Some(name.clone());
         }
-        
+
         if let Some(lang) = metadata.get("language").or_else(|| metadata.get("lang")) {
             self.language = Some(lang.clone());
         }
-        
+
         // Project type
         if let Some(ptype) = metadata.get("type").or_else(|| metadata.get("project_type")) {
             self.project_type = Some(match ptype.to_lowercase().as_str() {
@@ -144,34 +150,41 @@ impl ProjectMetadata {
                 _ => ProjectType::Unknown,
             });
         }
-        
+
         // Frameworks and dependencies
         if let Some(frameworks) = metadata.get("frameworks").or_else(|| metadata.get("framework")) {
             self.frameworks.extend(
-                frameworks.split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
+                frameworks.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
             );
         }
-        
+
         if let Some(deps) = metadata.get("dependencies").or_else(|| metadata.get("deps")) {
-            self.dependencies.extend(
-                deps.split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            );
+            self.dependencies
+                .extend(deps.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()));
         }
-        
+
         // Store remaining as custom
         for (key, value) in metadata {
-            if !matches!(key.as_str(), "name" | "project_name" | "language" | "lang" | 
-                        "type" | "project_type" | "frameworks" | "framework" | 
-                        "dependencies" | "deps" | "instruction" | "instructions") {
+            if !matches!(
+                key.as_str(),
+                "name"
+                    | "project_name"
+                    | "language"
+                    | "lang"
+                    | "type"
+                    | "project_type"
+                    | "frameworks"
+                    | "framework"
+                    | "dependencies"
+                    | "deps"
+                    | "instruction"
+                    | "instructions"
+            ) {
                 self.custom.insert(key.clone(), value.clone());
             }
         }
     }
-    
+
     /// Extract from instruction content using patterns
     fn extract_from_content(&mut self, content: &str) {
         // Language detection patterns
@@ -185,7 +198,7 @@ impl ProjectMetadata {
             (r"\b(in|using|with)\s+(C\+\+|cpp|CPP)\b", "C++"),
             (r"\b(in|using|with)\s+(C#|csharp|CSharp)\b", "C#"),
         ];
-        
+
         for (pattern, lang) in language_patterns {
             if let Ok(re) = Regex::new(pattern) {
                 if re.is_match(content) {
@@ -196,28 +209,26 @@ impl ProjectMetadata {
                 }
             }
         }
-        
+
         // Framework detection
         let framework_keywords = [
-            "actix", "rocket", "warp", "axum", "tokio",
-            "express", "fastapi", "flask", "django",
-            "react", "vue", "angular", "svelte",
-            "spring", "asp.net", "rails",
+            "actix", "rocket", "warp", "axum", "tokio", "express", "fastapi", "flask", "django",
+            "react", "vue", "angular", "svelte", "spring", "asp.net", "rails",
         ];
-        
+
         let content_lower = content.to_lowercase();
         for keyword in framework_keywords {
             if content_lower.contains(keyword) {
                 self.frameworks.push(keyword.to_string());
             }
         }
-        
+
         // Dependency extraction using common patterns
         let dep_patterns = [
             r"(?:use|import|require|depends on|dependency:?)\s+([a-zA-Z0-9_-]+)",
             r"(?:package|crate|library|module):?\s+([a-zA-Z0-9_-]+)",
         ];
-        
+
         let mut found_deps = HashSet::new();
         for pattern in dep_patterns {
             if let Ok(re) = Regex::new(pattern) {
@@ -229,14 +240,14 @@ impl ProjectMetadata {
             }
         }
         self.dependencies.extend(found_deps);
-        
+
         // Feature extraction
         let feature_patterns = [
             r"(?:feature|implement|support|include):?\s+([^,\.\n]+)",
             r"(?:should|must|need to)\s+([^,\.\n]+)",
-            r"[-*]\s+([A-Z][^,\.\n]+)",  // Bullet points starting with capital
+            r"[-*]\s+([A-Z][^,\.\n]+)", // Bullet points starting with capital
         ];
-        
+
         for pattern in feature_patterns {
             if let Ok(re) = Regex::new(pattern) {
                 for cap in re.captures_iter(content) {
@@ -249,7 +260,7 @@ impl ProjectMetadata {
                 }
             }
         }
-        
+
         // Deduplicate
         self.frameworks.sort();
         self.frameworks.dedup();
@@ -258,40 +269,48 @@ impl ProjectMetadata {
         self.features.sort();
         self.features.dedup();
     }
-    
+
     /// Extract from instruction sections
-    fn extract_from_sections(&mut self, sections: &[crate::instructions::parser::InstructionSection]) {
+    fn extract_from_sections(
+        &mut self,
+        sections: &[crate::instructions::parser::InstructionSection],
+    ) {
         for section in sections {
             let title_lower = section.title.to_lowercase();
-            
+
             // Dependencies section
             if title_lower.contains("dependencies") || title_lower.contains("requirements") {
                 for line in section.content.lines() {
-                    let trimmed = line.trim().trim_start_matches('-').trim_start_matches('*').trim();
+                    let trimmed =
+                        line.trim().trim_start_matches('-').trim_start_matches('*').trim();
                     if !trimmed.is_empty() && trimmed.len() < 50 {
                         self.dependencies.push(trimmed.to_string());
                     }
                 }
             }
-            
+
             // Features section
             if title_lower.contains("features") || title_lower.contains("functionality") {
                 for line in section.content.lines() {
-                    let trimmed = line.trim().trim_start_matches('-').trim_start_matches('*').trim();
+                    let trimmed =
+                        line.trim().trim_start_matches('-').trim_start_matches('*').trim();
                     if !trimmed.is_empty() && trimmed.len() < 100 {
                         self.features.push(trimmed.to_string());
                     }
                 }
             }
-            
+
             // Technology/Stack section
-            if title_lower.contains("technology") || title_lower.contains("stack") || 
-               title_lower.contains("tech") {
+            if title_lower.contains("technology")
+                || title_lower.contains("stack")
+                || title_lower.contains("tech")
+            {
                 let content_lower = section.content.to_lowercase();
-                
+
                 // Look for language mentions
                 if self.language.is_none() {
-                    let languages = ["rust", "python", "javascript", "typescript", "go", "java", "c++", "c#"];
+                    let languages =
+                        ["rust", "python", "javascript", "typescript", "go", "java", "c++", "c#"];
                     for lang in languages {
                         if content_lower.contains(lang) {
                             self.language = Some(lang.to_string());
@@ -299,17 +318,18 @@ impl ProjectMetadata {
                         }
                     }
                 }
-                
+
                 // Extract frameworks from bullet points
                 for line in section.content.lines() {
-                    let trimmed = line.trim().trim_start_matches('-').trim_start_matches('*').trim();
+                    let trimmed =
+                        line.trim().trim_start_matches('-').trim_start_matches('*').trim();
                     if !trimmed.is_empty() && trimmed.len() < 50 {
                         self.frameworks.push(trimmed.to_string());
                     }
                 }
             }
         }
-        
+
         // Final deduplication
         self.dependencies.sort();
         self.dependencies.dedup();
@@ -323,9 +343,9 @@ impl ProjectMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instructions::parser::{ParsedInstruction, InstructionSection};
     use crate::instructions::formats::Format;
-    
+    use crate::instructions::parser::{InstructionSection, ParsedInstruction};
+
     #[test]
     fn test_extract_language() {
         let instruction = ParsedInstruction {
@@ -335,12 +355,12 @@ mod tests {
             metadata: Default::default(),
             instruction_text: "Build a web server in Rust using Actix".to_string(),
         };
-        
+
         let metadata = MetadataExtractor::extract(&instruction).unwrap();
         assert_eq!(metadata.language, Some("Rust".to_string()));
         assert!(metadata.frameworks.contains(&"actix".to_string()));
     }
-    
+
     #[test]
     fn test_extract_project_type() {
         let instruction = ParsedInstruction {
@@ -350,18 +370,18 @@ mod tests {
             metadata: Default::default(),
             instruction_text: "Create a CLI tool for file processing".to_string(),
         };
-        
+
         let metadata = MetadataExtractor::extract(&instruction).unwrap();
         assert_eq!(metadata.project_type, Some(ProjectType::CliTool));
     }
-    
+
     #[test]
     fn test_extract_from_metadata_map() {
         let mut meta_map = HashMap::new();
         meta_map.insert("name".to_string(), "my-project".to_string());
         meta_map.insert("language".to_string(), "Python".to_string());
         meta_map.insert("frameworks".to_string(), "FastAPI, SQLAlchemy".to_string());
-        
+
         let instruction = ParsedInstruction {
             raw_content: String::new(),
             format: Format::Json,
@@ -369,14 +389,14 @@ mod tests {
             metadata: meta_map,
             instruction_text: String::new(),
         };
-        
+
         let metadata = MetadataExtractor::extract(&instruction).unwrap();
         assert_eq!(metadata.name, Some("my-project".to_string()));
         assert_eq!(metadata.language, Some("Python".to_string()));
         assert!(metadata.frameworks.contains(&"FastAPI".to_string()));
         assert!(metadata.frameworks.contains(&"SQLAlchemy".to_string()));
     }
-    
+
     #[test]
     fn test_extract_from_sections() {
         let instruction = ParsedInstruction {
@@ -390,14 +410,15 @@ mod tests {
                 },
                 InstructionSection {
                     title: "Features".to_string(),
-                    content: "- User authentication\n- File upload\n- Real-time updates".to_string(),
+                    content: "- User authentication\n- File upload\n- Real-time updates"
+                        .to_string(),
                     level: 2,
                 },
             ],
             metadata: Default::default(),
             instruction_text: String::new(),
         };
-        
+
         let metadata = MetadataExtractor::extract(&instruction).unwrap();
         assert!(metadata.dependencies.contains(&"tokio".to_string()));
         assert!(metadata.dependencies.contains(&"serde".to_string()));

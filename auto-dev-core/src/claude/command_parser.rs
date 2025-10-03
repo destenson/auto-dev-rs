@@ -17,9 +17,7 @@ pub struct CommandParser {
 impl CommandParser {
     /// Create a new command parser
     pub fn new() -> Self {
-        Self {
-            registry: CommandRegistry::new(),
-        }
+        Self { registry: CommandRegistry::new() }
     }
 
     /// Parse all command files in a directory
@@ -66,7 +64,7 @@ impl CommandParser {
         command.raw_content = content.to_string();
 
         let sections = parse_markdown_sections(content);
-        
+
         // Extract description (first non-empty paragraph before any section)
         command.description = extract_description(content);
 
@@ -93,7 +91,8 @@ impl CommandParser {
         }
 
         // Extract instructions (implementation/execution section or full content)
-        command.instructions = sections.get("implementation")
+        command.instructions = sections
+            .get("implementation")
             .or_else(|| sections.get("execution"))
             .or_else(|| sections.get("instructions"))
             .map(|s| s.trim().to_string())
@@ -115,11 +114,8 @@ impl CommandParser {
 
 /// Extract command name from file path
 fn extract_command_name(path: &Path) -> Result<String> {
-    let file_stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .context("Invalid file name")?;
-    
+    let file_stem = path.file_stem().and_then(|s| s.to_str()).context("Invalid file name")?;
+
     Ok(file_stem.to_string())
 }
 
@@ -130,7 +126,9 @@ fn validate_command_name(name: &str) -> Result<()> {
     }
 
     if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        anyhow::bail!("Command name can only contain alphanumeric characters, hyphens, and underscores");
+        anyhow::bail!(
+            "Command name can only contain alphanumeric characters, hyphens, and underscores"
+        );
     }
 
     Ok(())
@@ -199,13 +197,13 @@ fn extract_description(content: &str) -> String {
 /// Extract arguments from usage patterns
 fn extract_arguments_from_usage(usage: &str) -> Vec<CommandArgument> {
     let mut arguments = Vec::new();
-    
+
     // Look for patterns like:
     // - <required_arg>
     // - [optional_arg]
     // - --flag
     // - --option=value
-    
+
     for line in usage.lines() {
         if let Some(arg) = extract_argument_from_line(line) {
             arguments.push(arg);
@@ -218,7 +216,7 @@ fn extract_arguments_from_usage(usage: &str) -> Vec<CommandArgument> {
 /// Extract a single argument from a line
 fn extract_argument_from_line(line: &str) -> Option<CommandArgument> {
     let line = line.trim();
-    
+
     // Check for <required> pattern
     if line.contains('<') && line.contains('>') {
         if let Some(start) = line.find('<') {
@@ -229,7 +227,7 @@ fn extract_argument_from_line(line: &str) -> Option<CommandArgument> {
             }
         }
     }
-    
+
     // Check for [optional] pattern
     if line.contains('[') && line.contains(']') {
         if let Some(start) = line.find('[') {
@@ -240,7 +238,7 @@ fn extract_argument_from_line(line: &str) -> Option<CommandArgument> {
             }
         }
     }
-    
+
     // Check for --flag pattern
     if line.starts_with("--") || line.contains(" --") {
         if let Some(flag_start) = line.find("--") {
@@ -252,37 +250,37 @@ fn extract_argument_from_line(line: &str) -> Option<CommandArgument> {
             }
         }
     }
-    
+
     None
 }
 
 /// Parse arguments from dedicated arguments section
 fn parse_arguments_section(content: &str) -> Vec<CommandArgument> {
     let mut arguments = Vec::new();
-    
+
     // Look for list items or structured definitions
     for line in content.lines() {
         let line = line.trim();
-        
+
         // Skip empty lines
         if line.is_empty() {
             continue;
         }
-        
+
         // Parse list items (- arg_name: description)
         if line.starts_with('-') || line.starts_with('*') {
             let content = line.trim_start_matches('-').trim_start_matches('*').trim();
-            
+
             if let Some(colon_idx) = content.find(':') {
                 let name = content[..colon_idx].trim().to_string();
                 let description = content[colon_idx + 1..].trim().to_string();
-                
+
                 // Determine if required based on keywords
                 let required = description.to_lowercase().contains("required")
                     || name.starts_with('<') && name.ends_with('>');
-                
+
                 let clean_name = name.trim_start_matches('<').trim_end_matches('>').to_string();
-                
+
                 if required {
                     arguments.push(CommandArgument::required(clean_name, description));
                 } else {
@@ -291,7 +289,7 @@ fn parse_arguments_section(content: &str) -> Vec<CommandArgument> {
             }
         }
     }
-    
+
     arguments
 }
 
@@ -300,7 +298,7 @@ fn extract_examples(content: &str) -> Vec<String> {
     let mut examples = Vec::new();
     let mut current_example = String::new();
     let mut in_code_block = false;
-    
+
     for line in content.lines() {
         if line.trim().starts_with("```") {
             if in_code_block {
@@ -319,12 +317,12 @@ fn extract_examples(content: &str) -> Vec<String> {
             current_example.push('\n');
         }
     }
-    
+
     // Add last example if exists
     if !current_example.is_empty() {
         examples.push(current_example.trim().to_string());
     }
-    
+
     examples
 }
 
@@ -377,7 +375,7 @@ Command usage here.
 
 Example content
 "#;
-        
+
         let sections = parse_markdown_sections(content);
         assert!(sections.contains_key("usage"));
         assert!(sections.contains_key("arguments"));
@@ -396,7 +394,7 @@ It can span multiple lines.
 
 More content here.
 "#;
-        
+
         let desc = extract_description(content);
         assert_eq!(desc, "This is the command description. It can span multiple lines.");
     }
@@ -405,7 +403,7 @@ More content here.
     fn test_parse_command_file() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let file_path = temp_dir.path().join("test-command.md");
-        
+
         let content = r#"# Test Command
 
 This is a test command for demonstration.
@@ -430,45 +428,45 @@ test-command input.txt output.txt --verbose
 
 Process the input file and generate output.
 "#;
-        
+
         fs::write(&file_path, content)?;
-        
+
         let mut parser = CommandParser::new();
         parser.parse_file(&file_path)?;
-        
+
         let registry = parser.registry();
         assert!(registry.contains("test-command"));
-        
+
         let command = registry.get("test-command").unwrap();
         assert_eq!(command.name, "test-command");
         assert_eq!(command.description, "This is a test command for demonstration.");
         assert!(!command.usage.is_empty());
         assert!(!command.arguments.is_empty());
         assert_eq!(command.examples.len(), 1);
-        
+
         Ok(())
     }
 
     #[test]
     fn test_parse_directory() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        
+
         // Create multiple command files
         for i in 1..=3 {
             let file_path = temp_dir.path().join(format!("command{}.md", i));
             let content = format!("# Command {}\n\nDescription for command {}.", i, i);
             fs::write(&file_path, content)?;
         }
-        
+
         let mut parser = CommandParser::new();
         parser.parse_directory(temp_dir.path())?;
-        
+
         let registry = parser.registry();
         assert_eq!(registry.metadata.command_count, 3);
         assert!(registry.contains("command1"));
         assert!(registry.contains("command2"));
         assert!(registry.contains("command3"));
-        
+
         Ok(())
     }
 
@@ -477,13 +475,13 @@ Process the input file and generate output.
         let usage = r#"
         command <required_arg> [optional_arg] --flag --option=value
         "#;
-        
+
         let args = extract_arguments_from_usage(usage);
         assert!(!args.is_empty());
-        
+
         // Check for required argument
         assert!(args.iter().any(|a| a.name == "required_arg" && a.required));
-        
+
         // Check for optional argument
         assert!(args.iter().any(|a| a.name == "optional_arg" && !a.required));
     }

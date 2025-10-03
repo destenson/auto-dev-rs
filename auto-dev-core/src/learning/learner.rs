@@ -350,7 +350,7 @@ impl LearningSystem {
             debug!("Export path {:?} doesn't exist, skipping import", self.config.export_path);
             return Ok(());
         }
-        
+
         let import_path = self.config.export_path.join("knowledge_export.json");
 
         if !import_path.exists() {
