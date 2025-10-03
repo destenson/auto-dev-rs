@@ -435,6 +435,7 @@ dependencies = [
  "futures",
  "gherkin",
  "git2",
+ "globset",
  "hnsw",
  "ignore",
  "indicatif 0.18.0",
