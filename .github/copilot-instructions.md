@@ -192,3 +192,18 @@ pub async fn execute(args: GenerateArgs) -> anyhow::Result<()> {
 - **Safety features**: Extend validation gates in `safety/validators.rs`
 
 This codebase represents a new paradigm where specifications drive implementation automatically. Focus on understanding the safety mechanisms, async patterns, and modular architecture to be immediately productive.
+
+## Future Enhancements
+
+### Web Frontend for Process Visibility
+A web-based dashboard is planned to provide real-time visibility into auto-dev's autonomous processes:
+
+- **Live Process Monitor**: View active development loops, file monitoring, and LLM interactions
+- **Safety Gate Dashboard**: Real-time validation status and security events from the 5-layer safety system
+- **Metrics Visualization**: Self-improvement progress, pattern learning, and cost optimization charts
+- **Module Sandbox View**: Resource usage, capability violations, and audit logs
+- **PRP Progress Tracker**: Visual representation of implementation status and dependencies
+- **LLM Usage Analytics**: Provider selection, cost tracking, and response quality metrics
+
+This would be particularly valuable for debugging autonomous behavior and understanding system decision-making in real-time.
+
