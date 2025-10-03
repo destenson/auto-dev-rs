@@ -3,6 +3,13 @@
 //! This module provides dynamic integration of Claude commands
 //! into the CLI, allowing user-defined commands from .claude/commands/
 //! to be executed as subcommands.
+//! It handles discovery, registration, argument parsing, and execution
+//! of Claude commands within the CLI framework.
+//!
+//! The main struct is `ClaudeCommandHandler` which manages the lifecycle
+//! of Claude commands. The `DynamicCommandBuilder` helps integrate
+//! Claude commands into the main CLI app.
+
 
 use anyhow::{Context, Result};
 use auto_dev_core::claude::{
@@ -97,13 +104,15 @@ impl ClaudeCommandHandler {
         let mut subcommands = Vec::new();
         
         for (name, cmd) in &self.commands_cache {
-            let mut clap_cmd = Command::new(name.as_str())
+            // Create a new clap Command for each Claude command
+            let name = name.clone();
+            let mut clap_cmd = Command::new(clap::builder::Str::from(name))
                 .about(cmd.description.clone())
                 .long_about(self.extract_help_text(cmd).unwrap_or_else(|| cmd.usage.clone()));
             
             // Add arguments from command definition
             for arg in &cmd.arguments {
-                let mut clap_arg = Arg::new(arg.name.as_str())
+                let mut clap_arg = Arg::new(clap::builder::Str::from(arg.name.clone()))
                     .help(arg.description.clone());
                 
                 // Set argument properties based on definition
@@ -131,11 +140,11 @@ impl ClaudeCommandHandler {
                     }
                     
                 // Add long flag (default to argument name)
-                clap_arg = clap_arg.long(arg.name.as_str());
+                clap_arg = clap_arg.long(clap::builder::Str::from(arg.name.clone()));
                     
                 // Set default value if specified
-                if let Some(default) = &arg.default {
-                    clap_arg = clap_arg.default_value(default.as_str());
+                if let Some(default) = arg.default.clone() {
+                    clap_arg = clap_arg.default_value(clap::builder::Str::from(default));
                 }
                 
                 clap_cmd = clap_cmd.arg(clap_arg);
@@ -329,40 +338,40 @@ pub async fn handle_claude_command(command: String, args: Vec<String>) -> Result
         })?;
     
     // Parse arguments into ArgMatches for the specific command
-    let mut cmd_app = Command::new(command.as_str())
+    let mut cmd_app = Command::new(command.clone())
         .about(cmd.description.clone());
     
     // Add argument definitions
-    for arg in &cmd.arguments {
-        let mut clap_arg = Arg::new(arg.name.as_str())
+    for arg in cmd.arguments {
+        let mut clap_arg = Arg::new(clap::builder::Str::from(arg.name.clone()))
             .help(arg.description.clone());
         
         if arg.required {
             clap_arg = clap_arg.required(true);
         }
-            
-            match arg.arg_type.as_deref() {
-                Some("boolean") | Some("bool") => {
-                    clap_arg = clap_arg
-                        .action(ArgAction::SetTrue)
-                        .num_args(0);
-                }
-                Some("array") | Some("list") => {
-                    clap_arg = clap_arg
-                        .action(ArgAction::Append)
-                        .num_args(1..);
-                }
-                _ => {
-                    clap_arg = clap_arg
-                        .action(ArgAction::Set)
-                        .num_args(1);
-                }
+        
+        match arg.arg_type.as_deref() {
+            Some("boolean") | Some("bool") => {
+                clap_arg = clap_arg
+                    .action(ArgAction::SetTrue)
+                    .num_args(0);
             }
-            
-            clap_arg = clap_arg.long(arg.name.as_str());
-            
-        if let Some(default) = &arg.default {
-            clap_arg = clap_arg.default_value(default.as_str());
+            Some("array") | Some("list") => {
+                clap_arg = clap_arg
+                    .action(ArgAction::Append)
+                    .num_args(1..);
+            }
+            _ => {
+                clap_arg = clap_arg
+                    .action(ArgAction::Set)
+                    .num_args(1);
+            }
+        }
+        
+        clap_arg = clap_arg.long(clap::builder::Str::from(arg.name.clone()));
+        
+        if let Some(default) = arg.default {
+            clap_arg = clap_arg.default_value(clap::builder::Str::from(default.clone()));
         }
         
         cmd_app = cmd_app.arg(clap_arg);
