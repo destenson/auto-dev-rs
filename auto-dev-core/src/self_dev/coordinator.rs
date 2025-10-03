@@ -64,7 +64,6 @@ impl ComponentCoordinator {
         let specs = self.specification_cache.read().await.clone();
         let require_tests = self.config.read().await.require_tests;
         let planner = IncrementPlanner::new(6, require_tests);
-        drop(require_tests);
 
         let mut plan_cache = self.plan_cache.write().await;
         let mut pending = self.pending_changes.write().await;
@@ -329,7 +328,10 @@ impl ComponentCoordinator {
             "deployment" => config.components.deployment = true,
             "learning" => config.components.learning = true,
             _ => {
-                return Err(SelfDevError::Configuration(format!("Unknown component {}", component)));
+                return Err(SelfDevError::Configuration(format!(
+                    "Unknown component {}",
+                    component
+                )));
             }
         }
         drop(config);
@@ -347,7 +349,10 @@ impl ComponentCoordinator {
             "deployment" => config.components.deployment = false,
             "learning" => config.components.learning = false,
             _ => {
-                return Err(SelfDevError::Configuration(format!("Unknown component {}", component)));
+                return Err(SelfDevError::Configuration(format!(
+                    "Unknown component {}",
+                    component
+                )));
             }
         }
         drop(config);
@@ -612,18 +617,19 @@ impl ComponentCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::self_dev::{ComponentConfig, DevelopmentMode, SafetyLevel};
     use tempfile::TempDir;
 
     fn sample_config() -> SelfDevConfig {
         SelfDevConfig {
             enabled: true,
-            mode: super::DevelopmentMode::Assisted,
+            mode: DevelopmentMode::Assisted,
             safety_level: SafetyLevel::Standard,
             auto_approve: false,
             max_changes_per_day: 5,
             require_tests: false,
             require_documentation: true,
-            components: super::ComponentConfig {
+            components: ComponentConfig {
                 monitoring: true,
                 synthesis: true,
                 testing: false,

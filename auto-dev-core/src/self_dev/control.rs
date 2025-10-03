@@ -8,7 +8,7 @@ use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ControlCommand {
     Start,
     Stop,
@@ -56,7 +56,7 @@ struct AuditEntry {
 
 pub struct OperatorInterface {
     command_tx: mpsc::Sender<(CommandTicket, ControlCommand)>,
-    command_rx: Arc<Mutex<mpsc::Receiver<(CommandTicket, ControlCommand)>>>,
+    command_rx: Arc<Mutex<Option<mpsc::Receiver<(CommandTicket, ControlCommand)>>>>,
     audit_log: Arc<Mutex<Vec<AuditEntry>>>,
 }
 
@@ -66,7 +66,7 @@ impl OperatorInterface {
 
         Self {
             command_tx,
-            command_rx: Arc::new(Mutex::new(command_rx)),
+            command_rx: Arc::new(Mutex::new(Some(command_rx))),
             audit_log: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -105,7 +105,16 @@ impl OperatorInterface {
     }
 
     pub async fn receive_command(&self) -> Option<(CommandTicket, ControlCommand)> {
-        self.command_rx.lock().await.recv().await
+        let mut guard = self.command_rx.lock().await;
+        let mut receiver = guard.take()?;
+        drop(guard);
+
+        let result = receiver.recv().await;
+
+        let mut guard = self.command_rx.lock().await;
+        *guard = Some(receiver);
+
+        result
     }
 
     async fn log_command(

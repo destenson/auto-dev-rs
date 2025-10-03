@@ -255,6 +255,7 @@ mod tests {
     use crate::self_dev::orchestrator::{
         ChangeMetrics, ChangeStatus, ChangeType, PlanDigest, PlanStep,
     };
+    use std::path::PathBuf;
 
     fn sample_change(target: &str, risk: RiskLevel) -> PendingChange {
         PendingChange {

@@ -156,7 +156,7 @@ impl PendingChange {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChangeType {
     Create,
     Modify,
@@ -164,7 +164,7 @@ pub enum ChangeType {
     Refactor,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -172,6 +172,7 @@ pub enum RiskLevel {
     Critical,
 }
 
+#[derive(Clone)]
 pub struct SelfDevOrchestrator {
     config: Arc<RwLock<SelfDevConfig>>,
     state_machine: Arc<Mutex<DevelopmentStateMachine>>,
@@ -179,7 +180,7 @@ pub struct SelfDevOrchestrator {
     safety_monitor: Arc<SafetyMonitor>,
     operator_interface: Arc<OperatorInterface>,
     shutdown_tx: mpsc::Sender<()>,
-    shutdown_rx: Arc<Mutex<mpsc::Receiver<()>>>,
+    shutdown_rx: Arc<Mutex<Option<mpsc::Receiver<()>>>>,
     project_root: PathBuf,
 }
 
@@ -202,7 +203,7 @@ impl SelfDevOrchestrator {
             safety_monitor: Arc::new(safety_monitor),
             operator_interface: Arc::new(operator_interface),
             shutdown_tx,
-            shutdown_rx: Arc::new(Mutex::new(shutdown_rx)),
+            shutdown_rx: Arc::new(Mutex::new(Some(shutdown_rx))),
             project_root,
         })
     }
@@ -218,7 +219,7 @@ impl SelfDevOrchestrator {
         drop(config);
         self.transition_state(DevelopmentState::Analyzing).await?;
 
-        let orchestrator = self.clone_internal().await;
+        let orchestrator = self.clone();
         tokio::spawn(async move {
             if let Err(e) = orchestrator.run_development_loop().await {
                 error!("Self-development loop error: {}", e);
@@ -339,6 +340,12 @@ impl SelfDevOrchestrator {
     async fn apply_control_command(&self, command: ControlCommand) -> Result<()> {
         match command {
             ControlCommand::Start => self.start().await,
+            other => self.execute_non_start_command(other).await,
+        }
+    }
+
+    async fn execute_non_start_command(&self, command: ControlCommand) -> Result<()> {
+        match command {
             ControlCommand::Stop => self.stop().await,
             ControlCommand::Pause => self.pause().await,
             ControlCommand::Resume => self.resume().await,
@@ -362,6 +369,10 @@ impl SelfDevOrchestrator {
                 self.coordinator.disable_component(component).await
             }
             ControlCommand::SetMaxChangesPerDay(limit) => self.set_max_changes_per_day(limit).await,
+            ControlCommand::Start => {
+                debug!("Start command ignored in non-start handler");
+                Ok(())
+            }
         }
     }
 
@@ -417,7 +428,15 @@ impl SelfDevOrchestrator {
     async fn run_development_loop(&self) -> Result<()> {
         info!("Development loop started");
 
-        let mut shutdown_rx = self.shutdown_rx.lock().await;
+        let mut shutdown_guard = self.shutdown_rx.lock().await;
+        let mut shutdown_rx = match shutdown_guard.take() {
+            Some(rx) => rx,
+            None => {
+                warn!("Shutdown receiver already in use; skipping run loop start");
+                return Ok(());
+            }
+        };
+        drop(shutdown_guard);
 
         loop {
             tokio::select! {
@@ -427,7 +446,13 @@ impl SelfDevOrchestrator {
                 }
                 command = self.operator_interface.receive_command() => {
                     if let Some((ticket, command)) = command {
-                        let result = self.apply_control_command(command.clone()).await;
+                        let result = match command.clone() {
+                            ControlCommand::Start => {
+                                debug!("Start command received while loop active; ignoring");
+                                Ok(())
+                            }
+                            other => self.execute_non_start_command(other).await,
+                        };
                         match result {
                             Ok(_) => {
                                 self.operator_interface.finalize_command(ticket, super::control::CommandResult::Success).await;
@@ -447,6 +472,9 @@ impl SelfDevOrchestrator {
         }
 
         info!("Development loop ended");
+
+        let mut shutdown_guard = self.shutdown_rx.lock().await;
+        *shutdown_guard = Some(shutdown_rx);
         Ok(())
     }
 
@@ -495,7 +523,7 @@ impl SelfDevOrchestrator {
     }
 
     async fn check_for_work(&self) -> Result<()> {
-        if self.coordinator.has_pending_work().await {
+        if self.coordinator.has_pending_work().await? {
             self.transition_state(DevelopmentState::Analyzing).await?;
         }
         Ok(())
@@ -577,19 +605,6 @@ impl SelfDevOrchestrator {
         let mut state_machine = self.state_machine.lock().await;
         state_machine.transition_to(new_state)?;
         Ok(())
-    }
-
-    async fn clone_internal(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            state_machine: self.state_machine.clone(),
-            coordinator: self.coordinator.clone(),
-            safety_monitor: self.safety_monitor.clone(),
-            operator_interface: self.operator_interface.clone(),
-            shutdown_tx: self.shutdown_tx.clone(),
-            shutdown_rx: self.shutdown_rx.clone(),
-            project_root: self.project_root.clone(),
-        }
     }
 
     pub async fn execute_task(&self, task_description: &str) -> Result<()> {

@@ -57,7 +57,7 @@ pub struct SelfDevConfig {
     pub components: ComponentConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DevelopmentMode {
     Observation,
     Assisted,
@@ -73,7 +73,7 @@ pub enum SafetyLevel {
     Strict,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ComponentConfig {
     pub monitoring: bool,
     pub synthesis: bool,
